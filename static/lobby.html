@@ -13,9 +13,10 @@
       background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.07) 0 1px, transparent 1px 3px);
       display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:20px; }
     .balls { display:flex; align-items:center; gap:22px; }
-    .pball { width:26px; height:26px; border-radius:50%; background:linear-gradient(var(--red) 0 47%,#111 47% 53%,#e9efe6 53% 100%); border:2px solid #0a0a0a; position:relative; }
+    .pball { width:26px; height:26px; border-radius:50%; background:linear-gradient(#666 0 47%,#111 47% 53%,#fff 53% 100%); border:2px solid #0a0a0a; position:relative; }
     .pball::after { content:""; position:absolute; inset:0; margin:auto; width:7px; height:7px; background:#e9efe6; border:2px solid #0a0a0a; border-radius:50%; }
-    .logo { font-family:"PokeRed", monospace; color:var(--red); font-size:32px; letter-spacing:2px; text-shadow:2px 2px 0 #5a0f0e; image-rendering:pixelated; }
+    .logo { font-family:"PokeRed", monospace; color:#8a8a8a; font-size:32px; letter-spacing:2px; image-rendering:pixelated;
+      text-shadow:-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000,2px 2px 0 #000,0 -2px 0 #000,0 2px 0 #000,-2px 0 0 #000,2px 0 0 #000, 4px 4px 0 #555; }
     .sub { color:#9a9a86; letter-spacing:4px; font-size:15px; margin-top:2px; }
     /* Game Boy cream box (real pokered frame) */
     .gb { background:var(--parch); color:var(--ink); position:relative; border:14px solid transparent;
@@ -24,14 +25,14 @@
     .who { margin-top:16px; padding:10px 22px; font-size:20px; letter-spacing:1px; }
     .who b { font-weight:400; }
     #find { width:min(86vw,460px); margin-top:14px; font-family:"PokeRed", monospace; font-size:22px;
-      color:var(--ink); background:var(--parch); padding:22px; cursor:pointer; letter-spacing:2px;
-      display:flex; align-items:center; justify-content:center; gap:16px; }
-    #find .pball{width:16px;height:16px;}
+      color:var(--ink); background:var(--parch); padding:20px 22px 20px 44px; cursor:pointer; letter-spacing:2px;
+      display:flex; align-items:center; justify-content:flex-start; gap:12px; position:relative; }
+    #find .cur { position:absolute; left:20px; }
     #find:hover { filter:brightness(1.04); }
     #find.searching { animation:bk 1s steps(2) infinite; }
     @keyframes bk { 50% { opacity:.55; } }
     .status { margin-top:16px; min-height:22px; color:var(--ink); text-align:center; }
-    .spin { display:inline-block; width:14px; height:14px; border:2px solid #34342a; border-top-color:var(--red); border-radius:50%; animation:s .8s linear infinite; vertical-align:-2px; }
+    .spin { display:inline-block; width:14px; height:14px; border:2px solid #bbb; border-top-color:#000; border-radius:50%; animation:s .8s linear infinite; vertical-align:-2px; }
     @keyframes s { to { transform:rotate(360deg); } }
     .links { margin-top:20px; font-size:18px; color:var(--inkdim); }
     .links a, .links span { color:#7c7c68; text-decoration:none; cursor:pointer; } .links a:hover,.links span:hover{color:var(--parch);}
@@ -41,7 +42,7 @@
   <div class="balls"><span class="pball"></span><div class="logo">RED STADIUM ENGINE</div><span class="pball"></span></div>
   <div class="sub">- RANDOM BATTLE ARENA -</div>
   <div class="gb who" id="who">...</div>
-  <button class="gb" id="find"><span class="pball"></span> FIND MATCH <span class="pball"></span></button>
+  <button class="gb" id="find"><span class="cur">▶</span>FIND MATCH</button>
   <div class="status" id="status"></div>
   <div class="links"><a href="/console.html">DEV CONSOLE</a> - <span id="logout">LOGOUT</span></div>
   <script>
@@ -65,8 +66,8 @@
       };
       ws.onclose = () => { if (!searching) setIdle(); };
     }
-    function setSearching(pos) { $("find").classList.add("searching"); $("find").innerHTML = "⏳ SEARCHING...  (CANCEL)"; $("status").innerHTML = '<span class="spin"></span> WAITING FOR AN OPPONENT' + (pos > 1 ? " - #" + pos : ""); }
-    function setIdle() { $("find").classList.remove("searching"); $("find").innerHTML = '<span class="pball"></span> FIND MATCH <span class="pball"></span>'; $("status").textContent = ""; }
+    function setSearching(pos) { $("find").classList.add("searching"); $("find").innerHTML = '<span class="cur">▶</span>SEARCHING... (CANCEL)'; $("status").innerHTML = '<span class="spin"></span> WAITING FOR AN OPPONENT' + (pos > 1 ? " - #" + pos : ""); }
+    function setIdle() { $("find").classList.remove("searching"); $("find").innerHTML = '<span class="cur">▶</span>FIND MATCH'; $("status").textContent = ""; }
     $("find").onclick = () => { if (!ws || ws.readyState !== 1) return; if (searching) { ws.send(JSON.stringify({ type: "cancel_queue" })); searching = false; setIdle(); } else ws.send(JSON.stringify({ type: "find_match" })); };
     $("logout").onclick = async () => { await fetch("/auth/logout", { method: "POST" }); location.replace("/login.html"); };
   </script>

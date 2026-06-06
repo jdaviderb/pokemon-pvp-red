@@ -21,9 +21,10 @@
     .foot { position:absolute; bottom:18px; width:100%; left:0; display:flex; justify-content:space-between; padding:0 22px; color:#7c7c68; font-size:16px; letter-spacing:1px; }
     .stage { text-align:center; display:flex; flex-direction:column; align-items:center; gap:6px; }
     .balls { display:flex; align-items:center; gap:24px; }
-    .pball { width:28px; height:28px; border-radius:50%; background:linear-gradient(var(--red) 0 47%,#111 47% 53%,#e9efe6 53% 100%); border:2px solid #0a0a0a; position:relative; }
+    .pball { width:28px; height:28px; border-radius:50%; background:linear-gradient(#666 0 47%,#111 47% 53%,#fff 53% 100%); border:2px solid #0a0a0a; position:relative; }
     .pball::after { content:""; position:absolute; inset:0; margin:auto; width:8px; height:8px; background:#e9efe6; border:2px solid #0a0a0a; border-radius:50%; }
-    .logo { font-family:"PokeRed", monospace; color:var(--red); font-size:40px; letter-spacing:2px; line-height:1.2; text-shadow:3px 3px 0 #5a0f0e; image-rendering:pixelated; }
+    .logo { font-family:"PokeRed", monospace; color:#8a8a8a; font-size:40px; letter-spacing:2px; line-height:1.2; image-rendering:pixelated;
+      text-shadow:-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000,2px 2px 0 #000,0 -2px 0 #000,0 2px 0 #000,-2px 0 0 #000,2px 0 0 #000, 5px 5px 0 #555; }
     .sub { color:#9a9a86; letter-spacing:4px; font-size:16px; margin-top:4px; }
     .panel { margin-top:22px; padding:16px 24px; min-width:min(86vw,460px); }
     .press { font-family:"PokeRed", monospace; font-size:24px; color:var(--ink); letter-spacing:2px;
@@ -36,12 +37,14 @@
     input { width:100%; background:var(--field); border:3px solid var(--ink); border-radius:6px; color:var(--ink);
       font-family:inherit; font-size:22px; padding:7px 12px; }
     input:focus { outline:none; box-shadow:0 0 0 2px var(--ink) inset; }
-    .row { display:flex; gap:12px; margin-top:18px; }
-    .btn { flex:1; font-family:"PokeRed", monospace; font-size:18px; padding:13px; border-radius:7px; cursor:pointer;
-      background:var(--parch); color:var(--ink); border:3px solid var(--ink); letter-spacing:1px; }
-    .btn.primary { background:var(--ink); color:var(--parch); }
-    .btn:hover { filter:brightness(1.06); }
-    .msg { margin-top:12px; min-height:20px; font-size:19px; color:#9a2c2c; }
+    /* Pokemon-style menu (left-aligned items + ▶ cursor) */
+    .menu { margin-top:18px; }
+    .mitem { position:relative; text-align:left; padding:6px 8px 6px 34px; font-size:22px; cursor:pointer; line-height:1.5; }
+    .mitem .cur { position:absolute; left:8px; opacity:0; }
+    .mitem:first-child .cur { opacity:1; }
+    .menu:hover .mitem:first-child .cur { opacity:0; }
+    .mitem:hover .cur { opacity:1; }
+    .msg { margin-top:12px; min-height:20px; font-size:18px; color:#333; }
   </style>
 </head>
 <body>
@@ -62,9 +65,9 @@
         <input id="u" autocomplete="username" maxlength="20" placeholder="ASH" />
         <label>PASSWORD</label>
         <input id="p" type="password" autocomplete="current-password" placeholder="••••••" />
-        <div class="row">
-          <button class="btn primary" id="login">LOGIN</button>
-          <button class="btn" id="register">REGISTER</button>
+        <div class="menu">
+          <div class="mitem" id="login"><span class="cur">▶</span>LOGIN</div>
+          <div class="mitem" id="register"><span class="cur">▶</span>REGISTER</div>
         </div>
         <div class="msg" id="msg"></div>
       </div>
