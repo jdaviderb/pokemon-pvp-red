@@ -191,6 +191,42 @@
       border-radius: 4px; padding: 1px 6px; color: #cfcfe6; font-size: 11px;
     }
 
+    /* ---------------- agent battle console ---------------- */
+    .arena {
+      width: var(--w); max-width: 940px; margin-top: 4px;
+      background: linear-gradient(180deg, #14141b, #0e0e14);
+      border: 1px solid #23232e; border-radius: 12px; padding: 14px 16px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .arena-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .arena-title { font-weight: 800; letter-spacing: 1px; color: var(--accent); }
+    .arena button {
+      background: #1d1d26; color: #e8e8f0; border: 1px solid #2c2c3a; border-radius: 7px;
+      padding: 7px 12px; font: inherit; font-weight: 600; cursor: pointer; transition: .12s;
+    }
+    .arena button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .arena button:disabled { opacity: .4; cursor: default; }
+    #arenaMsg { font-size: 12px; color: #9a9aab; margin-left: auto; }
+    .arena-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0 10px; }
+    .mon { background: #0b0b11; border: 1px solid #20202b; border-radius: 9px; padding: 10px 12px; }
+    .mon-name { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+    .mon-name.enemy { color: #f1879b; }
+    .mon-name.you { color: #7fd4ff; }
+    .hpwrap { height: 12px; background: #060609; border-radius: 6px; overflow: hidden; border: 1px solid #20202b; }
+    .hpbar { height: 100%; width: 100%; background: var(--accent); transition: width .25s, background .25s; }
+    .hpbar.mid { background: #d9c04a; } .hpbar.low { background: #e06262; }
+    .mon-sub { font-size: 12px; color: #9a9aab; margin-top: 6px; }
+    .moves { display: grid; grid-template-columns: repeat(2, 1fr) auto; gap: 8px; }
+    .moves .mv { text-align: left; }
+    .moves .mv b { color: #e8e8f0; } .moves .mv span { color: #8a8aa0; font-weight: 400; font-size: 11px; }
+    #btnRun { color: #f1879b; }
+    .arena-state {
+      margin-top: 10px; font-size: 12px; color: #8a8aa0;
+      font-variant-numeric: tabular-nums; border-top: 1px solid #20202b; padding-top: 8px;
+    }
+    .arena-state .k { color: var(--accent); }
+    .arena-note { font-size: 11px; color: #6c6c80; margin: 8px 0 0; }
+
     @media (prefers-reduced-motion: reduce) {
       .scanlines, .roll::before, .tv.on .screen { animation: none !important; }
     }
@@ -227,6 +263,42 @@
     <b>D-pad</b> <kbd>←↑↓→</kbd> · <b>A</b> <kbd>X</kbd> · <b>B</b> <kbd>Z</kbd> ·
     <b>Start</b> <kbd>Enter</kbd> · <b>Select</b> <kbd>⇧</kbd>/<kbd>⌫</kbd>
   </p>
+
+  <!-- AI battle console: load a battle and act as the agent (Pokémon Red) -->
+  <div class="arena" id="arena">
+    <div class="arena-bar">
+      <span class="arena-title">⚔ AGENT BATTLE CONSOLE</span>
+      <button id="btnLoad">Load Battle</button>
+      <button id="btnSave">Save State</button>
+      <button id="btnAdvance">Advance ▶A</button>
+      <span id="arenaMsg"></span>
+    </div>
+    <div class="arena-grid">
+      <div class="mon">
+        <div class="mon-name enemy" id="enemyName">ENEMY —</div>
+        <div class="hpwrap"><div class="hpbar" id="enemyHp"></div></div>
+        <div class="mon-sub" id="enemySub">—</div>
+      </div>
+      <div class="mon">
+        <div class="mon-name you" id="playerName">YOU —</div>
+        <div class="hpwrap"><div class="hpbar" id="playerHp"></div></div>
+        <div class="mon-sub" id="playerSub">—</div>
+      </div>
+    </div>
+    <div class="moves" id="moves">
+      <button class="mv" data-slot="0" disabled>—</button>
+      <button class="mv" data-slot="1" disabled>—</button>
+      <button class="mv" data-slot="2" disabled>—</button>
+      <button class="mv" data-slot="3" disabled>—</button>
+      <button id="btnRun" disabled>Run</button>
+    </div>
+    <div class="arena-state" id="arenaState">battle: <span class="k">—</span></div>
+    <p class="arena-note">
+      Arranca el server con <kbd>Pokemon Red.gb</kbd> para el savestate incluido
+      (<code>cargo run --release -- "Pokemon Red.gb"</code>), pulsa <b>POWER</b> arriba y luego
+      <b>Load Battle</b>. O juega hasta el menú FIGHT y pulsa <b>Save State</b> para capturar el tuyo.
+    </p>
+  </div>
 
   <script>
     // Physical-key (e.code) -> { player, wire button }. Game Boy has no analog stick:
@@ -345,6 +417,97 @@
     const tv = document.querySelector(".tv");
     video.addEventListener("playing", () => tv.classList.add("on"));
     video.addEventListener("emptied", () => tv.classList.remove("on"));
+  </script>
+
+  <script>
+  // ===== AI battle console (Pokémon Red) — drives the same-origin /battle/* HTTP API =====
+  const MOVE_NAMES = {
+    1:"Pound",2:"Karate Chop",3:"DoubleSlap",5:"Mega Punch",7:"Fire Punch",8:"Ice Punch",
+    9:"ThunderPunch",10:"Scratch",15:"Cut",16:"Gust",17:"Wing Attack",20:"Bind",21:"Slam",
+    22:"Vine Whip",23:"Stomp",28:"Sand-Attack",29:"Headbutt",30:"Horn Attack",31:"Fury Attack",
+    33:"Tackle",34:"Body Slam",36:"Take Down",38:"Double-Edge",39:"Tail Whip",40:"Poison Sting",
+    43:"Leer",44:"Bite",45:"Growl",52:"Ember",53:"Flamethrower",55:"Water Gun",56:"Hydro Pump",
+    57:"Surf",58:"Ice Beam",64:"Peck",65:"Drill Peck",84:"ThunderShock",85:"Thunderbolt",
+    91:"Dig",94:"Psychic",98:"Quick Attack",111:"Defense Curl",116:"Focus Energy",145:"Bubble",
+  };
+  const SPECIES = { 153:"Bulbasaur", 176:"Charmander", 177:"Squirtle" };
+  const moveName = (id) => (id === 0 ? "—" : (MOVE_NAMES[id] || "#" + id));
+  const speciesName = (id) => SPECIES[id] || "#" + id;
+
+  const $ = (id) => document.getElementById(id);
+  const arenaMsg = $("arenaMsg");
+  const msg = (t) => { arenaMsg.textContent = t; };
+  const api = async (path, opts) => { try { return await fetch(path, opts); } catch (e) { return null; } };
+
+  $("btnLoad").onclick = async () => {
+    msg("loading…");
+    const r = await api("/battle/load", { method: "POST" });
+    msg(!r ? "no server" : r.ok ? "battle loaded ✓"
+        : r.status === 404 ? "no states/battle.state — Save State first"
+        : "load failed (" + r.status + ") — run server with Pokemon Red.gb");
+  };
+  $("btnSave").onclick = async () => {
+    msg("saving…");
+    const r = await api("/battle/save", { method: "POST" });
+    msg(r && r.ok ? "saved → states/battle.state ✓" : "save failed");
+  };
+  $("btnAdvance").onclick = () => act({ type: "buttons", presses: ["A"] }, "advance ▶A");
+  $("btnRun").onclick = () => act({ type: "run" }, "run");
+  document.querySelectorAll("#moves .mv").forEach((b) => {
+    b.onclick = () => act({ type: "move", slot: +b.dataset.slot }, "move " + (+b.dataset.slot + 1));
+  });
+  async function act(body, label) {
+    msg(label + "…");
+    const r = await api("/battle/action", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    msg(r && r.status === 202 ? label + " sent ✓" : "action failed");
+  }
+
+  const hpClass = (f) => (f > 0.5 ? "" : f > 0.2 ? "mid" : "low");
+  function setMoves(d) {
+    const ready = d && d.in_battle !== 0;
+    document.querySelectorAll("#moves .mv").forEach((b, i) => {
+      const id = d ? d.player.moves[i] : 0;
+      const pp = d ? d.player.pp[i] & 0x3f : 0;
+      b.innerHTML = id ? "<b>" + moveName(id) + "</b> <span>PP " + pp + "</span>" : "—";
+      b.disabled = !(ready && id);
+    });
+    $("btnRun").disabled = !ready;
+  }
+  async function refresh() {
+    const r = await api("/battle/state");
+    if (!r || !r.ok) {
+      $("arenaState").innerHTML =
+        'battle: <span class="k">' + (r ? "idle — press Load Battle" : "server off") + "</span>";
+      setMoves(null);
+      return;
+    }
+    const d = await r.json();
+    const e = d.enemy, p = d.player;
+    $("enemyName").textContent = "ENEMY  " + speciesName(e.species) + (e.level ? " L" + e.level : "");
+    const ef = e.max_hp ? Math.max(0, Math.min(1, e.hp / e.max_hp)) : 0;
+    $("enemyHp").style.width = ef * 100 + "%";
+    $("enemyHp").className = "hpbar " + hpClass(ef);
+    $("enemySub").textContent = "HP " + e.hp + "/" + e.max_hp;
+    $("playerName").textContent = "YOU  " + speciesName(p.species) + (p.level ? " L" + p.level : "");
+    const pf = p.max_hp ? Math.max(0, Math.min(1, p.hp / p.max_hp)) : 0;
+    $("playerHp").style.width = pf * 100 + "%";
+    $("playerHp").className = "hpbar " + hpClass(pf);
+    $("playerSub").textContent = "HP " + p.hp + "/" + p.max_hp;
+    setMoves(d);
+    const inb = d.in_battle
+      ? "yes (" + (d.in_battle === 2 ? "trainer" : d.in_battle === 1 ? "wild" : d.in_battle) + ")"
+      : "no";
+    $("arenaState").innerHTML =
+      'in_battle: <span class="k">' + inb + '</span> · turn: <span class="k">' + d.turns_in_battle +
+      '</span> · menu: <span class="k">' + d.menu + '</span> · your move: <span class="k">' +
+      moveName(d.player_selected_move) + "</span>";
+  }
+  setInterval(refresh, 600);
+  refresh();
   </script>
 </body>
 </html>
