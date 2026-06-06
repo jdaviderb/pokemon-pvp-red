@@ -33,6 +33,26 @@ const DEFAULT_ROM: &str = "~/pokemon-pvp-red/Pokemon Red.gb";
 const DEFAULT_CORE: &str =
     "~/pokemon-pvp-red/cores/gambatte_libretro.dylib";
 
+/// A session-cookie key that is stable across restarts (so logins survive `cargo run`):
+/// COOKIE_SECRET env if set, else a random key persisted to `.cookie_key` (created once).
+fn load_cookie_key() -> Key {
+    if let Ok(s) = std::env::var("COOKIE_SECRET") {
+        if s.len() >= 64 {
+            return Key::from(s.as_bytes());
+        }
+    }
+    if let Ok(bytes) = std::fs::read(".cookie_key") {
+        if bytes.len() >= 64 {
+            return Key::from(bytes.as_slice());
+        }
+    }
+    let key = Key::generate();
+    if let Err(e) = std::fs::write(".cookie_key", key.master()) {
+        tracing::warn!("could not persist .cookie_key ({e}); sessions won't survive a restart");
+    }
+    key
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -57,12 +77,9 @@ async fn main() -> anyhow::Result<()> {
     let database = db::connect_and_migrate().await?;
     rooms::recover_abandoned(&database).await?;
 
-    // Session cookie key. Set COOKIE_SECRET (>=64 bytes) in prod for stable sessions across
-    // restarts; otherwise a fresh key is generated each boot (dev).
-    let cookie_key = match std::env::var("COOKIE_SECRET") {
-        Ok(s) if s.len() >= 64 => Key::from(s.as_bytes()),
-        _ => Key::generate(),
-    };
+    // Session cookie key — STABLE across restarts so sessions survive `cargo run`. COOKIE_SECRET
+    // (>=64 bytes) wins; otherwise a key is generated once and persisted to .cookie_key.
+    let cookie_key = load_cookie_key();
 
     // Game/room layer: matchmaking queue, rooms, WS hub. The matchmaker pairs queued players and
     // feeds the single emulator one match at a time.

@@ -7,61 +7,55 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
   <style>
-    :root { --bg:#04070a; --grn:#5ad17a; --grn-dim:#2c6e44; --red:#e8403f; --wht:#e9efe6; --txt:#9fe0b4; --dim:#4f8a66; --line:#1c3a28; }
+    :root { --bg:#04070a; --red:#e8403f; --parch:#d6d0b6; --field:#ece6cf; --ink:#171712; --inkdim:#5a563f; }
     * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; background:var(--bg); color:var(--txt);
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--parch);
       font-family:"VT323", ui-monospace, monospace; font-size:22px;
-      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0 1px, transparent 1px 3px);
-      display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; position:relative; overflow:hidden; }
-    .corner { position:absolute; padding:8px 14px; border:2px solid var(--line); border-radius:6px; background:#070d0a; font-size:18px; color:var(--dim); line-height:1.25; }
-    .corner b { color:var(--grn); font-size:20px; } .corner .led { color:var(--red); }
-    .tl{top:18px;left:18px;} .tr{top:18px;right:18px;text-align:right;}
-    .bl{bottom:18px;left:18px;} .br{bottom:18px;right:18px;}
-    .bc{bottom:18px;left:50%;transform:translateX(-50%);text-align:center;}
+      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.32) 0 1px, transparent 1px 3px);
+      display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; position:relative; }
+    .gb { background:var(--parch); color:var(--ink); border:4px solid var(--ink); border-radius:12px; position:relative; }
+    .gb::after { content:""; position:absolute; inset:5px; border:2px solid var(--ink); border-radius:7px; pointer-events:none; }
+    .corner { position:absolute; padding:7px 14px; font-size:16px; color:var(--inkdim); line-height:1.3; }
+    .corner b { color:var(--ink); font-size:18px; display:block; }
+    .tl{top:16px;left:16px;} .tr{top:16px;right:16px;text-align:right;}
+    .foot { position:absolute; bottom:18px; width:100%; left:0; display:flex; justify-content:space-between; padding:0 22px; color:#7c7c68; font-size:16px; letter-spacing:1px; }
     .stage { text-align:center; display:flex; flex-direction:column; align-items:center; gap:6px; }
-    .balls { display:flex; align-items:center; gap:26px; }
-    .pball { width:30px; height:30px; border-radius:50%; background:linear-gradient(#e8403f 0 47%, #111 47% 53%, #e9efe6 53% 100%);
-      border:2px solid #0a0a0a; position:relative; box-shadow:0 0 14px rgba(232,64,63,.4); }
+    .balls { display:flex; align-items:center; gap:24px; }
+    .pball { width:28px; height:28px; border-radius:50%; background:linear-gradient(var(--red) 0 47%,#111 47% 53%,#e9efe6 53% 100%); border:2px solid #0a0a0a; position:relative; }
     .pball::after { content:""; position:absolute; inset:0; margin:auto; width:8px; height:8px; background:#e9efe6; border:2px solid #0a0a0a; border-radius:50%; }
-    .logo { font-family:"Press Start 2P", monospace; line-height:1.06; margin:6px 0; }
-    .logo .red { color:var(--red); font-size:58px; text-shadow:4px 4px 0 #5a0f0e, 0 0 22px rgba(232,64,63,.5); display:block; }
-    .logo .wht { color:var(--wht); font-size:48px; text-shadow:4px 4px 0 #555, 0 0 10px rgba(255,255,255,.25); display:block; margin:6px 0; letter-spacing:2px; }
-    .logo .eng { color:var(--red); font-size:30px; text-shadow:3px 3px 0 #5a0f0e; display:block; }
-    .sub { color:var(--grn); letter-spacing:3px; font-size:22px; margin-top:4px; }
-    .panel { margin-top:22px; border:3px solid var(--grn-dim); border-radius:10px; background:#060f0a;
-      padding:16px 26px; min-width:min(86vw,480px); box-shadow:0 0 24px rgba(90,209,122,.12) inset; }
-    .press { font-family:"Press Start 2P", monospace; font-size:24px; color:var(--grn); letter-spacing:2px;
-      display:flex; align-items:center; justify-content:center; gap:18px; cursor:pointer; padding:8px; }
-    .press .pball { width:22px; height:22px; } .press.blink { animation:bk 1s steps(2) infinite; }
-    @keyframes bk { 50% { opacity:.35; } }
-    .arrow { color:var(--grn); font-size:20px; margin-top:8px; }
-    /* login form (revealed) */
-    .form { display:none; }
-    .form.on { display:block; }
-    label { display:block; text-align:left; color:var(--dim); font-size:18px; letter-spacing:2px; margin:10px 0 4px; }
-    input { width:100%; background:#04100a; border:2px solid var(--line); border-radius:6px; color:var(--wht);
-      font-family:inherit; font-size:22px; padding:8px 12px; }
-    input:focus { outline:none; border-color:var(--grn); }
-    .row { display:flex; gap:12px; margin-top:16px; }
-    .btn { flex:1; font-family:"Press Start 2P", monospace; font-size:13px; padding:13px; border-radius:7px; cursor:pointer;
-      background:#0c1a12; color:var(--txt); border:2px solid var(--grn-dim); letter-spacing:1px; }
-    .btn.primary { background:var(--grn); color:#06120a; border-color:var(--grn); }
-    .btn:hover { filter:brightness(1.12); }
-    .msg { margin-top:12px; min-height:20px; font-size:20px; color:var(--red); }
+    .logo { font-family:"Press Start 2P", monospace; color:var(--red); font-size:40px; letter-spacing:3px; line-height:1.3; text-shadow:3px 3px 0 #5a0f0e; }
+    .sub { color:#9a9a86; letter-spacing:4px; font-size:16px; margin-top:4px; }
+    .panel { margin-top:22px; padding:16px 24px; min-width:min(86vw,460px); }
+    .press { font-family:"Press Start 2P", monospace; font-size:20px; color:var(--ink); letter-spacing:2px;
+      display:flex; align-items:center; justify-content:center; gap:16px; cursor:pointer; padding:10px; }
+    .press .pball { width:18px; height:18px; } .press.blink { animation:bk 1s steps(2) infinite; }
+    @keyframes bk { 50% { opacity:.45; } }
+    .arrow { color:var(--parch); font-size:20px; margin-top:8px; }
+    .form { display:none; } .form.on { display:block; }
+    label { display:block; text-align:left; color:var(--inkdim); font-size:16px; letter-spacing:2px; margin:10px 0 4px; }
+    input { width:100%; background:var(--field); border:3px solid var(--ink); border-radius:6px; color:var(--ink);
+      font-family:inherit; font-size:22px; padding:7px 12px; }
+    input:focus { outline:none; box-shadow:0 0 0 2px var(--ink) inset; }
+    .row { display:flex; gap:12px; margin-top:18px; }
+    .btn { flex:1; font-family:"Press Start 2P", monospace; font-size:13px; padding:14px; border-radius:7px; cursor:pointer;
+      background:var(--parch); color:var(--ink); border:3px solid var(--ink); letter-spacing:1px; }
+    .btn.primary { background:var(--ink); color:var(--parch); }
+    .btn:hover { filter:brightness(1.06); }
+    .msg { margin-top:12px; min-height:20px; font-size:19px; color:#9a2c2c; }
   </style>
 </head>
 <body>
-  <div class="corner tl"><span class="led">▪</span> SEED<br><b id="seed">BATTLE_0042</b></div>
-  <div class="corner tr"><span class="led">▪</span> MODE<br><b>1 VS 1</b><br>LEVEL CAP: 50</div>
+  <div class="gb corner tl">SEED<b id="seed">BATTLE_0042</b></div>
+  <div class="gb corner tr">MODE<b>1 VS 1</b>LEVEL CAP: 50</div>
 
   <div class="stage">
     <div class="balls"><span class="pball"></span>
-      <div class="logo"><span class="red">RED</span><span class="wht">STADIUM</span><span class="eng">ENGINE</span></div>
+      <div class="logo">RED STADIUM<br>ENGINE</div>
       <span class="pball"></span>
     </div>
-    <div class="sub">◂─── RANDOM BATTLE ARENA ───▸</div>
+    <div class="sub">— RANDOM BATTLE ARENA —</div>
 
-    <div class="panel">
+    <div class="gb panel">
       <div class="press blink" id="press"><span class="pball"></span> PRESS START <span class="pball"></span></div>
       <div class="form" id="form">
         <label>USERNAME</label>
@@ -78,23 +72,15 @@
     <div class="arrow" id="arrow">▾</div>
   </div>
 
-  <div class="corner bl">BUILD 1.0.0</div>
-  <div class="corner bc"><span class="led">▪</span> PREPARE. COMPETE. BE LEGEND. <span class="led">▪</span></div>
-  <div class="corner br">© 2025 RSE</div>
+  <div class="foot"><span>BUILD 1.0.0</span><span>PREPARE. COMPETE. BE LEGEND.</span><span>© 2025 RSE</span></div>
 
   <script>
     const $ = (id) => document.getElementById(id);
-    const msg = (t, ok) => { const m = $("msg"); m.textContent = t; m.style.color = ok ? "#5ad17a" : "#e8403f"; };
-    // already logged in? skip the title screen
+    const msg = (t, ok) => { const m = $("msg"); m.textContent = t; m.style.color = ok ? "#2c6e44" : "#9a2c2c"; };
     (async () => { try { const r = await fetch("/api/me"); if (r.ok) location.replace("/"); } catch (e) {} })();
-
-    function start() {
-      $("press").style.display = "none"; $("arrow").style.display = "none";
-      $("form").classList.add("on"); $("u").focus();
-    }
+    function start() { $("press").style.display = "none"; $("arrow").style.display = "none"; $("form").classList.add("on"); $("u").focus(); }
     $("press").onclick = start;
     document.addEventListener("keydown", (e) => { if (!$("form").classList.contains("on") && (e.key === "Enter" || e.key === " ")) start(); });
-
     async function go(path) {
       const username = $("u").value.trim(), password = $("p").value;
       if (username.length < 3) return msg("USERNAME NEEDS 3+ CHARACTERS");
