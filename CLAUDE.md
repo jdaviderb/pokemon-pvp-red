@@ -9,8 +9,13 @@ over **WebRTC** (VP8 video + Opus audio), with **keyboard input** sent back over
 channel. Open `http://localhost:3000`, click **Connect**, watch/play.
 
 The crate name is historical: NES (tetanes-core) → N64 (libretro) → now also **Game Boy / GBC**
-(libretro). The libretro frontend (`src/n64.rs`) loads ANY core. Designs: `DESIGN.md` (NES),
-`DESIGN-N64.md`, `DESIGN-GB.md`. Emulation is server-only — the browser only receives the stream.
+(libretro). The libretro frontend (`src/n64.rs`) loads ANY core. Emulation is server-only — the
+browser only receives the stream.
+
+> **Full docs:** `docs/ARCHITECTURE.md` (complete project guide: lineage, components, cores, HTTP
+> API, build, extending) and `docs/battle-arena.md` (the AI battle arena + matchup). Verified
+> design records: `DESIGN.md` (NES), `DESIGN-N64.md`, `DESIGN-GB.md`, `DESIGN-BATTLE.md`,
+> `DESIGN-LEGENDARY.md`. Gen-1 RAM map: `docs/pokemon-red-ram-map.md`.
 
 Default ROM/core: `Pokemon Red Color.gbc` + `cores/gambatte_libretro.dylib` (GBC, color).
 The .gbc is `Pokemon Red.gb` with `pokered_color/pokered_color_vanilla.ips` applied (see
@@ -68,13 +73,15 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
 | `src/pipeline.rs` | the core-fps loop; broadcast channels; `AppInner`; N64 input; stats |
 | `src/webrtc.rs` | per-peer PeerConnection, tracks (Opus stereo cap), RTCP drain, data channel, signaling, cleanup |
 | `src/battle.rs` | Pokémon Red battle arena: `BattleState`/`BattlePokemon`/`AgentAction`, `read_battle_state` (WRAM, BIG-ENDIAN), inject_*, `TapMachine` (action→menu input) |
-| `src/signaling.rs` | axum `Router`, `POST /offer`, `AppState`, `GET/POST /battle/{state,action,save,load}` |
+| `src/signaling.rs` | axum `Router`, `POST /offer`, `AppState`, `/battle/{state,action,save,load,setup,species}` |
 | `src/main.rs` | entry: ROM + core paths, start pipeline, serve axum |
 | `logshim.c` + `build.rs` | C-variadic log fn for `GET_LOG_INTERFACE` (mupen-next needs it) |
-| `static/index.html` | browser client (N64 keymap) |
-| `cores/` | libretro core dylibs (`fetch.sh`; gitignored) |
-| `DESIGN-N64.md` | full verified N64 design + risks |
-| `research/*.md`, `research/ssb64-*.png` | grounded probe findings + proof screenshots |
+| `scripts/apply_ips.py` | IPS patcher (makes `Pokemon Red Color.gbc`) |
+| `static/index.html` | browser client: CRT-TV UI, per-system keymap, AI battle console + matchup picker |
+| `cores/` | libretro core dylibs (`fetch.sh`; gitignored). `states/` = savestates (gitignored) |
+| `docs/` | `ARCHITECTURE.md`, `battle-arena.md`, `pokemon-red-ram-map.md` |
+| `DESIGN*.md` | verified design records (NES, N64, GB, BATTLE, LEGENDARY) |
+| `research/*.md`, `research/*.png` | grounded probe findings + proof screenshots |
 
 ## Non-obvious things — READ before editing these areas
 

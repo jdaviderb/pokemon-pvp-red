@@ -133,8 +133,10 @@ Win/loss: `enemy.hp==0` (ganas) / `player.hp==0` (pierdes); batalla terminada cu
 | `scripts/apply_ips.py` | aplicar parches IPS (genera el `.gbc` de Pokémon Red Color) |
 | `cores/` | dylibs libretro (`fetch.sh` los baja; ignorados por git) |
 | `static/index.html` | cliente navegador (TV CRT + teclado) |
-| `DESIGN-N64.md`, `DESIGN-GB.md`, `DESIGN-BATTLE.md` | diseños verificados + riesgos |
+| `docs/ARCHITECTURE.md` | **guía completa del proyecto** (lineage, componentes, cores, API HTTP, build, extender) |
+| `docs/battle-arena.md` | guía de la battle-arena de IA + matchup de legendarios |
 | `docs/pokemon-red-ram-map.md` | RAM map de batalla (direcciones + endianness) |
+| `DESIGN*.md` | diseños verificados + riesgos (NES, N64, GB, BATTLE, LEGENDARY) |
 | `test/e2e-*.cjs` | pruebas headless (Chrome/Puppeteer) |
 | `research/` | notas de investigación + capturas de prueba |
 
