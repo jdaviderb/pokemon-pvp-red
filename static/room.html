@@ -45,9 +45,10 @@
     .reelbox { padding:12px 14px; display:grid; grid-template-columns:1fr 116px; gap:10px; align-items:center; }
     .reel .lbl { color:#5a563f; font-size:16px; letter-spacing:2px; }
     .rows { margin-top:4px; display:flex; flex-direction:column; }
-    .rrow { display:flex; align-items:center; gap:8px; padding:1px 6px; color:#5a563f; opacity:.7; font-size:18px; border-radius:3px; }
-    .rrow img { width:18px; height:18px; image-rendering:pixelated; filter:grayscale(1) contrast(1.1) brightness(.5); }
-    .rrow .no { color:#7a755a; width:34px; }
+    .rrow { display:flex; align-items:center; gap:7px; padding:1px 6px; color:#5a563f; opacity:.7; font-size:16px; border-radius:3px; white-space:nowrap; }
+    .rrow img { width:18px; height:18px; image-rendering:pixelated; filter:grayscale(1) contrast(1.1) brightness(.5); flex:none; }
+    .rrow .no { color:#7a755a; width:52px; flex:none; }
+    .rrow > span:last-child { flex:1; overflow:hidden; text-overflow:clip; }
     .rrow.hot { opacity:1; background:#000000; color:#ffffff; } .rrow.hot .no { color:#d8d8d0; }
     .spincol { text-align:center; }
     .spinner { width:76px; height:76px; margin:0 auto 6px; border-radius:50%;
