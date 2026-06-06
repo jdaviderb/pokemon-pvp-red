@@ -8,7 +8,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
   <style>
     :root { --bg:#04070a; --grn:#5ad17a; --grn-dim:#2c6e44; --red:#e8403f; --wht:#e9efe6; --txt:#9fe0b4;
-      --dim:#4f8a66; --line:#1c3a28; --blue:#5aa9ff; --bluedim:#23507e; --reddim:#7a2422; }
+      --dim:#4f8a66; --line:#1c3a28; --blue:#5aa9ff; --bluedim:#23507e; --reddim:#7a2422;
+      --parch:#e9e2c6; --ink:#33301f; --inkdim:#6b6448; }
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; background:var(--bg); color:var(--txt);
       font-family:"VT323", ui-monospace, monospace; font-size:21px; line-height:1.15; padding:12px;
@@ -21,7 +22,7 @@
     .pball::after { content:""; position:absolute; inset:0; margin:auto; width:6px; height:6px; background:#e9efe6; border:2px solid #0a0a0a; border-radius:50%; }
 
     /* header */
-    header { display:grid; grid-template-columns:200px 1fr 200px; gap:10px; }
+    header { display:grid; grid-template-columns:180px 1fr 150px 96px; gap:10px; }
     header .cell { padding:7px 12px; color:var(--dim); font-size:18px; line-height:1.25; }
     header .cell b { color:var(--grn); font-size:20px; } header .cell .led{color:var(--red);}
     header .title { text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; }
@@ -74,40 +75,45 @@
     .vs { font-size:54px; color:var(--grn); text-shadow:0 0 16px rgba(90,209,122,.5); }
     .startbox { padding:12px 18px; font-size:16px; color:var(--grn); letter-spacing:1px; text-align:center; }
 
-    /* ---- BATTLE VIEW ---- */
-    .battleview { display:grid; grid-template-rows:auto auto auto; gap:10px; }
-    .brow { display:grid; grid-template-columns:230px 1fr 230px; gap:10px; align-items:start; }
-    .sidecard { padding:12px; text-align:center; transition:box-shadow .2s; }
-    .sidecard .nm { font-size:24px; } .sidecard .sprite { width:130px; height:130px; }
-    .youbadge { color:var(--grn); font-size:15px; letter-spacing:1px; }
-    .sidecard.myturn { box-shadow:0 0 0 2px var(--grn), 0 0 26px rgba(90,209,122,.55); animation:turnpulse 1.1s ease-in-out infinite; }
-    .turnflag { display:none; color:var(--grn); font-size:16px; letter-spacing:2px; margin-top:6px; }
-    .sidecard.myturn .turnflag { display:block; animation:turnpulse 1.1s ease-in-out infinite; }
-    @keyframes turnpulse { 50% { opacity:.55; } }
-    .pips { display:flex; gap:3px; margin-top:8px; justify-content:center; }
-    .pips i { width:14px; height:14px; background:#0b1610; border:1px solid var(--line); }
-    .p1 .pips i.on{background:var(--blue);} .p2 .pips i.on{background:var(--red);}
-    .screen { position:relative; height:min(52vh,440px); background:#0a140c; overflow:hidden; border-radius:14px;
-      box-shadow: inset 0 0 55px rgba(0,0,0,.8), 0 0 18px rgba(90,209,122,.16); }
-    video { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; background:#0a140c; display:block;
-      filter:saturate(1.05) contrast(1.04); }
-    /* CRT overlays: scanlines + vignette/curvature glow (over the video, click-through) */
-    .screen::before { content:""; position:absolute; inset:0; z-index:2; pointer-events:none;
-      background: repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.24) 2px 3px); }
-    .screen::after { content:""; position:absolute; inset:0; z-index:3; pointer-events:none;
-      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,.62) 100%);
-      box-shadow: inset 0 0 70px rgba(0,0,0,.55); }
-    #unmute { z-index:4; }
-    .movebar { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; padding:10px; }
-    .mv { text-align:left; font:inherit; font-size:19px; color:#bfe6d0; background:#0a160f; border:2px solid var(--line); border-radius:7px; padding:9px 12px; cursor:default; }
-    .mv .ic{margin-right:8px;} .mv small{display:block;color:var(--dim);font-size:15px;letter-spacing:1px;}
-    .you .mv.live { cursor:pointer; } .you .mv.live:hover { border-color:var(--grn); color:#eafff2; }
-    .mv.live { border-color:var(--reddim); color:#ffe2e1; }
-    .mv:disabled { opacity:.5; }
-    .cmd { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; font-size:21px; }
-    #timer { color:var(--grn); font-size:24px; } #timer.urgent{color:var(--red);}
-    #turnNo { color:var(--dim); border:2px solid var(--line); border-radius:6px; padding:4px 12px; font-size:18px; letter-spacing:1px; }
-    #unmute { position:absolute; right:8px; bottom:8px; font:inherit; font-size:15px; background:#0a160f; color:var(--grn); border:1px solid var(--line); border-radius:6px; padding:4px 9px; cursor:pointer; }
+    @keyframes turnpulse { 50% { opacity:.6; } }
+    /* ---- BATTLE VIEW (parchment / minimalist) ---- */
+    .battleview { display:grid; grid-template-columns:1fr 300px; gap:12px; align-items:start; }
+    .bz-left, .bz-right { display:flex; flex-direction:column; gap:12px; }
+    .screen { position:relative; height:min(46vh,400px); background:#0a140c; overflow:hidden; border-radius:12px;
+      border:3px solid #1d1b12; box-shadow: inset 0 0 50px rgba(0,0,0,.8), 0 0 14px rgba(0,0,0,.5); }
+    video { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; background:#0a140c; display:block; filter:saturate(1.05) contrast(1.04); }
+    .screen::before { content:""; position:absolute; inset:0; z-index:2; pointer-events:none; background:repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.22) 2px 3px); }
+    .screen::after { content:""; position:absolute; inset:0; z-index:3; pointer-events:none; background:radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,.55) 100%); }
+    #unmute { position:absolute; right:8px; bottom:8px; z-index:4; font:inherit; font-size:14px; background:#1d1b12; color:#e9e2c6; border:1px solid #000; border-radius:6px; padding:4px 9px; cursor:pointer; }
+    /* stat cards */
+    .statcard { background:var(--parch); color:var(--ink); border:3px solid var(--ink); border-radius:10px; padding:10px 12px; box-shadow:0 0 0 2px #000 inset, 3px 3px 0 rgba(0,0,0,.4); transition:box-shadow .2s; }
+    .statcard.p1 { border-color:#2c4a6e; } .statcard.p2 { border-color:#6e2c2c; }
+    .sc-head { display:flex; align-items:center; gap:8px; border-bottom:2px solid var(--ink); padding-bottom:6px; margin-bottom:8px; }
+    .statcard .sc-sprite { width:42px; height:42px; image-rendering:pixelated; filter:grayscale(1) contrast(1.1) brightness(.45); }
+    .sc-name { font-size:21px; letter-spacing:1px; flex:1; }
+    .sc-typeic { font-size:18px; }
+    .sc-line { display:flex; justify-content:space-between; align-items:center; font-size:17px; margin:5px 0; }
+    .sc-line .k { color:var(--inkdim); letter-spacing:1px; }
+    .badge { display:inline-block; font-size:14px; padding:2px 9px; border-radius:4px; color:#fff; letter-spacing:1px; background:#a8a070; }
+    .sc-hp .hptrack { width:150px; max-width:none; height:11px; background:#bdb491; border:2px solid var(--ink); border-radius:2px; }
+    .hpfill { height:100%; width:100%; background:#5a7a3a; } .hpfill.low{background:#c8a23a;} .hpfill.crit{background:#c0463f;}
+    .sc-hpn { text-align:right; font-size:18px; margin-top:3px; }
+    .statcard.myturn { box-shadow:0 0 0 2px #000 inset, 0 0 22px rgba(90,209,122,.85); animation:glowpulse 1.1s ease-in-out infinite; }
+    @keyframes glowpulse { 50% { box-shadow:0 0 0 2px #000 inset, 0 0 32px rgba(90,209,122,1); } }
+    /* moves 2x2 */
+    .moves2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .mv2 { display:flex; align-items:center; gap:12px; background:var(--parch); color:var(--ink); border:3px solid var(--ink); border-radius:8px; padding:8px 12px; font:inherit; text-align:left; cursor:default; box-shadow:3px 3px 0 rgba(0,0,0,.35); }
+    .mv2 .mic { width:34px; height:34px; flex:none; display:grid; place-items:center; background:var(--ink); color:var(--parch); border-radius:6px; font-size:18px; }
+    .mv2 b { font-size:19px; letter-spacing:1px; } .mv2 small { display:block; color:var(--inkdim); font-size:14px; }
+    .you .mv2.live { cursor:pointer; } .you .mv2.live:hover { outline:3px solid #2c4a6e; outline-offset:1px; }
+    .mv2:disabled, .mv2[disabled] { opacity:.5; }
+    /* banner + timer */
+    .banner { display:flex; align-items:center; gap:14px; background:#240c0c; color:#d98a86; border:3px solid #7a2422; border-radius:10px; padding:12px 16px; font-size:21px; letter-spacing:1px; }
+    .banner.active { background:#3a1010; color:#ff5a55; animation:turnpulse 1.1s ease-in-out infinite; }
+    .banner .bolt { width:34px; height:34px; flex:none; display:grid; place-items:center; background:#7a2422; color:#ffe; border-radius:6px; }
+    .timerbox { background:var(--parch); color:var(--ink); border:3px solid var(--ink); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:8px; box-shadow:3px 3px 0 rgba(0,0,0,.35); }
+    .timerbox .tg { display:flex; align-items:center; gap:10px; font-size:28px; } #timer.urgent { color:#c0463f; }
+    .tpips { display:flex; gap:3px; } .tpips i { flex:1; height:12px; background:#bdb491; border:1px solid var(--ink); } .tpips i.on { background:#c0463f; }
 
     .overlay { position:fixed; inset:0; background:rgba(3,6,8,.93); display:grid; place-items:center; z-index:50; }
     .overlay.hidden { display:none; }
@@ -123,6 +129,7 @@
       <div class="sub">◂─── RANDOM BATTLE ARENA ───▸</div>
     </div>
     <div class="box cell" style="text-align:right"><span class="led">▪</span> MODE<br><b>1 VS 1</b><br>LEVEL CAP: <span id="lvcap">50</span></div>
+    <div class="box cell" style="text-align:right"><span class="led">▪</span> TURN<br><b id="turnNo">0</b></div>
   </header>
 
   <main id="arena" class="phase-slot">
@@ -161,28 +168,28 @@
 
     <!-- ============ BATTLE ============ -->
     <div class="battleview">
-      <div class="brow">
-        <div class="box p1box p1 sidecard" id="p1card">
-          <div class="ptag">◖ PLAYER 1 ◗ <span class="youbadge">(YOU)</span></div>
-          <div class="nm s1 name">—</div>
-          <img class="sprite s1 sprite" src="/sprites/1.png" alt="" />
-          <div class="lv">Lv.50</div><div class="badge s1 type">—</div>
-          <div class="hpline" style="justify-content:center">HP: <span class="hptrack"><span class="hpfill s1 hpfill"></span></span><span class="s1 hpnum"></span></div>
-          <div class="pips" id="pips1"></div>
-          <div class="turnflag">▸ YOUR TURN ◂</div>
-        </div>
-        <div class="box screen" id="screenWrap"><video id="video" autoplay playsinline muted></video><button id="unmute">🔊 SOUND</button></div>
-        <div class="box p2box p2 sidecard">
-          <div class="ptag" style="text-align:right">◖ PLAYER 2 ◗</div>
-          <div class="nm s2 name">—</div>
-          <img class="sprite s2 sprite" src="/sprites/1.png" alt="" />
-          <div class="lv">Lv.50</div><div class="badge s2 type">—</div>
-          <div class="hpline" style="justify-content:center">HP: <span class="hptrack"><span class="hpfill s2 hpfill"></span></span><span class="s2 hpnum"></span></div>
-          <div class="pips" id="pips2"></div>
-        </div>
+      <div class="bz-left">
+        <div class="screen" id="screenWrap"><video id="video" autoplay playsinline muted></video><button id="unmute">🔊 SOUND</button></div>
+        <div class="moves2 you" id="movebar"></div>
+        <div class="banner" id="banner"><span class="bolt">⚡</span><span id="turnInfo">Choose your move.</span></div>
       </div>
-      <div class="box movebar you" id="movebar"></div>
-      <div class="box cmd"><span id="turnInfo">Choose your move.</span><span id="timer"></span><span id="turnNo" class="px">TURN 1</span></div>
+      <div class="bz-right">
+        <div class="statcard p1 you" id="p1card">
+          <div class="sc-head"><img class="sc-sprite s1 sprite" src="/sprites/1.png" alt="" /><span class="sc-name s1 name">—</span><span class="sc-typeic s1 typeic"></span></div>
+          <div class="sc-line"><span class="k">Lv.</span><span class="v">50</span></div>
+          <div class="sc-line"><span class="k">TYPE</span><span class="badge s1 type">—</span></div>
+          <div class="sc-hp sc-line"><span class="k">HP</span><span class="hptrack"><span class="hpfill s1 hpfill"></span></span></div>
+          <div class="sc-hpn s1 hpnum"></div>
+        </div>
+        <div class="statcard p2 opp" id="p2card">
+          <div class="sc-head"><img class="sc-sprite s2 sprite" src="/sprites/1.png" alt="" /><span class="sc-name s2 name">—</span><span class="sc-typeic s2 typeic"></span></div>
+          <div class="sc-line"><span class="k">Lv.</span><span class="v">50</span></div>
+          <div class="sc-line"><span class="k">TYPE</span><span class="badge s2 type">—</span></div>
+          <div class="sc-hp sc-line"><span class="k">HP</span><span class="hptrack"><span class="hpfill s2 hpfill"></span></span></div>
+          <div class="sc-hpn s2 hpnum"></div>
+        </div>
+        <div class="timerbox"><div class="tg">⏳ <span id="timer">—</span></div><div class="tpips" id="tpips"></div></div>
+      </div>
     </div>
   </main>
 
@@ -204,15 +211,16 @@
     if (/agility|quick|swords|sharpen|focus|defense|harden|withdraw|screech|double team|minimize/.test(n)) return "✦";
     return "▸";
   }
+  const TYPE_COLOR = {NORMAL:"#a8a070",FIGHTING:"#c0573f",FLYING:"#7fa9d4",POISON:"#9d6fbf",GROUND:"#c9a86a",ROCK:"#a89060",BUG:"#9aab3a",GHOST:"#6a5a9a",FIRE:"#e08a4a",WATER:"#5a9fd4",GRASS:"#6fb04a",ELECTRIC:"#caa72e",PSYCHIC:"#d46fa0",ICE:"#6fc6d4",DRAGON:"#7a6fd4"};
+  const TYPE_ICON  = {NORMAL:"●",FIGHTING:"✊",FLYING:"🪶",POISON:"☠",GROUND:"⛰",ROCK:"⛰",BUG:"🐛",GHOST:"👻",FIRE:"🔥",WATER:"💧",GRASS:"🌿",ELECTRIC:"⚡",PSYCHIC:"👁",ICE:"❄",DRAGON:"🐉"};
+  const firstType = (t) => (t || "").split("/")[0];
+  const bannerActive = (on) => $("banner").classList.toggle("active", on);
   const $ = (id) => document.getElementById(id);
   const setF = (side, field, txt) => document.querySelectorAll(".s" + side + "." + field).forEach((e) => (e.textContent = txt));
   const setSprite = (side, dex) => document.querySelectorAll(".s" + side + ".sprite").forEach((e) => (e.src = "/sprites/" + dex + ".png"));
 
   let ws, pc, mySeat = 0, timerHandle = null, resultShown = false, lastProgress = Date.now();
   let SP = {}, byDex = {}, allDex = [], lockedIdx = { 1:null, 2:null }, myMoves = null, reelsStarted = false;
-
-  // pips decoration
-  [1,2].forEach((s) => { const p = $("pips" + s); for (let i=0;i<8;i++){ const e=document.createElement("i"); if(i<6)e.className="on"; p.appendChild(e);} });
 
   async function connectVideo() {
     pc = new RTCPeerConnection({ iceServers: [] });
@@ -257,16 +265,16 @@
         const opp = (lockedIdx[2] && SP[lockedIdx[2]]) ? SP[lockedIdx[2]].name : "the opponent";
         if (m.seat === mySeat) {
           renderMoves(myMoves, true); startTimer(m.deadline_ms);
-          $("turnInfo").textContent = "▸ YOUR TURN — choose " + mine + "'s move!";
-          $("p1card").classList.add("myturn");
+          $("turnInfo").textContent = "≫ YOUR TURN — choose " + mine + "'s move! ≪";
+          $("p1card").classList.add("myturn"); bannerActive(true);
         } else {
           $("turnInfo").textContent = "Opponent's " + opp + " is choosing…";
-          $("p1card").classList.remove("myturn");
+          $("p1card").classList.remove("myturn"); bannerActive(false);
         }
         break;
       }
       case "battle_state": onBattle(m); break;
-      case "move_auto": if (m.seat === mySeat) { $("turnInfo").textContent = "⏱ Time's up — random move chosen!"; $("p1card").classList.remove("myturn"); } break;
+      case "move_auto": if (m.seat === mySeat) { $("turnInfo").textContent = "⏱ Time's up — random move chosen!"; $("p1card").classList.remove("myturn"); bannerActive(false); } break;
       case "winner": resultShown = true; showResult(m.you_won); break;
       case "room_closed": if (!resultShown) bail(m.reason === "battle_ended" ? "MATCH ENDED" : "MATCH COULDN'T START"); break;
     }
@@ -300,23 +308,25 @@
 
   function lockCard(side, idx) { lockedIdx[side]=idx; const s=SP[idx]; if(!s) return;
     setSprite(side, s.dex); setF(side,"name",s.name); setF(side,"type",s.types||"—");
-    document.querySelectorAll(".lockcard").forEach(()=>{}); $("lock"+side).classList.add("locked"); $("locklbl"+side).textContent="🔓 LOCKED IN";
+    setF(side,"typeic", TYPE_ICON[firstType(s.types)] || "●");
+    document.querySelectorAll(".s"+side+".type").forEach((e)=>{ e.style.background = TYPE_COLOR[firstType(s.types)] || "#a8a070"; });
+    $("lock"+side).classList.add("locked"); $("locklbl"+side).textContent="🔓 LOCKED IN";
   }
 
   function renderMoves(moves, live) {
     const box = $("movebar"); box.innerHTML = "";
     const list = (moves && moves.length) ? moves : (lockedIdx[1] && SP[lockedIdx[1]] ? SP[lockedIdx[1]].moves.map((id,i)=>({slot:i,id,pp:""})) : []);
-    list.forEach((mv) => { if(!mv.id) return; const b=document.createElement("button"); b.className="mv"; b.dataset.slot=mv.slot;
-      b.innerHTML = `<span class="ic">${moveIcon(moveName(mv.id))}</span>${moveName(mv.id)}<small>PP ${mv.pp!==""?mv.pp:""}</small>`;
+    list.forEach((mv) => { if(!mv.id) return; const nm=moveName(mv.id); const b=document.createElement("button"); b.className="mv2"; b.dataset.slot=mv.slot;
+      b.innerHTML = `<span class="mic">${moveIcon(nm)}</span><span><b>${nm}</b><small>PP ${mv.pp!==""?mv.pp:""}</small></span>`;
       if (live) { b.classList.add("live"); b.onclick=()=>{ if(!ws||ws.readyState!==1)return; ws.send(JSON.stringify({type:"commit_move",slot:mv.slot}));
-        renderMoves(myMoves,false); stopTimer(); $("p1card").classList.remove("myturn"); $("turnInfo").textContent="Locked in — resolving…"; }; }
+        renderMoves(myMoves,false); stopTimer(); $("p1card").classList.remove("myturn"); bannerActive(false); $("turnInfo").textContent="Locked in — resolving…"; }; }
       else b.disabled = true;
       box.appendChild(b); });
   }
 
   function onBattle(m) {
-    setView("battle"); $("turnNo").textContent = "TURN " + (m.turn || 0);
-    $("p1card").classList.remove("myturn");
+    setView("battle"); $("turnNo").textContent = (m.turn || 0);
+    $("p1card").classList.remove("myturn"); bannerActive(false);
     hpBar(1, m.you); hpBar(2, m.opp);
     if (m.you.species && SP[m.you.species]) lockCard(1, m.you.species);
     if (m.opp.species && SP[m.opp.species]) lockCard(2, m.opp.species);
@@ -327,10 +337,11 @@
     document.querySelectorAll(".s"+side+".hpfill").forEach((f)=>{ f.style.width=pct+"%"; f.className="hpfill s"+side+" hpfill "+(pct<=12?"crit":pct<=35?"low":""); });
     setF(side, "hpnum", mon.max_hp ? mon.hp+"/"+mon.max_hp : "");
   }
-  function startTimer(ms){ stopTimer(); const end=Date.now()+(ms||15000);
-    const upd=()=>{ const left=Math.max(0,(end-Date.now())/1000); $("timer").textContent=left.toFixed(0)+"s"; $("timer").classList.toggle("urgent",left<=5); if(left<=0){stopTimer(); renderMoves(myMoves,false);} };
+  function renderTpips(frac){ const p=$("tpips"); if(!p)return; const N=12, on=Math.max(0,Math.ceil(frac*N)); let h=""; for(let i=0;i<N;i++) h+=(i<on?'<i class="on"></i>':'<i></i>'); p.innerHTML=h; }
+  function startTimer(ms){ stopTimer(); const total=ms||15000; const end=Date.now()+total;
+    const upd=()=>{ const left=Math.max(0,(end-Date.now())/1000); $("timer").textContent=Math.ceil(left); $("timer").classList.toggle("urgent",left<=5); renderTpips(left/(total/1000)); if(left<=0){stopTimer(); renderMoves(myMoves,false);} };
     upd(); timerHandle=setInterval(upd,100); }
-  function stopTimer(){ if(timerHandle)clearInterval(timerHandle); timerHandle=null; $("timer").textContent=""; $("timer").classList.remove("urgent"); }
+  function stopTimer(){ if(timerHandle)clearInterval(timerHandle); timerHandle=null; $("timer").textContent="—"; $("timer").classList.remove("urgent"); const p=$("tpips"); if(p)p.innerHTML=""; }
   function showResult(youWon){ stopTimer(); $("resultText").textContent=youWon?"YOU WIN!":"YOU LOSE"; $("resultText").className="result px "+(youWon?"win":"lose"); $("result").classList.remove("hidden"); }
   function bail(msg){ resultShown=true; stopTimer(); $("resultText").textContent=msg; $("resultText").className="result px"; $("resultText").style.fontSize="26px"; $("result").classList.remove("hidden"); setTimeout(()=>location.replace("/lobby.html"),2300); }
   $("home").onclick = () => location.replace("/lobby.html");
