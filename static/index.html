@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>RETRO·VISION 64 — server-side emulation over WebRTC</title>
+  <title>RETRO·VISION — Game Boy over WebRTC</title>
   <style>
     :root {
       color-scheme: dark;
@@ -211,7 +211,7 @@
         </div>
       </div>
       <div class="panel">
-        <div class="brand">RETRO·VISION <span>64</span></div>
+        <div class="brand">RETRO·VISION <span>GB</span></div>
         <div class="controls">
           <button id="connect" class="power">⏻ <span>POWER</span></button>
           <span class="readout"><span id="status">standby</span></span>
@@ -222,34 +222,28 @@
     <div class="stand"></div>
   </div>
 
-  <p class="caption"><b>Pokémon Stadium</b> · emulación 100% en el servidor, streaming por WebRTC</p>
+  <p class="caption"><b>Pokémon Red Color</b> · emulación 100% en el servidor, streaming por WebRTC</p>
   <p class="hint">
-    <b>Stick:</b> <kbd>←↑↓→</kbd> · <b>A</b> <kbd>X</kbd> · <b>B</b> <kbd>Z</kbd> ·
-    <b>Z-trig</b> <kbd>C</kbd> · <b>L</b> <kbd>Q</kbd> · <b>R</b> <kbd>E</kbd> · <b>Start</b> <kbd>Enter</kbd>
-    · <b>C</b> <kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd>
+    <b>D-pad</b> <kbd>←↑↓→</kbd> · <b>A</b> <kbd>X</kbd> · <b>B</b> <kbd>Z</kbd> ·
+    <b>Start</b> <kbd>Enter</kbd> · <b>Select</b> <kbd>⇧</kbd>/<kbd>⌫</kbd>
   </p>
 
   <script>
-    // Physical-key (e.code) -> { player, N64 wire button }. The server folds the
-    // Stick*/C* names into the analog control stick / C-stick; the rest are digital.
+    // Physical-key (e.code) -> { player, wire button }. Game Boy has no analog stick:
+    // the D-pad uses the DIGITAL Up/Down/Left/Right names (server maps to ID_UP..ID_RIGHT),
+    // NOT the Stick* names. A/B/Start/Select are digital too.
     const KEYMAP = {
-      // control stick (analog) on the arrows
-      ArrowUp:    { p: 1, b: "StickUp" },
-      ArrowDown:  { p: 1, b: "StickDown" },
-      ArrowLeft:  { p: 1, b: "StickLeft" },
-      ArrowRight: { p: 1, b: "StickRight" },
-      // face / shoulder / start
-      KeyX:  { p: 1, b: "A" },
-      KeyZ:  { p: 1, b: "B" },
-      KeyC:  { p: 1, b: "Z" },      // N64 Z trigger
-      KeyQ:  { p: 1, b: "L" },
-      KeyE:  { p: 1, b: "R" },
-      Enter: { p: 1, b: "Start" },
-      // C-buttons on IJKL (up/left/down/right)
-      KeyI:  { p: 1, b: "CUp" },
-      KeyJ:  { p: 1, b: "CLeft" },
-      KeyK:  { p: 1, b: "CDown" },
-      KeyL:  { p: 1, b: "CRight" },
+      // D-pad on the arrows (digital)
+      ArrowUp:    { p: 1, b: "Up" },
+      ArrowDown:  { p: 1, b: "Down" },
+      ArrowLeft:  { p: 1, b: "Left" },
+      ArrowRight: { p: 1, b: "Right" },
+      // face buttons + start/select
+      KeyX:       { p: 1, b: "A" },
+      KeyZ:       { p: 1, b: "B" },
+      Enter:      { p: 1, b: "Start" },
+      ShiftRight: { p: 1, b: "Select" },
+      Backspace:  { p: 1, b: "Select" },
     };
 
     const statusEl = document.getElementById("status");

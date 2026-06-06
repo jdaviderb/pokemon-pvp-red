@@ -499,6 +499,7 @@ pub fn map_button(b: &str) -> Option<N64Action> {
         "A" => Btn(ID_A),
         "B" => Btn(ID_B),
         "Start" => Btn(ID_START),
+        "Select" => Btn(ID_SELECT), // N64 has no Select; Game Boy does
         "Z" => Btn(ID_L2), // N64 Z trigger
         "L" => Btn(ID_L),
         "R" => Btn(ID_R),

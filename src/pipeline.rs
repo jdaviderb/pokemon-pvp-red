@@ -11,7 +11,7 @@ use tokio::sync::{broadcast, mpsc};
 
 use crate::audio::OpusStreamer;
 use crate::n64::{map_button, N64Action, AXIS_MAX, N64};
-use crate::video::{i420_len, make_vp8_encoder, xrgb_to_i420};
+use crate::video::{frame_to_i420, i420_len, make_vp8_encoder};
 
 #[derive(Clone)]
 pub struct EncodedVideo {
@@ -182,10 +182,20 @@ fn run_loop(
             }
         }
 
-        // 4. VIDEO: latest XRGB8888 -> I420 -> VP8 -> broadcast.
+        // 4. VIDEO: latest framebuffer (format-aware: XRGB8888 for N64/SameBoy, RGB565 for gambatte)
+        //    -> I420 -> VP8 -> broadcast.
         emu.with_frame(|f| {
             if !f.bytes.is_empty() {
-                xrgb_to_i420(&f.bytes, f.w as usize, f.h as usize, f.pitch, &mut i420, cw as usize, ch as usize);
+                frame_to_i420(
+                    &f.bytes,
+                    f.w as usize,
+                    f.h as usize,
+                    f.pitch,
+                    f.fmt,
+                    &mut i420,
+                    cw as usize,
+                    ch as usize,
+                );
             }
         });
         let pts_ms = (frame_idx as f64 * 1000.0 / emu.fps) as i64;

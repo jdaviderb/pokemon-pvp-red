@@ -17,9 +17,11 @@ use std::net::SocketAddr;
 
 use signaling::{router, AppState};
 
-const DEFAULT_ROM: &str = "~/pokemon-pvp-red/Pokemon-Stadium.z64";
+// Default to the GBC color romhack so `cargo run` shows color out of the box. The original
+// grayscale DMG ROM is "Pokemon Red.gb" (pass it as argv[1] to play the classic monochrome look).
+const DEFAULT_ROM: &str = "~/pokemon-pvp-red/Pokemon Red Color.gbc";
 const DEFAULT_CORE: &str =
-    "~/pokemon-pvp-red/cores/parallel_n64_libretro.dylib";
+    "~/pokemon-pvp-red/cores/gambatte_libretro.dylib";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

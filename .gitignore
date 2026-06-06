@@ -18,3 +18,9 @@
 
 # Prebuilt libretro cores (fetch with cores/fetch.sh)
 cores/*.dylib
+*.gb
+*.gbc
+*.ips
+
+# Pokémon Red Color romhack IPS patches (downloaded; copyright)
+pokered_color/

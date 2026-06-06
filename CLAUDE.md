@@ -8,14 +8,16 @@ Guidance for Claude Code when working in this repository.
 over **WebRTC** (VP8 video + Opus audio), with **keyboard input** sent back over a WebRTC data
 channel. Open `http://localhost:3000`, click **Connect**, watch/play.
 
-The crate name is historical: it started as **NES** (tetanes-core) and now runs **N64** via a
-**libretro** core. The NES/SNES lineage is documented in `DESIGN.md` (NES) and `DESIGN-N64.md`
-(current). Emulation is server-only by design — the browser only receives the stream.
+The crate name is historical: NES (tetanes-core) → N64 (libretro) → now also **Game Boy / GBC**
+(libretro). The libretro frontend (`src/n64.rs`) loads ANY core. Designs: `DESIGN.md` (NES),
+`DESIGN-N64.md`, `DESIGN-GB.md`. Emulation is server-only — the browser only receives the stream.
 
-Default ROM/core: `Pokemon-Stadium.z64` + `cores/parallel_n64_libretro.dylib`.
-Override: `cargo run --release -- "<rom.z64>" "<core.dylib>"`. The RSP plugin is env-selectable:
-`N64_RSP=hle` (faster) vs the default `cxd4` (accurate LLE; needed for demanding games like
-Pokémon Stadium, which renders correctly at 60 fps with cxd4 + angrylion).
+Default ROM/core: `Pokemon Red Color.gbc` + `cores/gambatte_libretro.dylib` (GBC, color).
+The .gbc is `Pokemon Red.gb` with `pokered_color/pokered_color_vanilla.ips` applied (see
+`scripts/apply_ips.py`; header 0x143=0xC0). Override via argv: `cargo run --release -- "<rom>" "<core.dylib>"`:
+- classic grayscale DMG: `cargo run --release -- "Pokemon Red.gb"` (header 0x143=0x00 → monochrome by design).
+- N64: `cargo run --release -- "<rom>.z64" cores/parallel_n64_libretro.dylib` (RSP env-selectable:
+  `N64_RSP=hle` faster vs default `cxd4` accurate LLE).
 
 ## Build & run
 
@@ -25,8 +27,8 @@ cargo build --release
 ./cores/fetch.sh               # (re)download the libretro N64 cores if cores/*.dylib are missing
 ```
 Then open **http://localhost:3000** in **Chrome** and click **Connect**.
-Controls (P1): arrows = control stick, `X`=A, `Z`=B, `C`=Z-trigger, `Q`/`E`=L/R, `Enter`=Start,
-`IJKL`=C-buttons.
+Controls (Game Boy, P1): arrows = D-pad, `X`=A, `Z`=B, `Enter`=Start, `⇧Right`/`⌫`=Select.
+(N64: arrows=stick, `X`=A `Z`=B `C`=Z `Q`/`E`=L/R `Enter`=Start `IJKL`=C-buttons.)
 
 ### Build prerequisites (satisfied on this machine)
 
@@ -81,8 +83,10 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
 - **`GET_LOG_INTERFACE` (env cmd 27)** must return a REAL C-variadic fn pointer (`n64_core_log`
   from `logshim.c`). Declining it makes mupen64plus-next SIGSEGV in `retro_load_game`. Harmless
   for parallel_n64. `build.rs` links the shim; don't drop it.
-- **Pixel format is XRGB8888 = memory bytes B,G,R,X** (not R,G,B). `xrgb_to_i420` reads
-  `src[p]=B, src[p+1]=G, src[p+2]=R`. Use the callback's real `pitch`, never `width*4`.
+- **Pixel format is per-core**: `frame_to_i420` (src/video.rs) branches on `Frame.fmt`. **XRGB8888**
+  = memory bytes B,G,R,X (N64/angrylion, SameBoy). **RGB565** = little-endian u16 (gambatte/mGBA),
+  R5/G6/B5. ALWAYS stride rows by the callback's real `pitch` (gambatte pads 160px→256px = 512 B;
+  never `width*2` or `width*4`).
 - **VP8 canvas is fixed at the first frame's dims** (640×240 for SSB64; angrylion line-doubles
   320→640). Frame dims can change (interlace/menus); `xrgb_to_i420` letterboxes onto the fixed
   canvas because VP8 can't resize mid-stream.

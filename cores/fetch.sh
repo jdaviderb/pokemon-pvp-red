@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 BB=https://buildbot.libretro.com/nightly/apple/osx/arm64/latest
-for c in parallel_n64 mupen64plus_next; do
+for c in gambatte sameboy parallel_n64 mupen64plus_next; do
   echo "fetching $c ..."
   curl -fsSL -o "$c.zip" "$BB/${c}_libretro.dylib.zip"
   unzip -o "$c.zip" >/dev/null && rm -f "$c.zip"
