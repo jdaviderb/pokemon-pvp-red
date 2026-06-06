@@ -11,10 +11,11 @@
       --dim:#4f8a66; --line:#1c3a28; --blue:#5aa9ff; --bluedim:#23507e; --reddim:#7a2422;
       --parch:#e9e2c6; --ink:#33301f; --inkdim:#6b6448; }
     * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; background:var(--bg); color:var(--txt);
-      font-family:"VT323", ui-monospace, monospace; font-size:21px; line-height:1.15; padding:12px;
+    body { margin:0; height:100vh; overflow:hidden; background:var(--bg); color:var(--txt);
+      font-family:"VT323", ui-monospace, monospace; font-size:21px; line-height:1.15; padding:9px;
       background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.32) 0 1px, transparent 1px 3px);
-      display:flex; flex-direction:column; gap:10px; }
+      display:flex; flex-direction:column; gap:8px; }
+    #arena { flex:1; min-height:0; }
     .px { font-family:"Press Start 2P", monospace; }
     .box { border:2px solid var(--grn-dim); border-radius:8px; background:#060f0a; position:relative; }
     .p1box { border-color:var(--bluedim); } .p2box { border-color:var(--reddim); }
@@ -78,15 +79,15 @@
     .startbox { padding:12px 18px; font-size:16px; color:var(--grn); letter-spacing:1px; text-align:center; }
 
     /* ---- BATTLE VIEW (classic Game Boy: cream boxes + ornate double border, monochrome) ---- */
-    .battleview { display:flex; flex-direction:column; gap:12px; max-width:900px; margin:0 auto; width:100%; }
+    .battleview { display:flex; flex-direction:column; gap:10px; max-width:900px; margin:0 auto; width:100%; height:100%; }
     .gb { background:#d6d0b6; color:#171712; border:4px solid #171712; border-radius:14px; position:relative; }
     .gb::after { content:""; position:absolute; inset:5px; border:2px solid #171712; border-radius:9px; pointer-events:none; }
-    .screen-box { padding:7px; }
-    .screen { position:relative; height:min(46vh,420px); background:#0a0a08; overflow:hidden; border-radius:8px; }
+    .screen-box { padding:7px; flex:1 1 auto; min-height:0; }
+    .screen { position:relative; height:100%; background:#0a0a08; overflow:hidden; border-radius:8px; }
     video { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; background:#0a0a08; display:block; }
     .screen::before { content:""; position:absolute; inset:0; z-index:2; pointer-events:none; background:repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.16) 2px 3px); }
     #unmute { position:absolute; right:8px; bottom:8px; z-index:4; font:inherit; font-size:14px; background:#171712; color:#d6d0b6; border:0; border-radius:6px; padding:4px 9px; cursor:pointer; }
-    .bz-row { display:grid; grid-template-columns:1.7fr 1fr; gap:12px; }
+    .bz-row { display:grid; grid-template-columns:1.7fr 1fr; gap:10px; flex:0 0 auto; }
     /* move list (left) */
     .movelist { padding:14px 18px; display:flex; flex-direction:column; justify-content:space-evenly; }
     .mvrow { position:relative; display:flex; justify-content:space-between; align-items:center; padding:4px 6px 4px 30px; font-size:22px; letter-spacing:1px; cursor:default; border-radius:5px; }
@@ -104,10 +105,10 @@
     .statbox .hpfill { height:100%; width:100%; background:#171712; } .statbox .hpfill.low{background:#5a5640;} .statbox .hpfill.crit{background:#7a2c2c;}
     .sb-hpn { text-align:right; font-size:20px; }
     .statbox .badge { display:inline-block; font-size:15px; padding:2px 12px; border:2px solid #171712; border-radius:5px; background:transparent; color:#171712; letter-spacing:1px; }
-    .statbox .sb-sprite { display:block; width:104px; height:104px; margin:auto auto 0; image-rendering:pixelated; filter:grayscale(1) contrast(1.12) brightness(.55); }
+    .statbox .sb-sprite { display:block; width:78px; height:78px; margin:auto auto 0; image-rendering:pixelated; filter:grayscale(1) contrast(1.12) brightness(.55); }
     .gb.myturn { box-shadow:0 0 20px rgba(232,64,63,.6); }
     /* message box (bottom) */
-    .msgbox { padding:14px 18px; font-size:24px; letter-spacing:1px; display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:56px; }
+    .msgbox { padding:12px 18px; font-size:23px; letter-spacing:1px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex:0 0 auto; }
     .msgbox .tmr { font-size:20px; color:#3e3e2e; } .msgbox .tmr.urgent { color:#7a2c2c; }
 
     .overlay { position:fixed; inset:0; background:rgba(3,6,8,.93); display:grid; place-items:center; z-index:50; }
