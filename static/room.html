@@ -104,6 +104,7 @@
     .statbox .hpfill { height:100%; width:100%; background:#171712; } .statbox .hpfill.low{background:#5a5640;} .statbox .hpfill.crit{background:#7a2c2c;}
     .sb-hpn { text-align:right; font-size:20px; }
     .statbox .badge { display:inline-block; font-size:15px; padding:2px 12px; border:2px solid #171712; border-radius:5px; background:transparent; color:#171712; letter-spacing:1px; }
+    .statbox .sb-sprite { display:block; width:96px; height:96px; margin:8px auto 0; image-rendering:pixelated; filter:grayscale(1) contrast(1.12) brightness(.55); }
     .gb.myturn { box-shadow:0 0 20px rgba(232,64,63,.6); }
     /* message box (bottom) */
     .msgbox { padding:14px 18px; font-size:24px; letter-spacing:1px; display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:56px; }
@@ -171,6 +172,7 @@
           <div class="sb-hp">HP: <span class="hptrack"><span class="hpfill s1 hpfill"></span></span></div>
           <div class="sb-hpn s1 hpnum"></div>
           <div class="sb-type"><span class="badge s1 type">—</span></div>
+          <img class="sb-sprite s1 sprite" src="/sprites/1.png" alt="" />
         </div>
       </div>
       <div class="gb msgbox"><span id="turnInfo">Choose your move.</span><span class="tmr" id="timer"></span></div>
