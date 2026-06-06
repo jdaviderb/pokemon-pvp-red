@@ -19,6 +19,7 @@ mod signaling;
 mod species_data;
 mod video;
 mod webrtc; // our module; refer to the crate as `::webrtc`
+mod ws;
 
 use std::net::SocketAddr;
 
@@ -62,7 +63,12 @@ async fn main() -> anyhow::Result<()> {
         _ => Key::generate(),
     };
 
-    let state = AppState { api, inner, db: database, cookie_key };
+    // Game/room layer: matchmaking queue, rooms, WS hub. The matchmaker pairs queued players and
+    // feeds the single emulator one match at a time.
+    let game = std::sync::Arc::new(rooms::GameState::new(inner.clone(), database.clone()));
+    rooms::spawn_matchmaker(game.clone());
+
+    let state = AppState { api, inner, db: database, cookie_key, game };
     let app = router(state);
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     let listener = tokio::net::TcpListener::bind(addr).await?;

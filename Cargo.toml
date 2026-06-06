@@ -13,7 +13,7 @@ libloading = "0.8"
 tokio = { version = "1", features = ["full"] }
 
 # --- HTTP / signaling server ---
-axum       = "0.8"
+axum       = { version = "0.8", features = ["ws"] }
 tower-http = { version = "0.6", features = ["fs"] }
 
 # --- WebRTC (server side) ---
@@ -59,6 +59,7 @@ axum-extra = { version = "0.10", features = ["cookie", "cookie-private"] }  # ma
 chrono     = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 async-trait = "0.1"
 time       = "0.3"   # Cookie max_age (already in tree via webrtc)
+futures-util = "0.3" # split() the axum WebSocket into sink+stream
 
 [profile.release]
 opt-level = 3

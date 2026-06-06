@@ -23,6 +23,7 @@ pub struct AppState {
     pub inner: Arc<AppInner>,
     pub db: DatabaseConnection,
     pub cookie_key: Key,
+    pub game: Arc<crate::rooms::GameState>,
 }
 
 impl FromRef<AppState> for Key {
@@ -63,6 +64,8 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/logout", post(crate::auth::logout))
         .route("/api/me", get(crate::auth::me))
         .route("/api/species", get(species_list_handler))
+        // --- realtime ---
+        .route("/ws", get(crate::ws::ws_upgrade))
         .fallback_service(static_service)
         .with_state(state)
 }
@@ -113,14 +116,25 @@ async fn battle_action_handler(
     State(state): State<AppState>,
     Json(action): Json<crate::battle::AgentAction>,
 ) -> StatusCode {
+    if emu_busy(&state) {
+        return StatusCode::CONFLICT;
+    }
     let _ = state.inner.action_tx.send(action);
     StatusCode::ACCEPTED
+}
+
+/// True while a multiplayer match owns the single emulator — the dev console is locked out.
+fn emu_busy(state: &AppState) -> bool {
+    state.game.emu_busy.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// POST /battle/save -> serialize on the emu thread, write states/battle.state, return the blob.
 async fn battle_save_handler(
     State(state): State<AppState>,
 ) -> Result<Bytes, (StatusCode, String)> {
+    if emu_busy(&state) {
+        return Err((StatusCode::CONFLICT, "match in progress".into()));
+    }
     let (tx, rx) = tokio::sync::oneshot::channel();
     let _ = state.inner.save_tx.send(tx);
     match rx.await {
@@ -137,6 +151,9 @@ async fn battle_save_handler(
 
 /// POST /battle/load  body: raw savestate bytes; if empty, load states/battle.state from disk.
 async fn battle_load_handler(State(state): State<AppState>, body: Bytes) -> StatusCode {
+    if emu_busy(&state) {
+        return StatusCode::CONFLICT;
+    }
     let data = if body.is_empty() {
         match std::fs::read("states/battle.state") {
             Ok(d) => d,
@@ -182,6 +199,9 @@ async fn battle_setup_handler(
     State(state): State<AppState>,
     Json(req): Json<SetupRequest>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    if emu_busy(&state) {
+        return Err((StatusCode::CONFLICT, "match in progress".into()));
+    }
     let (tx, rx) = tokio::sync::oneshot::channel();
     let _ = state.inner.setup_tx.send(crate::pipeline::SetupReq {
         player: req.player,
@@ -211,6 +231,9 @@ fn ai_slot() -> u8 {
 /// POST /battle/enemy {"slot":0..3}  -> YOU pick the opponent's move (forces wEnemySelectedMove
 /// each turn). {"slot":255} or empty -> hand control back to the game AI.
 async fn battle_enemy_handler(State(state): State<AppState>, Json(req): Json<EnemyRequest>) -> StatusCode {
+    if emu_busy(&state) {
+        return StatusCode::CONFLICT;
+    }
     state
         .inner
         .enemy_force
