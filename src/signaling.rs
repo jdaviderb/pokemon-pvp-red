@@ -3,9 +3,10 @@
 
 use std::sync::Arc;
 
+use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use tower_http::services::ServeDir;
@@ -39,6 +40,10 @@ pub fn router(state: AppState) -> Router {
     let static_service = ServeDir::new("static").append_index_html_on_directories(true);
     Router::new()
         .route("/offer", post(offer_handler))
+        .route("/battle/state", get(battle_state_handler))
+        .route("/battle/action", post(battle_action_handler))
+        .route("/battle/save", post(battle_save_handler))
+        .route("/battle/load", post(battle_load_handler))
         .fallback_service(static_service)
         .with_state(state)
 }
@@ -58,4 +63,64 @@ async fn offer_handler(
         sdp: answer_sdp,
         kind: "answer".to_owned(),
     }))
+}
+
+// ---------- AI battle-arena API ----------
+
+/// GET /battle/state -> the latest snapshot the emulator thread published.
+async fn battle_state_handler(
+    State(state): State<AppState>,
+) -> Result<Json<crate::battle::BattleState>, (StatusCode, String)> {
+    match state.inner.battle.lock().unwrap().clone() {
+        Some(st) => Ok(Json(st)),
+        None => Err((StatusCode::SERVICE_UNAVAILABLE, "no battle state yet".into())),
+    }
+}
+
+/// POST /battle/action  body: {"type":"move","slot":0} (also switch/run/buttons). 202 = queued.
+async fn battle_action_handler(
+    State(state): State<AppState>,
+    Json(action): Json<crate::battle::AgentAction>,
+) -> StatusCode {
+    let _ = state.inner.action_tx.send(action);
+    StatusCode::ACCEPTED
+}
+
+/// POST /battle/save -> serialize on the emu thread, write states/battle.state, return the blob.
+async fn battle_save_handler(
+    State(state): State<AppState>,
+) -> Result<Bytes, (StatusCode, String)> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let _ = state.inner.save_tx.send(tx);
+    match rx.await {
+        Ok(Some(buf)) => {
+            let _ = std::fs::create_dir_all("states");
+            if let Err(e) = std::fs::write("states/battle.state", &buf) {
+                tracing::warn!("battle.state write failed: {e}");
+            }
+            Ok(Bytes::from(buf))
+        }
+        _ => Err((StatusCode::INTERNAL_SERVER_ERROR, "serialize failed".into())),
+    }
+}
+
+/// POST /battle/load  body: raw savestate bytes; if empty, load states/battle.state from disk.
+async fn battle_load_handler(State(state): State<AppState>, body: Bytes) -> StatusCode {
+    let data = if body.is_empty() {
+        match std::fs::read("states/battle.state") {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::warn!("no battle.state on disk: {e}");
+                return StatusCode::NOT_FOUND;
+            }
+        }
+    } else {
+        body.to_vec()
+    };
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let _ = state.inner.load_tx.send((data, tx));
+    match rx.await {
+        Ok(true) => StatusCode::OK,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
 }

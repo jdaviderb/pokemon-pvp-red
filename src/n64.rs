@@ -349,10 +349,24 @@ type AudioBatchFn = unsafe extern "C" fn(*const i16, usize) -> usize;
 type PollFn = unsafe extern "C" fn();
 type InputFn = unsafe extern "C" fn(c_uint, c_uint, c_uint, c_uint) -> i16;
 type RunFn = unsafe extern "C" fn();
+type GetMemDataFn = unsafe extern "C" fn(c_uint) -> *mut c_void;
+type GetMemSizeFn = unsafe extern "C" fn(c_uint) -> usize;
+type SerializeSizeFn = unsafe extern "C" fn() -> usize;
+type SerializeFn = unsafe extern "C" fn(*mut c_void, usize) -> bool;
+type UnserializeFn = unsafe extern "C" fn(*const c_void, usize) -> bool;
+
+// libretro memory ids. GB: SYSTEM_RAM = the 8 KiB WRAM 0xC000..0xE000 (verified).
+pub const RETRO_MEMORY_SAVE_RAM: c_uint = 0;
+pub const RETRO_MEMORY_SYSTEM_RAM: c_uint = 2;
 
 pub struct N64 {
     _lib: Library, // keep the dylib mapped for the process lifetime
     run: RunFn,    // raw fn pointer (valid while _lib lives)
+    get_mem_data: GetMemDataFn,
+    get_mem_size: GetMemSizeFn,
+    serialize_size: SerializeSizeFn,
+    serialize: SerializeFn,
+    unserialize: UnserializeFn,
     pub fps: f64,
     pub sample_rate: f64,
     pub width: u32,
@@ -376,7 +390,8 @@ impl N64 {
         let rom = std::fs::read(rom_path)?;
         let path_c = CString::new(rom_path)?;
 
-        let (run, fps, sample_rate, width, height) = unsafe {
+        let (run, get_mem_data, get_mem_size, serialize_size, serialize, unserialize,
+             fps, sample_rate, width, height) = unsafe {
             let set_environment: Symbol<unsafe extern "C" fn(EnvFn)> =
                 lib.get(b"retro_set_environment")?;
             let set_video: Symbol<unsafe extern "C" fn(VideoFn)> =
@@ -399,6 +414,12 @@ impl N64 {
                 lib.get(b"retro_set_controller_port_device")?;
             // raw fn pointer for run (outlives the borrow; valid while `lib` is alive)
             let run: RunFn = *lib.get::<RunFn>(b"retro_run")?;
+            // memory + savestate accessors (verified present & callable in gambatte)
+            let get_mem_data: GetMemDataFn = *lib.get::<GetMemDataFn>(b"retro_get_memory_data")?;
+            let get_mem_size: GetMemSizeFn = *lib.get::<GetMemSizeFn>(b"retro_get_memory_size")?;
+            let serialize_size: SerializeSizeFn = *lib.get::<SerializeSizeFn>(b"retro_serialize_size")?;
+            let serialize: SerializeFn = *lib.get::<SerializeFn>(b"retro_serialize")?;
+            let unserialize: UnserializeFn = *lib.get::<UnserializeFn>(b"retro_unserialize")?;
 
             // ORDER MATTERS: environment first, then media callbacks, then init.
             set_environment(cb_environment);
@@ -433,6 +454,11 @@ impl N64 {
 
             (
                 run,
+                get_mem_data,
+                get_mem_size,
+                serialize_size,
+                serialize,
+                unserialize,
                 av.timing.fps,
                 av.timing.sample_rate,
                 av.geometry.base_width,
@@ -440,18 +466,71 @@ impl N64 {
             )
         };
 
+        let sys_ram_len = unsafe { get_mem_size(RETRO_MEMORY_SYSTEM_RAM) };
         tracing::info!(
-            "N64 core loaded: fps={fps:.4} sample_rate={sample_rate:.0} base={width}x{height}"
+            "core loaded: fps={fps:.4} sample_rate={sample_rate:.0} base={width}x{height} \
+             system_ram={sys_ram_len}B"
         );
 
         Ok(N64 {
             _lib: lib,
             run,
+            get_mem_data,
+            get_mem_size,
+            serialize_size,
+            serialize,
+            unserialize,
             fps,
             sample_rate,
             width,
             height,
         })
+    }
+
+    /// Borrow the core's SYSTEM_RAM (GB: 8 KiB WRAM, CPU 0xC000..0xE000) for the closure.
+    /// Returns None if the core exposes no such region. Slice valid only inside `f`.
+    pub fn with_system_ram<R>(&self, f: impl FnOnce(&[u8]) -> R) -> Option<R> {
+        unsafe {
+            let ptr = (self.get_mem_data)(RETRO_MEMORY_SYSTEM_RAM) as *const u8;
+            let len = (self.get_mem_size)(RETRO_MEMORY_SYSTEM_RAM);
+            if ptr.is_null() || len == 0 {
+                return None;
+            }
+            Some(f(std::slice::from_raw_parts(ptr, len)))
+        }
+    }
+
+    /// Mutable WRAM access for inject_* writes. Same validity rules.
+    pub fn with_system_ram_mut<R>(&self, f: impl FnOnce(&mut [u8]) -> R) -> Option<R> {
+        unsafe {
+            let ptr = (self.get_mem_data)(RETRO_MEMORY_SYSTEM_RAM) as *mut u8;
+            let len = (self.get_mem_size)(RETRO_MEMORY_SYSTEM_RAM);
+            if ptr.is_null() || len == 0 {
+                return None;
+            }
+            Some(f(std::slice::from_raw_parts_mut(ptr, len)))
+        }
+    }
+
+    /// Serialize full emulator state into a fresh Vec (savestate).
+    pub fn save_state(&self) -> Option<Vec<u8>> {
+        unsafe {
+            let n = (self.serialize_size)();
+            if n == 0 {
+                return None;
+            }
+            let mut buf = vec![0u8; n];
+            if (self.serialize)(buf.as_mut_ptr() as *mut c_void, n) {
+                Some(buf)
+            } else {
+                None
+            }
+        }
+    }
+
+    /// Restore from a savestate blob produced by `save_state`.
+    pub fn load_state(&self, data: &[u8]) -> bool {
+        unsafe { (self.unserialize)(data.as_ptr() as *const c_void, data.len()) }
     }
 
     /// Advance exactly one video frame (fires video/audio/input callbacks).

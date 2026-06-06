@@ -7,6 +7,7 @@
 //! Args: [1] ROM path (.z64), [2] core dylib path. Both optional.
 
 mod audio;
+mod battle;
 mod n64;
 mod pipeline;
 mod signaling;

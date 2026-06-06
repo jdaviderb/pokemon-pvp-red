@@ -24,3 +24,7 @@ cores/*.dylib
 
 # Pokémon Red Color romhack IPS patches (downloaded; copyright)
 pokered_color/
+
+# Savestates (game-derived, ROM-specific; capture via /battle/save)
+states/
+pokemon-memory.md

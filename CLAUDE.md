@@ -67,7 +67,8 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
 | `src/audio.rs` | i16 stereo → 44100→48000 linear resample → stereo Opus 960-frame packets |
 | `src/pipeline.rs` | the core-fps loop; broadcast channels; `AppInner`; N64 input; stats |
 | `src/webrtc.rs` | per-peer PeerConnection, tracks (Opus stereo cap), RTCP drain, data channel, signaling, cleanup |
-| `src/signaling.rs` | axum `Router`, `POST /offer`, `AppState` |
+| `src/battle.rs` | Pokémon Red battle arena: `BattleState`/`BattlePokemon`/`AgentAction`, `read_battle_state` (WRAM, BIG-ENDIAN), inject_*, `TapMachine` (action→menu input) |
+| `src/signaling.rs` | axum `Router`, `POST /offer`, `AppState`, `GET/POST /battle/{state,action,save,load}` |
 | `src/main.rs` | entry: ROM + core paths, start pipeline, serve axum |
 | `logshim.c` + `build.rs` | C-variadic log fn for `GET_LOG_INTERFACE` (mupen-next needs it) |
 | `static/index.html` | browser client (N64 keymap) |
@@ -98,6 +99,15 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
   mupen64plus-*); a core only queries its own keys. To switch cores, just change the dylib path.
 - **`.z64` is native big-endian** → no byteswap. Keep `webrtc.rs` referring to the crate as
   `::webrtc` (our module shadows it).
+- **AI battle arena** (`src/battle.rs`, Pokémon Red): WRAM = `RETRO_MEMORY_SYSTEM_RAM` (id 2, 8 KiB,
+  CPU `addr-0xC000`); HRAM (FFF3) NOT exposed. Gen-1 HP/stats are **BIG-ENDIAN** (`from_be_bytes`) —
+  #1 bug, pinned by a unit test. Battles bootstrap from a savestate (`states/battle.state`,
+  ROM-specific to `Pokemon Red.gb`) captured at the **FIGHT menu** (a few text-boxes AFTER `D057`
+  goes nonzero — capturing too early makes the action macro off-by-one). Agent moves run via the
+  `TapMachine` input macro (A→FIGHT, Down×slot, A) on `emu.set_button` (same PAD path as the browser);
+  status-move/result text may wait for an A — advance with `{"type":"buttons","presses":["A"]}`. CCDD
+  enemy-move override works only in a post-AI-pick window (poll the 0→nonzero transition). `states/`
+  is gitignored. Run on `Pokemon Red.gb` (the .gbc savestate would differ).
 
 ## Testing
 

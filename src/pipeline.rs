@@ -3,15 +3,20 @@
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use tokio::sync::{broadcast, mpsc};
 
 use crate::audio::OpusStreamer;
+use crate::battle::{AgentAction, BattleState, MenuPhase, TapMachine};
 use crate::n64::{map_button, N64Action, AXIS_MAX, N64};
 use crate::video::{frame_to_i420, i420_len, make_vp8_encoder};
+
+/// Reply channels for emu-thread-only savestate ops (the thread owns `N64`).
+type SaveReq = tokio::sync::oneshot::Sender<Option<Vec<u8>>>;
+type LoadReq = (Vec<u8>, tokio::sync::oneshot::Sender<bool>);
 
 #[derive(Clone)]
 pub struct EncodedVideo {
@@ -42,6 +47,11 @@ pub struct AppInner {
     pub audio_tx: broadcast::Sender<EncodedAudio>,
     pub input_tx: mpsc::UnboundedSender<InputEvent>,
     pub keyframe_req: Arc<AtomicBool>,
+    // --- battle arena ---
+    pub battle: Arc<Mutex<Option<BattleState>>>, // latest snapshot, refreshed every frame
+    pub action_tx: mpsc::UnboundedSender<AgentAction>, // agent actions queued by HTTP
+    pub save_tx: mpsc::UnboundedSender<SaveReq>,
+    pub load_tx: mpsc::UnboundedSender<LoadReq>,
 }
 
 pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
@@ -50,11 +60,19 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
     let (input_tx, input_rx) = mpsc::unbounded_channel::<InputEvent>();
     let keyframe_req = Arc::new(AtomicBool::new(false));
 
+    let (action_tx, action_rx) = mpsc::unbounded_channel::<AgentAction>();
+    let (save_tx, save_rx) = mpsc::unbounded_channel::<SaveReq>();
+    let (load_tx, load_rx) = mpsc::unbounded_channel::<LoadReq>();
+    let battle: Arc<Mutex<Option<BattleState>>> = Arc::new(Mutex::new(None));
+
     let v = video_tx.clone();
     let a = audio_tx.clone();
     let kf = keyframe_req.clone();
+    let battle_thread = battle.clone();
     std::thread::spawn(move || {
-        if let Err(e) = run_loop(core_path, rom_path, v, a, input_rx, kf) {
+        if let Err(e) = run_loop(
+            core_path, rom_path, v, a, input_rx, kf, action_rx, save_rx, load_rx, battle_thread,
+        ) {
             tracing::error!("emulator loop ended: {e:?}");
         }
     });
@@ -64,6 +82,10 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
         audio_tx,
         input_tx,
         keyframe_req,
+        battle,
+        action_tx,
+        save_tx,
+        load_tx,
     })
 }
 
@@ -86,6 +108,7 @@ fn stick_vec(held: &HashSet<String>, up: &str, down: &str, left: &str, right: &s
     (x.clamp(-32768, 32767) as i16, y.clamp(-32768, 32767) as i16)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_loop(
     core_path: String,
     rom_path: String,
@@ -93,6 +116,10 @@ fn run_loop(
     audio_tx: broadcast::Sender<EncodedAudio>,
     mut input_rx: mpsc::UnboundedReceiver<InputEvent>,
     keyframe_req: Arc<AtomicBool>,
+    mut action_rx: mpsc::UnboundedReceiver<AgentAction>,
+    mut save_rx: mpsc::UnboundedReceiver<SaveReq>,
+    mut load_rx: mpsc::UnboundedReceiver<LoadReq>,
+    battle: Arc<Mutex<Option<BattleState>>>,
 ) -> anyhow::Result<()> {
     let mut emu = N64::new(&core_path, &rom_path)?;
     let mut opus =
@@ -122,6 +149,8 @@ fn run_loop(
     let mut next = Instant::now();
     let mut frame_idx: u64 = 0;
     let mut held: HashSet<String> = HashSet::new();
+    let mut taps = TapMachine::default(); // agent action -> button taps
+    let mut menu = MenuPhase::Overworld; // software battle-menu state machine
 
     let mut stat_t = Instant::now();
     let mut stat_frames: u64 = 0;
@@ -129,6 +158,23 @@ fn run_loop(
     let mut stat_apkts: u64 = 0;
 
     loop {
+        // 0a. Savestate commands run on THIS thread (the only owner of `N64`).
+        while let Ok(reply) = save_rx.try_recv() {
+            let _ = reply.send(emu.save_state());
+        }
+        while let Ok((data, reply)) = load_rx.try_recv() {
+            let ok = emu.load_state(&data);
+            if ok {
+                taps.clear(&emu); // abandon any in-flight macro; we just teleported state
+            }
+            let _ = reply.send(ok);
+        }
+        // 0b. Queue any new agent actions, then advance the tap macro one frame (sets PAD bits).
+        while let Ok(action) = action_rx.try_recv() {
+            taps.enqueue(&action);
+        }
+        taps.tick(&emu);
+
         // 1. Apply pending input (P1). Direction keys feed analog vectors; rest are digital.
         let mut stick_dirty = false;
         while let Ok(ev) = input_rx.try_recv() {
@@ -167,6 +213,16 @@ fn run_loop(
 
         // 3. Advance one frame.
         emu.clock_frame();
+
+        // 3a. Refresh the battle snapshot from WRAM (negligible vs VP8 encode) + menu phase.
+        let busy = taps.busy();
+        let snap = emu.with_system_ram(|ram| {
+            menu = crate::battle::next_menu_phase(menu, ram, busy);
+            crate::battle::read_battle_state(ram, menu)
+        });
+        if let Some(s) = snap {
+            *battle.lock().unwrap() = Some(s);
+        }
 
         // 3b. Resolution change? (N64 games switch lo-res 640x240 <-> hi-res 640x480, e.g. Pokémon
         //     Stadium menus). VP8 needs fixed dims per encoder, so re-init to match — a fresh

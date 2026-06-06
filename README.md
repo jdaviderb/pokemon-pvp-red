@@ -68,6 +68,42 @@ Luego abre **http://localhost:3000** en **Chrome** y pulsa **POWER**.
 **N64** (al cargar un `.z64`): `←↑↓→` stick · `X`=A · `Z`=B · `C`=Z · `Q`/`E`=L/R · `Enter`=Start ·
 `I J K L`=C-buttons. (El cliente web manda nombres de botón; el servidor mapea según el juego.)
 
+## 🎮 AI Battle Arena (Pokémon Red)
+
+Un módulo experimental expone la **batalla de Pokémon Red como un entorno para agentes de IA**
+sobre HTTP. La emulación corre el motor de batalla **real** (no una reimplementación); el agente
+lee el estado de WRAM y elige movimientos, que se ejecutan navegando el menú por *input* (no se
+hackea el engine).
+
+Arranca con la ROM con la que se capturó el savestate:
+```sh
+cargo run --release -- "Pokemon Red.gb"
+```
+
+Endpoints (mismo origen, `:3000`):
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/battle/load` | restaura `states/battle.state` (cuerpo vacío) o un blob crudo (`--data-binary @file`) |
+| `GET`  | `/battle/state` | JSON `BattleState` (in_battle, turnos, player/enemy {hp,lvl,moves,pp,stats}, menú) |
+| `POST` | `/battle/action` | `{"type":"move","slot":0..3}` · `{"type":"switch","slot":N}` · `{"type":"run"}` · `{"type":"buttons","presses":["A",...]}` |
+| `POST` | `/battle/save` | serializa el estado actual → devuelve el blob y escribe `states/battle.state` |
+
+Bucle del agente:
+```sh
+curl -X POST localhost:3000/battle/load                 # bootstrap a una batalla
+curl -s localhost:3000/battle/state | jq                # leer estado
+curl -X POST localhost:3000/battle/action -H 'content-type: application/json' \
+     -d '{"type":"move","slot":0}'                       # elegir movimiento -> se ejecuta
+# repetir: leer estado; si un texto de resultado espera, avanzar con
+#          {"type":"buttons","presses":["A"]} hasta que turns_in_battle suba y menu vuelva a MainMenu
+```
+Win/loss: `enemy.hp==0` (ganas) / `player.hp==0` (pierdes); batalla terminada cuando `in_battle==0`.
+
+**Notas:** el savestate de batalla (`states/battle.state`) es **específico de la ROM** (capturado en
+`Pokemon Red.gb`); regenéralo jugando hasta el menú FIGHT y `POST /battle/save`. HP/stats de Gen-1 son
+**big-endian**. Detalles + RAM map en `DESIGN-BATTLE.md` y `docs/pokemon-red-ram-map.md`.
+
 ## Estructura
 
 | Fichero | Rol |
@@ -77,13 +113,15 @@ Luego abre **http://localhost:3000** en **Chrome** y pulsa **POWER**.
 | `src/audio.rs` | i16 estéreo → resample `core_rate`→48000 → Opus estéreo (960/canal) |
 | `src/pipeline.rs` | hilo maestro @core-fps: retro_run → encode → broadcast; re-init en cambio de resolución |
 | `src/webrtc.rs` | PeerConnection, tracks (Opus estéreo), RTCP, data channel, señalización |
-| `src/signaling.rs` | router axum + `POST /offer` |
+| `src/battle.rs` | battle-arena: `BattleState` reader (WRAM, big-endian), `AgentAction`, tap-macro del menú |
+| `src/signaling.rs` | router axum + `POST /offer` + `/battle/{state,action,save,load}` |
 | `src/main.rs` | arranque (ROM + core path por argv) |
 | `logshim.c` / `build.rs` | shim C-variádico para `GET_LOG_INTERFACE` (lo necesita mupen-next) |
 | `scripts/apply_ips.py` | aplicar parches IPS (genera el `.gbc` de Pokémon Red Color) |
 | `cores/` | dylibs libretro (`fetch.sh` los baja; ignorados por git) |
 | `static/index.html` | cliente navegador (TV CRT + teclado) |
-| `DESIGN-N64.md`, `DESIGN-GB.md` | diseños verificados + riesgos |
+| `DESIGN-N64.md`, `DESIGN-GB.md`, `DESIGN-BATTLE.md` | diseños verificados + riesgos |
+| `docs/pokemon-red-ram-map.md` | RAM map de batalla (direcciones + endianness) |
 | `test/e2e-*.cjs` | pruebas headless (Chrome/Puppeteer) |
 | `research/` | notas de investigación + capturas de prueba |
 
