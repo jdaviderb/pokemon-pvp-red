@@ -44,6 +44,8 @@ pub fn router(state: AppState) -> Router {
         .route("/battle/action", post(battle_action_handler))
         .route("/battle/save", post(battle_save_handler))
         .route("/battle/load", post(battle_load_handler))
+        .route("/battle/setup", post(battle_setup_handler))
+        .route("/battle/species", get(battle_species_handler))
         .fallback_service(static_service)
         .with_state(state)
 }
@@ -122,5 +124,41 @@ async fn battle_load_handler(State(state): State<AppState>, body: Bytes) -> Stat
     match rx.await {
         Ok(true) => StatusCode::OK,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SetupRequest {
+    pub player: u8, // internal species index
+    pub enemy: u8,  // internal species index
+    #[serde(default = "default_level")]
+    pub level: u8,
+}
+fn default_level() -> u8 {
+    50
+}
+
+/// GET /battle/species -> the selectable species table for the dropdowns: [[index,"NAME"], ...].
+async fn battle_species_handler() -> Json<Vec<(u8, &'static str)>> {
+    Json(crate::battle::species_menu())
+}
+
+/// POST /battle/setup  body: {"player":74,"enemy":75,"level":50}
+/// Loads the intro savestate, injects both party slots, drives the send-out. 200 = matchup live.
+async fn battle_setup_handler(
+    State(state): State<AppState>,
+    Json(req): Json<SetupRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let _ = state.inner.setup_tx.send(crate::pipeline::SetupReq {
+        player: req.player,
+        enemy: req.enemy,
+        level: req.level,
+        reply: tx,
+    });
+    match rx.await {
+        Ok(Ok(())) => Ok(StatusCode::OK),
+        Ok(Err(e)) => Err((StatusCode::BAD_REQUEST, e)),
+        Err(_) => Err((StatusCode::INTERNAL_SERVER_ERROR, "emu thread gone".into())),
     }
 }

@@ -304,6 +304,229 @@ pub fn next_menu_phase(prev: MenuPhase, ram: &[u8], macro_busy: bool) -> MenuPha
     }
 }
 
+// ======================================================================================
+// Legendary / custom-matchup injection (proven in research/legendary-injection.md).
+// Inject into states/legendary_intro.state (D057=2, neither side sent out) THEN resume:
+// the engine's send-out routine draws the real sprites/names/cries from the injected data.
+// ======================================================================================
+
+/// Gen-1 internal species data for injection (NOT the Pokédex number).
+#[derive(Clone, Copy)]
+pub struct Gen1Species {
+    pub name: &'static str,
+    pub species: u8,          // internal index byte (struct +0)
+    pub type1: u8,
+    pub type2: u8,
+    pub catch_rate: u8,       // struct +7
+    pub base_stats: [u16; 5], // [HP, Atk, Def, Spd, Spc] BASE
+    pub moves: [(u8, u8); 4], // (move_id, base_pp)
+    pub growth: GrowthRate,
+}
+
+/// Gen-1 EXP growth groups (to seed a sane exp for `level` at struct +14).
+#[derive(Clone, Copy)]
+pub enum GrowthRate {
+    Fast,
+    MediumFast,
+    MediumSlow,
+    Slow,
+}
+
+/// Gen-1 type ids (constants/type_constants.asm).
+pub mod gen1_type {
+    pub const NORMAL: u8 = 0x00;
+    pub const FLYING: u8 = 0x02;
+    pub const FIRE: u8 = 0x14;
+    pub const WATER: u8 = 0x15;
+    pub const GRASS: u8 = 0x16;
+    pub const ELECTRIC: u8 = 0x17;
+    pub const PSYCHIC: u8 = 0x18;
+    pub const ICE: u8 = 0x19;
+    pub const DRAGON: u8 = 0x1A;
+}
+
+/// Selectable species table. The internal index is the dropdown value the browser POSTs.
+pub static SPECIES: &[Gen1Species] = &[
+    Gen1Species {
+        name: "ARTICUNO",
+        species: 0x4A,
+        type1: gen1_type::ICE,
+        type2: gen1_type::FLYING,
+        catch_rate: 3,
+        base_stats: [90, 85, 100, 85, 125],
+        moves: [(0x3A, 10), (0x3B, 5), (0x40, 35), (0x61, 30)], // IceBeam, Blizzard, Peck, Agility
+        growth: GrowthRate::Slow,
+    },
+    Gen1Species {
+        name: "ZAPDOS",
+        species: 0x4B,
+        type1: gen1_type::ELECTRIC,
+        type2: gen1_type::FLYING,
+        catch_rate: 3,
+        base_stats: [90, 90, 85, 100, 125],
+        moves: [(0x55, 15), (0x57, 10), (0x41, 20), (0x61, 30)], // Tbolt, Thunder, DrillPeck, Agility
+        growth: GrowthRate::Slow,
+    },
+    Gen1Species {
+        name: "MOLTRES",
+        species: 0x49,
+        type1: gen1_type::FIRE,
+        type2: gen1_type::FLYING,
+        catch_rate: 3,
+        base_stats: [90, 100, 90, 90, 125],
+        moves: [(0x53, 15), (0x2B, 30), (0x61, 30), (0x8F, 5)], // FireSpin, Leer, Agility, SkyAttack
+        growth: GrowthRate::Slow,
+    },
+    Gen1Species {
+        name: "DRAGONITE",
+        species: 0x42,
+        type1: gen1_type::DRAGON,
+        type2: gen1_type::FLYING,
+        catch_rate: 9,
+        base_stats: [91, 134, 95, 80, 100],
+        moves: [(0x23, 20), (0x2B, 30), (0x56, 20), (0x61, 30)], // Wrap, Leer, ThunderWave, Agility
+        growth: GrowthRate::Slow,
+    },
+];
+
+/// Find a species row by its internal index (the value the browser POSTs).
+pub fn species_by_index(idx: u8) -> Option<&'static Gen1Species> {
+    SPECIES.iter().find(|s| s.species == idx)
+}
+
+/// Gen-1 stat formula, DV=15, stat-EXP=0:
+/// stat = floor((base+DV)*2*level/100) + 5 ; HP = same + level + 10.
+const DV: u32 = 15;
+fn calc_hp(base: u16, level: u8) -> u16 {
+    let l = level as u32;
+    ((((base as u32 + DV) * 2 * l) / 100) + l + 10) as u16
+}
+fn calc_stat(base: u16, level: u8) -> u16 {
+    let l = level as u32;
+    ((((base as u32 + DV) * 2 * l) / 100) + 5) as u16
+}
+
+/// Experience to *be* `level` in each growth group (24-bit, written BE at struct +14).
+fn exp_for_level(growth: GrowthRate, level: u8) -> u32 {
+    let n = level as i64;
+    let e = match growth {
+        GrowthRate::Fast => (4 * n * n * n) / 5,
+        GrowthRate::MediumFast => n * n * n,
+        GrowthRate::MediumSlow => (6 * n * n * n) / 5 - 15 * n * n + 100 * n - 140,
+        GrowthRate::Slow => (5 * n * n * n) / 4,
+    };
+    e.max(0) as u32
+}
+
+/// Encode a Gen-1 nickname: 11 bytes, 0x50 terminator/padding (constants/charmap.asm).
+pub fn encode_name(s: &str) -> [u8; 11] {
+    let mut out = [0x50u8; 11];
+    for (i, c) in s.bytes().enumerate().take(10) {
+        out[i] = match c {
+            b'A'..=b'Z' => 0x80 + (c - b'A'),
+            b'a'..=b'z' => 0xA0 + (c - b'a'),
+            b' ' => 0x7F,
+            b'0'..=b'9' => 0xF6 + (c - b'0'),
+            _ => 0x50,
+        };
+    }
+    out
+}
+
+/// Build a full 44-byte wPartyMon / wEnemyMon struct for `sp` at `level` (all multibyte fields BE).
+pub fn build_party_mon(sp: &Gen1Species, level: u8) -> [u8; 44] {
+    let mut m = [0u8; 44];
+    let be = |v: u16| v.to_be_bytes();
+    let hp = calc_hp(sp.base_stats[0], level);
+    let atk = calc_stat(sp.base_stats[1], level);
+    let def = calc_stat(sp.base_stats[2], level);
+    let spd = calc_stat(sp.base_stats[3], level);
+    let spc = calc_stat(sp.base_stats[4], level);
+
+    m[0] = sp.species;
+    let h = be(hp);
+    m[1] = h[0];
+    m[2] = h[1]; // +1 current HP (= max)
+    m[3] = level; // +3 box-level (cosmetic)
+    m[4] = 0x00; // +4 status
+    m[5] = sp.type1;
+    m[6] = sp.type2;
+    m[7] = sp.catch_rate;
+    for i in 0..4 {
+        m[8 + i] = sp.moves[i].0; // +8..+11 move ids
+    }
+    m[12] = 0x00;
+    m[13] = 0x00; // +12 OT id
+    let e = exp_for_level(sp.growth, level).to_be_bytes(); // u32 -> [hi..lo]
+    m[14] = e[1];
+    m[15] = e[2];
+    m[16] = e[3]; // +14..+16 exp (24-bit BE)
+    // +17..+26 stat-EXP all 0
+    m[27] = 0xFF; // +27 Atk/Def DV = 15/15
+    m[28] = 0xFF; // +28 Spd/Spc DV = 15/15
+    for i in 0..4 {
+        m[29 + i] = sp.moves[i].1; // +29..+32 PP
+    }
+    m[33] = level; // +33 LIVE level
+    let mx = be(hp);
+    m[34] = mx[0];
+    m[35] = mx[1];
+    let a = be(atk);
+    m[36] = a[0];
+    m[37] = a[1];
+    let d = be(def);
+    m[38] = d[0];
+    m[39] = d[1];
+    let s = be(spd);
+    m[40] = s[0];
+    m[41] = s[1];
+    let p = be(spc);
+    m[42] = p[0];
+    m[43] = p[1];
+    m
+}
+
+fn write_party_mon(ram: &mut [u8], base: u16, mon: &[u8; 44]) {
+    let off = (base - 0xC000) as usize;
+    ram[off..off + 44].copy_from_slice(mon);
+}
+fn write_nick(ram: &mut [u8], base: u16, nick: &[u8; 11]) {
+    let off = (base - 0xC000) as usize;
+    ram[off..off + 11].copy_from_slice(nick);
+}
+
+// verified single-mon party offsets (slot 0)
+const P_PARTY_COUNT: u16 = 0xD163;
+const P_PARTY_SPECIES: u16 = 0xD164;
+const P_MON0: u16 = 0xD16B;
+const P_NICK0: u16 = 0xD2B5;
+const E_PARTY_COUNT: u16 = 0xD89C;
+const E_PARTY_SPECIES: u16 = 0xD89D;
+const E_MON0: u16 = 0xD8A4;
+const E_NICK0: u16 = 0xD9EE;
+
+/// Set up a 1-vs-1 custom matchup in WRAM. Call AFTER load_state(legendary_intro.state) and BEFORE
+/// resuming (intro is pre-send-out: D057=2, D014=0, CFE5=0). The engine then sends out both mons
+/// with correct sprites/names/cries.
+pub fn setup_matchup(ram: &mut [u8], player: &Gen1Species, enemy: &Gen1Species, level: u8) {
+    wr8(ram, P_PARTY_COUNT, 1);
+    wr8(ram, P_PARTY_SPECIES, player.species);
+    wr8(ram, P_PARTY_SPECIES + 1, 0xFF);
+    write_party_mon(ram, P_MON0, &build_party_mon(player, level));
+    write_nick(ram, P_NICK0, &encode_name(player.name)); // REQUIRED: player name is the nick
+
+    wr8(ram, E_PARTY_COUNT, 1);
+    wr8(ram, E_PARTY_SPECIES, enemy.species);
+    wr8(ram, E_PARTY_SPECIES + 1, 0xFF);
+    write_party_mon(ram, E_MON0, &build_party_mon(enemy, level));
+    write_nick(ram, E_NICK0, &encode_name(enemy.name));
+}
+
+/// Lightweight species list for the browser dropdowns: (internal_index, NAME).
+pub fn species_menu() -> Vec<(u8, &'static str)> {
+    SPECIES.iter().map(|s| (s.species, s.name)).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -326,5 +549,16 @@ mod tests {
         assert_eq!(taps[0].button, ID_A);
         assert_eq!(taps[1].button, ID_DOWN);
         assert_eq!(taps[3].button, ID_A);
+    }
+    #[test]
+    fn articuno_lv50_struct() {
+        let a = species_by_index(0x4A).unwrap();
+        assert_eq!(calc_hp(a.base_stats[0], 50), 165);
+        assert_eq!(calc_stat(a.base_stats[4], 50), 145); // special
+        let m = build_party_mon(a, 50);
+        assert_eq!(m[0], 0x4A); // species index
+        assert_eq!(m[33], 50); // live level
+        assert_eq!(u16::from_be_bytes([m[34], m[35]]), 165); // max HP (BE)
+        assert_eq!(m[27], 0xFF); // Atk/Def DVs = 15
     }
 }

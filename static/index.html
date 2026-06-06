@@ -207,6 +207,10 @@
     .arena button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
     .arena button:disabled { opacity: .4; cursor: default; }
     #arenaMsg { font-size: 12px; color: #9a9aab; margin-left: auto; }
+    .arena select, .arena input {
+      background: #0b0b11; color: #e8e8f0; border: 1px solid #2c2c3a;
+      border-radius: 6px; padding: 5px 8px; font: inherit;
+    }
     .arena-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0 10px; }
     .mon { background: #0b0b11; border: 1px solid #20202b; border-radius: 9px; padding: 10px 12px; }
     .mon-name { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
@@ -272,6 +276,13 @@
       <button id="btnSave">Save State</button>
       <button id="btnAdvance">Advance ▶A</button>
       <span id="arenaMsg"></span>
+    </div>
+    <div class="arena-bar" style="margin-top:10px">
+      <span class="arena-title" style="font-size:12px">MATCHUP</span>
+      YOU <select id="selPlayer"></select>
+      vs <select id="selEnemy"></select>
+      Lv <input id="selLevel" type="number" min="1" max="100" value="50" style="width:54px" />
+      <button id="btnMatchup">Start Matchup</button>
     </div>
     <div class="arena-grid">
       <div class="mon">
@@ -506,6 +517,34 @@
       '</span> · menu: <span class="k">' + d.menu + '</span> · your move: <span class="k">' +
       moveName(d.player_selected_move) + "</span>";
   }
+  // Populate species dropdowns from the server table, then wire "Start Matchup".
+  async function loadSpecies() {
+    const r = await api("/battle/species");
+    if (!r || !r.ok) return;
+    const list = await r.json(); // [[index,"NAME"], ...]
+    const opts = list.map(([idx, name]) => '<option value="' + idx + '">' + name + "</option>").join("");
+    $("selPlayer").innerHTML = opts;
+    $("selEnemy").innerHTML = opts;
+    $("selPlayer").value = "74"; // Articuno
+    $("selEnemy").value = "75";  // Zapdos
+    list.forEach(([idx, name]) => { SPECIES[idx] = name.charAt(0) + name.slice(1).toLowerCase(); });
+  }
+  $("btnMatchup").onclick = async () => {
+    const player = +$("selPlayer").value;
+    const enemy = +$("selEnemy").value;
+    const level = Math.max(1, Math.min(100, +$("selLevel").value || 50));
+    msg("starting matchup…");
+    const r = await api("/battle/setup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ player, enemy, level }),
+    });
+    if (!r) msg("no server");
+    else if (r.ok) msg("matchup live ✓");
+    else msg("setup failed (" + r.status + "): " + (await r.text()));
+  };
+  loadSpecies();
+
   setInterval(refresh, 600);
   refresh();
   </script>

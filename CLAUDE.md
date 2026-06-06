@@ -108,6 +108,13 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
   status-move/result text may wait for an A — advance with `{"type":"buttons","presses":["A"]}`. CCDD
   enemy-move override works only in a post-AI-pick window (poll the 0→nonzero transition). `states/`
   is gitignored. Run on `Pokemon Red.gb` (the .gbc savestate would differ).
+- **Custom matchup** (`POST /battle/setup`, `src/battle.rs::setup_matchup`): loads
+  `states/legendary_intro.state` (pre-send-out: D057!=0, D014==0, CFE5==0) and injects full 44-byte
+  party structs for BOTH sides (species internal index, Lv-scaled BE stats via the Gen-1 formula
+  DV=15, moves/PP, and the player NICKNAME at D2B5 — mandatory or the on-screen name is stale), then
+  taps A through send-out so the engine draws the real sprites/names/cries. Species table `SPECIES`
+  (Articuno 0x4A, Zapdos 0x4B, Moltres 0x49, Dragonite 0x42 — INTERNAL indices, not Pokédex).
+  Verified: Articuno vs Zapdos renders with correct sprites + Lv50 HP 165.
 
 ## Testing
 

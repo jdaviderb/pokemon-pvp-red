@@ -18,6 +18,14 @@ use crate::video::{frame_to_i420, i420_len, make_vp8_encoder};
 type SaveReq = tokio::sync::oneshot::Sender<Option<Vec<u8>>>;
 type LoadReq = (Vec<u8>, tokio::sync::oneshot::Sender<bool>);
 
+/// /battle/setup payload, resolved on the emu thread. Reply = Ok / why-not.
+pub struct SetupReq {
+    pub player: u8, // internal species index
+    pub enemy: u8,  // internal species index
+    pub level: u8,
+    pub reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+}
+
 #[derive(Clone)]
 pub struct EncodedVideo {
     pub data: Bytes,
@@ -52,6 +60,7 @@ pub struct AppInner {
     pub action_tx: mpsc::UnboundedSender<AgentAction>, // agent actions queued by HTTP
     pub save_tx: mpsc::UnboundedSender<SaveReq>,
     pub load_tx: mpsc::UnboundedSender<LoadReq>,
+    pub setup_tx: mpsc::UnboundedSender<SetupReq>,
 }
 
 pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
@@ -63,6 +72,7 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
     let (action_tx, action_rx) = mpsc::unbounded_channel::<AgentAction>();
     let (save_tx, save_rx) = mpsc::unbounded_channel::<SaveReq>();
     let (load_tx, load_rx) = mpsc::unbounded_channel::<LoadReq>();
+    let (setup_tx, setup_rx) = mpsc::unbounded_channel::<SetupReq>();
     let battle: Arc<Mutex<Option<BattleState>>> = Arc::new(Mutex::new(None));
 
     let v = video_tx.clone();
@@ -71,7 +81,8 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
     let battle_thread = battle.clone();
     std::thread::spawn(move || {
         if let Err(e) = run_loop(
-            core_path, rom_path, v, a, input_rx, kf, action_rx, save_rx, load_rx, battle_thread,
+            core_path, rom_path, v, a, input_rx, kf, action_rx, save_rx, load_rx, setup_rx,
+            battle_thread,
         ) {
             tracing::error!("emulator loop ended: {e:?}");
         }
@@ -86,6 +97,7 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
         action_tx,
         save_tx,
         load_tx,
+        setup_tx,
     })
 }
 
@@ -119,6 +131,7 @@ fn run_loop(
     mut action_rx: mpsc::UnboundedReceiver<AgentAction>,
     mut save_rx: mpsc::UnboundedReceiver<SaveReq>,
     mut load_rx: mpsc::UnboundedReceiver<LoadReq>,
+    mut setup_rx: mpsc::UnboundedReceiver<SetupReq>,
     battle: Arc<Mutex<Option<BattleState>>>,
 ) -> anyhow::Result<()> {
     let mut emu = N64::new(&core_path, &rom_path)?;
@@ -169,6 +182,48 @@ fn run_loop(
             }
             let _ = reply.send(ok);
         }
+
+        // 0a'. Custom matchup: load the intro savestate, inject both party slots, then queue
+        //      A-taps to drive the send-out (engine draws the injected sprites/names/cries).
+        while let Ok(req) = setup_rx.try_recv() {
+            let res = (|| -> Result<(), String> {
+                let player = crate::battle::species_by_index(req.player)
+                    .ok_or_else(|| format!("unknown player species {}", req.player))?;
+                let enemy = crate::battle::species_by_index(req.enemy)
+                    .ok_or_else(|| format!("unknown enemy species {}", req.enemy))?;
+                let level = req.level.clamp(1, 100);
+                let state = std::fs::read("states/legendary_intro.state")
+                    .map_err(|e| format!("no states/legendary_intro.state: {e}"))?;
+                if !emu.load_state(&state) {
+                    return Err("load_state failed (wrong ROM? need Pokemon Red.gb)".into());
+                }
+                // Intro must be pre-send-out (D057!=0, D014==0, CFE5==0) or the ROM/state mismatch.
+                let ok_intro = emu
+                    .with_system_ram(|ram| {
+                        ram[(0xD057 - 0xC000) as usize] != 0
+                            && ram[(0xD014 - 0xC000) as usize] == 0
+                            && ram[(0xCFE5 - 0xC000) as usize] == 0
+                    })
+                    .unwrap_or(false);
+                if !ok_intro {
+                    return Err("intro markers wrong — savestate/ROM mismatch (run Pokemon Red.gb)".into());
+                }
+                emu.with_system_ram_mut(|ram| {
+                    crate::battle::setup_matchup(ram, player, enemy, level);
+                });
+                Ok(())
+            })();
+            if res.is_ok() {
+                taps.clear(&emu);
+                menu = MenuPhase::BattleIntro;
+                taps.enqueue(&AgentAction::Buttons {
+                    presses: vec!["A".into(), "A".into(), "A".into(), "A".into(), "A".into(), "A".into()],
+                });
+                tracing::info!("matchup set up: player={} enemy={}", req.player, req.enemy);
+            }
+            let _ = req.reply.send(res);
+        }
+
         // 0b. Queue any new agent actions, then advance the tap macro one frame (sets PAD bits).
         while let Ok(action) = action_rx.try_recv() {
             taps.enqueue(&action);

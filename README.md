@@ -88,6 +88,19 @@ Endpoints (mismo origen, `:3000`):
 | `GET`  | `/battle/state` | JSON `BattleState` (in_battle, turnos, player/enemy {hp,lvl,moves,pp,stats}, menú) |
 | `POST` | `/battle/action` | `{"type":"move","slot":0..3}` · `{"type":"switch","slot":N}` · `{"type":"run"}` · `{"type":"buttons","presses":["A",...]}` |
 | `POST` | `/battle/save` | serializa el estado actual → devuelve el blob y escribe `states/battle.state` |
+| `GET`  | `/battle/species` | lista de especies elegibles `[[idx,"NOMBRE"],…]` |
+| `POST` | `/battle/setup` | **monta un combate a elección**: `{"player":74,"enemy":75,"level":50}` (índices internos Gen-1) |
+
+**Combate de leyenda (elige los Pokémon):** `/battle/setup` carga un savestate de intro
+(`states/legendary_intro.state`) e inyecta el equipo de ambos lados, así el motor saca a los
+elegidos **con sus sprites/nombres/cries reales**. Disponibles: **Articuno (74), Zapdos (75),
+Moltres (73), Dragonite (66)** — extiende la tabla `SPECIES` en `src/battle.rs` para añadir más.
+Desde la UI: fila **MATCHUP** (dropdowns + Lv + *Start Matchup*). Stats Lv50 calculados con la
+fórmula Gen-1 (DV=15). **Requiere arrancar con `Pokemon Red.gb`** (el savestate es de esa ROM).
+```sh
+curl -s localhost:3000/battle/species
+curl -XPOST localhost:3000/battle/setup -H 'content-type: application/json' -d '{"player":74,"enemy":75,"level":50}'
+```
 
 Bucle del agente:
 ```sh
