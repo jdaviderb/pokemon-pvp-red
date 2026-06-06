@@ -95,6 +95,7 @@
   const $ = (id) => document.getElementById(id);
 
   let ws, pc, mySeat = 0, timerHandle = null, roomId = new URLSearchParams(location.search).get("id");
+  let resultShown = false, lastProgress = Date.now();
 
   // ---- WebRTC: subscribe to the shared room stream ----
   async function connectVideo() {
@@ -127,6 +128,7 @@
   }
 
   function handle(m) {
+    if (["slot_result", "battle_state", "your_turn", "room_state"].includes(m.type)) lastProgress = Date.now();
     switch (m.type) {
       case "room_state":
         mySeat = m.seat;
@@ -144,9 +146,23 @@
       case "move_auto":
         if (m.seat === mySeat) $("turnInfo").textContent = "time up — random move!";
         break;
-      case "winner": showResult(m.you_won); break;
-      case "room_closed": break; // banner already shown; user clicks Return Home
+      case "winner": resultShown = true; showResult(m.you_won); break;
+      case "room_closed":
+        // Normal end shows the winner banner first; if the match never started (setup failed),
+        // there's no winner — tell the player and send them home.
+        if (!resultShown) bail(m.reason === "battle_ended" ? "Match ended." : "Match couldn't start — try again.");
+        break;
     }
+  }
+
+  function bail(msg) {
+    resultShown = true; lockMoves(); stopTimer();
+    $("phaseLbl").textContent = "ended";
+    $("resultText").textContent = msg;
+    $("resultText").className = "result";
+    $("resultText").style.fontSize = "20px";
+    $("result").classList.remove("hidden");
+    setTimeout(() => location.replace("/lobby.html"), 2200);
   }
 
   // ---- slot machine ----
@@ -227,6 +243,11 @@
     if (!d.room) return location.replace("/lobby.html"); // battle already over -> home
     await connectVideo().catch(() => {});
     openWs();
+    // Watchdog: if the match makes no progress for 35s (e.g. setup wedged), don't strand the
+    // player on a dead screen — send them home.
+    setInterval(() => {
+      if (!resultShown && Date.now() - lastProgress > 35000) bail("Match stalled — returning home.");
+    }, 5000);
   })();
   </script>
 </body>

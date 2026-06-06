@@ -327,33 +327,45 @@ async fn run_room(game: Arc<GameState>, rid: RoomId) {
     broadcast_slot_result(&game, rid).await;
     tokio::time::sleep(Duration::from_millis(2800)).await;
 
-    // 2. Setup: inject the matchup and send out both mons.
+    // 2. Setup: inject the matchup and send out both mons (retry — a load_state can occasionally
+    //    not take on a freshly-booted core, leaving the title screen).
     set_phase(&game, rid, RoomPhase::Setup).await;
     let (p, e, lvl, pn, en) = {
         let rooms = game.rooms.lock().await;
         let r = rooms.get(&rid).unwrap();
-        (
-            r.p1.species,
-            r.p2.species,
-            r.level,
-            r.p1.username.to_uppercase(),
-            r.p2.username.to_uppercase(),
-        )
+        (r.p1.species, r.p2.species, r.level, r.p1.username.to_uppercase(), r.p2.username.to_uppercase())
     };
-    let (tx, rx) = oneshot::channel();
-    let _ = inner.setup_tx.send(SetupReq {
-        player: p,
-        enemy: e,
-        level: lvl,
-        player_name: pn,
-        enemy_name: en,
-        reply: tx,
-    });
-    if !matches!(rx.await, Ok(Ok(()))) {
+    let mut setup_ok = false;
+    for attempt in 0..3u32 {
+        let (tx, rx) = oneshot::channel();
+        let _ = inner.setup_tx.send(SetupReq {
+            player: p,
+            enemy: e,
+            level: lvl,
+            player_name: pn.clone(),
+            enemy_name: en.clone(),
+            reply: tx,
+        });
+        match rx.await {
+            Ok(Ok(())) => {
+                setup_ok = true;
+                break;
+            }
+            other => {
+                tracing::warn!("room {rid}: setup attempt {attempt} failed: {other:?}");
+                tokio::time::sleep(Duration::from_millis(700)).await;
+            }
+        }
+    }
+    if !setup_ok {
         abort_room(&game, rid, "setup_failed").await;
         return;
     }
-    advance_to_menu(&inner).await; // wait for the FIGHT menu after send-out
+    if !advance_to_menu(&inner).await {
+        tracing::warn!("room {rid}: battle never reached the FIGHT menu");
+        abort_room(&game, rid, "battle_did_not_start").await;
+        return;
+    }
     tokio::time::sleep(Duration::from_millis(500)).await; // let the menu settle / become input-ready
     tracing::info!("room {rid}: at FIGHT menu, battle begins");
 
@@ -543,18 +555,23 @@ fn snap(inner: &AppInner) -> Option<BattleState> {
     inner.battle.lock().unwrap().clone()
 }
 
-/// Wait for the FIGHT menu after send-out. The 6 A-taps queued by `setup` already drive the intro
-/// to the menu, so we just WAIT here — sending extra A's would open the move list early and corrupt
-/// the first move selection (the cursor can't be distinguished from the top menu via WRAM alone).
-async fn advance_to_menu(inner: &AppInner) {
-    for _ in 0..140 {
+/// Wait for the FIGHT menu after send-out. The 6 A-taps queued by `setup` usually drive the intro
+/// to the menu, so we mostly just WAIT (extra early A's would open the move list and corrupt the
+/// first move selection). After ~2.5s with no menu, sparsely nudge with A as a fallback for intro
+/// variations. Returns true if the FIGHT menu was reached, false on timeout (battle never started).
+async fn advance_to_menu(inner: &AppInner) -> bool {
+    for i in 0..130 {
         if let Some(s) = snap(inner) {
             if s.in_battle != 0 && s.menu == MenuPhase::MainMenu {
-                return;
+                return true;
+            }
+            if i > 20 && i % 12 == 0 && s.in_battle != 0 {
+                let _ = inner.action_tx.send(AgentAction::Buttons { presses: vec!["A".into()] });
             }
         }
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(120)).await;
     }
+    false
 }
 
 /// Drive one round to completion and return the resolving snapshot (or the last in-battle snapshot

@@ -46,7 +46,8 @@
     const msg = (t, ok) => { const m = $("msg"); m.textContent = t; m.style.color = ok ? "#46e07f" : "#f1879b"; };
     async function go(path) {
       const username = $("u").value.trim(), password = $("p").value;
-      if (username.length < 3 || password.length < 6) return msg("username ≥3, password ≥6");
+      if (username.length < 3) return msg("❌ username needs at least 3 characters");
+      if (password.length < 6) return msg("❌ password needs at least 6 characters (you typed " + password.length + ")");
       msg("…", true);
       try {
         const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" },
