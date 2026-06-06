@@ -96,6 +96,13 @@
 
   let ws, pc, mySeat = 0, timerHandle = null, roomId = new URLSearchParams(location.search).get("id");
   let resultShown = false, lastProgress = Date.now();
+  // who-is-who: each HP bar shows "<username> · <SPECIES>" so the owner of each Pokémon is clear
+  // (in-game the enemy trainer mon shows the species name, not a nickname — Gen-1 behavior).
+  let speciesMap = {}, youUser = "you", oppUser = "opponent", youSp = 0, oppSp = 0;
+  function renderNames() {
+    $("youName").textContent = youUser + (speciesMap[youSp] ? " · " + speciesMap[youSp] : "");
+    $("oppName").textContent = oppUser + (speciesMap[oppSp] ? " · " + speciesMap[oppSp] : "");
+  }
 
   // ---- WebRTC: subscribe to the shared room stream ----
   async function connectVideo() {
@@ -132,10 +139,10 @@
     switch (m.type) {
       case "room_state":
         mySeat = m.seat;
-        $("youName").textContent = m.you.username;
-        $("oppName").textContent = m.opp.username;
+        youUser = m.you.username; oppUser = m.opp.username;
+        youSp = m.you.species; oppSp = m.opp.species;
+        renderNames();
         $("phaseLbl").textContent = m.phase.replace("_", " ");
-        if (m.phase === "result" || m.phase === "done") {} // result msg drives the banner
         break;
       case "slot_result": runSlot(m.you_dex, m.opp_dex); break;
       case "your_turn":
@@ -186,6 +193,7 @@
   // ---- battle HUD ----
   function setBars(m) {
     $("phaseLbl").textContent = "battle · turn " + m.turn;
+    youSp = m.you.species; oppSp = m.opp.species; renderNames();
     bar("you", m.you); bar("opp", m.opp);
   }
   function bar(side, mon) {
@@ -241,6 +249,7 @@
     if (r.status === 401) return location.replace("/login.html");
     const d = await r.json();
     if (!d.room) return location.replace("/lobby.html"); // battle already over -> home
+    try { (await (await fetch("/api/species")).json()).forEach((s) => (speciesMap[s.index] = s.name)); } catch (e) {}
     await connectVideo().catch(() => {});
     openWs();
     // Watchdog: if the match makes no progress for 35s (e.g. setup wedged), don't strand the
