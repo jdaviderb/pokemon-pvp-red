@@ -35,7 +35,7 @@
     .rse-meta > div:first-child { border-left:0; }
     .rse-meta b { display:block; color:#000; font-size:18px; margin-top:2px; }
 
-    /* ---- SELECTION VIEW (slot machine — Game Boy cream) ---- */
+    /* ---- SELECTION VIEW (slot machine - Game Boy cream) ---- */
     .phase-battle .selview { display:none; }
     .phase-slot   .battleview { display:none; }
     .selview { display:flex; flex-direction:column; gap:10px; max-width:900px; margin:0 auto; width:100%; }
@@ -65,7 +65,7 @@
     .lock { grid-column:1/-1; font-size:18px; letter-spacing:2px; color:#5a563f; }
     .locked .lock{ color:#000000; }
     .sprite { width:108px; height:108px; image-rendering:pixelated; align-self:center; filter:grayscale(1) contrast(1.12) brightness(.5); }
-    .nm { font-size:26px; letter-spacing:1px; }
+    .nm { font-size:19px; letter-spacing:0; }
     .lv { color:#5a563f; font-size:18px; }
     .badge { display:inline-block; font-size:15px; padding:1px 10px; border:2px solid #000000; border-radius:5px; margin:4px 0; letter-spacing:1px; color:#000000; }
     .hpline { font-size:16px; display:flex; align-items:center; gap:8px; margin-top:4px; }
@@ -88,7 +88,7 @@
     .bz-row { display:grid; grid-template-columns:1.7fr 1fr; gap:10px; flex:0 0 auto; }
     /* move list (left) */
     .movelist { padding:14px 18px; display:flex; flex-direction:column; justify-content:space-evenly; }
-    .mvrow { position:relative; display:flex; justify-content:space-between; align-items:center; padding:4px 6px 4px 30px; font-size:22px; letter-spacing:1px; cursor:default; border-radius:5px; }
+    .mvrow { position:relative; display:flex; justify-content:space-between; align-items:center; gap:10px; white-space:nowrap; padding:4px 6px 4px 26px; font-size:18px; letter-spacing:0; cursor:default; border-radius:5px; }
     .mvrow .cur { position:absolute; left:8px; opacity:0; } .mvrow .pp { color:#3e3e2e; }
     .movelist.you .mvrow.live { cursor:pointer; }
     .movelist.you .mvrow.live:hover { background:#000000; color:#ffffff; }
@@ -106,7 +106,7 @@
     .statbox .sb-sprite { display:block; width:78px; height:78px; margin:auto auto 0; image-rendering:pixelated; filter:grayscale(1) contrast(1.12) brightness(.55); }
     .gb.myturn { box-shadow:0 0 20px rgba(232,64,63,.6); }
     /* message box (bottom) */
-    .msgbox { padding:12px 18px; font-size:23px; letter-spacing:1px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex:0 0 auto; }
+    .msgbox { padding:12px 18px; font-size:18px; letter-spacing:0; display:flex; align-items:center; justify-content:space-between; gap:12px; flex:0 0 auto; }
     .msgbox .tmr { font-size:20px; color:#3e3e2e; } .msgbox .tmr.urgent { color:#7a2c2c; }
 
     .overlay { position:fixed; inset:0; background:rgba(3,6,8,.93); display:grid; place-items:center; z-index:50; }
@@ -130,29 +130,29 @@
       <div class="srow">
         <div class="box p1box p1 reel reelbox stopped" id="reelbox1">
           <div><div class="lbl ptag">◖ PLAYER 1 ◗<span class="uname s1 uname">you</span></div>
-            <div class="lbl" id="rlbl1">RANDOMIZING…</div><div class="rows" id="rows1"></div></div>
-          <div class="spincol"><div class="spinner"></div><div class="progress" id="prog1"></div><div class="spinlbl" id="spin1">SPINNING…</div></div>
+            <div class="lbl" id="rlbl1">RANDOMIZING...</div><div class="rows" id="rows1"></div></div>
+          <div class="spincol"><div class="spinner"></div><div class="progress" id="prog1"></div><div class="spinlbl" id="spin1">SPINNING...</div></div>
         </div>
         <div class="box p2box p2 reel reelbox stopped" id="reelbox2">
           <div><div class="lbl ptag">◖ PLAYER 2 ◗<span class="uname s2 uname">opp</span></div>
-            <div class="lbl" id="rlbl2">RANDOMIZING…</div><div class="rows" id="rows2"></div></div>
-          <div class="spincol"><div class="spinner"></div><div class="progress" id="prog2"></div><div class="spinlbl" id="spin2">SPINNING…</div></div>
+            <div class="lbl" id="rlbl2">RANDOMIZING...</div><div class="rows" id="rows2"></div></div>
+          <div class="spincol"><div class="spinner"></div><div class="progress" id="prog2"></div><div class="spinlbl" id="spin2">SPINNING...</div></div>
         </div>
       </div>
       <div class="lockrow">
         <div class="box p1box p1 lockcard" id="lock1">
           <div class="lock" id="locklbl1">🔒 LOCKED</div>
           <img class="sprite s1 sprite" src="/sprites/1.png" alt="" />
-          <div><div class="nm s1 name">—</div><div class="lv">Lv.<span id="lv1">50</span></div>
-            <div class="badge s1 type">—</div>
+          <div><div class="nm s1 name">-</div><div class="lv">Lv.<span id="lv1">50</span></div>
+            <div class="badge s1 type">-</div>
             <div class="hpline">HP: <span class="hptrack"><span class="hpfill s1 hpfill"></span></span><span class="s1 hpnum"></span></div></div>
         </div>
         <div class="vsbox"><div class="vs" id="vs">VS</div><div class="box startbox" id="startbox">◖ START BATTLE ◗</div></div>
         <div class="box p2box p2 lockcard" id="lock2">
           <div class="lock" id="locklbl2">🔒 LOCKED</div>
           <img class="sprite s2 sprite" src="/sprites/1.png" alt="" />
-          <div><div class="nm s2 name">—</div><div class="lv">Lv.<span id="lv2">50</span></div>
-            <div class="badge s2 type">—</div>
+          <div><div class="nm s2 name">-</div><div class="lv">Lv.<span id="lv2">50</span></div>
+            <div class="badge s2 type">-</div>
             <div class="hpline">HP: <span class="hptrack"><span class="hpfill s2 hpfill"></span></span><span class="s2 hpnum"></span></div></div>
         </div>
       </div>
@@ -167,9 +167,9 @@
           <div class="lock locked" id="p1lbl">🔒 LOCKED IN</div>
           <img class="sprite s1 sprite" src="/sprites/1.png" alt="" />
           <div>
-            <div class="nm s1 name">—</div>
+            <div class="nm s1 name">-</div>
             <div class="lv">Lv.50</div>
-            <div class="badge s1 type">—</div>
+            <div class="badge s1 type">-</div>
             <div class="hpline">HP: <span class="hptrack"><span class="hpfill s1 hpfill"></span></span></div>
             <div class="bhpn"><span class="s1 hpnum"></span></div>
           </div>
@@ -180,7 +180,7 @@
   </main>
 
   <div id="result" class="overlay hidden"><div style="text-align:center">
-    <div class="result px" id="resultText">—</div><button id="home" class="px">RETURN HOME ▸</button></div></div>
+    <div class="result px" id="resultText">-</div><button id="home" class="px">RETURN HOME ▸</button></div></div>
 
   <script>
   const MOVE_NAMES = {1:"Pound",2:"Karate Chop",3:"DoubleSlap",4:"Comet Punch",5:"Mega Punch",6:"Pay Day",7:"Fire Punch",8:"Ice Punch",9:"ThunderPunch",10:"Scratch",11:"ViceGrip",12:"Guillotine",13:"Razor Wind",14:"Swords Dance",15:"Cut",16:"Gust",17:"Wing Attack",18:"Whirlwind",19:"Fly",20:"Bind",21:"Slam",22:"Vine Whip",23:"Stomp",24:"Double Kick",25:"Mega Kick",26:"Jump Kick",27:"Rolling Kick",28:"Sand-Attack",29:"Headbutt",30:"Horn Attack",31:"Fury Attack",32:"Horn Drill",33:"Tackle",34:"Body Slam",35:"Wrap",36:"Take Down",37:"Thrash",38:"Double-Edge",39:"Tail Whip",40:"Poison Sting",41:"Twineedle",42:"Pin Missile",43:"Leer",44:"Bite",45:"Growl",46:"Roar",47:"Sing",48:"Supersonic",49:"SonicBoom",50:"Disable",51:"Acid",52:"Ember",53:"Flamethrower",54:"Mist",55:"Water Gun",56:"Hydro Pump",57:"Surf",58:"Ice Beam",59:"Blizzard",60:"Psybeam",61:"BubbleBeam",62:"Aurora Beam",63:"Hyper Beam",64:"Peck",65:"Drill Peck",66:"Submission",67:"Low Kick",68:"Counter",69:"Seismic Toss",70:"Strength",71:"Absorb",72:"Mega Drain",73:"Leech Seed",74:"Growth",75:"Razor Leaf",76:"SolarBeam",77:"PoisonPowder",78:"Stun Spore",79:"Sleep Powder",80:"Petal Dance",81:"String Shot",82:"Dragon Rage",83:"Fire Spin",84:"ThunderShock",85:"Thunderbolt",86:"Thunder Wave",87:"Thunder",88:"Rock Throw",89:"Earthquake",90:"Fissure",91:"Dig",92:"Toxic",93:"Confusion",94:"Psychic",95:"Hypnosis",96:"Meditate",97:"Agility",98:"Quick Attack",99:"Rage",100:"Teleport",101:"Night Shade",102:"Mimic",103:"Screech",104:"Double Team",105:"Recover",106:"Harden",107:"Minimize",108:"SmokeScreen",109:"Confuse Ray",110:"Withdraw",111:"Defense Curl",112:"Barrier",113:"Light Screen",114:"Haze",115:"Reflect",116:"Focus Energy",117:"Bide",118:"Metronome",119:"Mirror Move",120:"Selfdestruct",121:"Egg Bomb",122:"Lick",123:"Smog",124:"Sludge",125:"Bone Club",126:"Fire Blast",127:"Waterfall",128:"Clamp",129:"Swift",130:"Skull Bash",131:"Spike Cannon",132:"Constrict",133:"Amnesia",134:"Kinesis",135:"Softboiled",136:"Hi Jump Kick",137:"Glare",138:"Dream Eater",139:"Poison Gas",140:"Barrage",141:"Leech Life",142:"Lovely Kiss",143:"Sky Attack",144:"Transform",145:"Bubble",146:"Dizzy Punch",147:"Spore",148:"Flash",149:"Psywave",150:"Splash",151:"Acid Armor",152:"Crabhammer",153:"Explosion",154:"Fury Swipes",155:"Bonemerang",156:"Rest",157:"Rock Slide",158:"Hyper Fang",159:"Sharpen",160:"Conversion",161:"Tri Attack",162:"Super Fang",163:"Slash",164:"Substitute",165:"Struggle"};
@@ -249,16 +249,16 @@
         const opp = (lockedIdx[2] && SP[lockedIdx[2]]) ? SP[lockedIdx[2]].name : "the opponent";
         if (m.seat === mySeat) {
           renderMoves(myMoves, true); startTimer(m.deadline_ms);
-          $("turnInfo").textContent = "YOUR TURN — choose " + mine + "'s move!";
+          $("turnInfo").textContent = "YOUR TURN - choose " + mine + "'s move!";
           $("p1card").classList.add("myturn"); $("p1lbl").textContent = "▶ YOUR TURN";
         } else {
-          $("turnInfo").textContent = "Opponent's " + opp + " is choosing…";
+          $("turnInfo").textContent = "Opponent's " + opp + " is choosing...";
           $("p1card").classList.remove("myturn"); $("p1lbl").textContent = "🔒 LOCKED IN";
         }
         break;
       }
       case "battle_state": onBattle(m); break;
-      case "move_auto": if (m.seat === mySeat) { $("turnInfo").textContent = "Time's up — random move chosen!"; $("p1card").classList.remove("myturn"); $("p1lbl").textContent = "🔒 LOCKED IN"; } break;
+      case "move_auto": if (m.seat === mySeat) { $("turnInfo").textContent = "Time's up - random move chosen!"; $("p1card").classList.remove("myturn"); $("p1lbl").textContent = "🔒 LOCKED IN"; } break;
       case "winner": resultShown = true; showResult(m.you_won); break;
       case "room_closed": if (!resultShown) bail(m.reason === "battle_ended" ? "MATCH ENDED" : "MATCH COULDN'T START"); break;
     }
@@ -271,15 +271,15 @@
   function paintReel(side, centerIdx, spinning) { const rows = $("rows"+side); const pick=[];
     for (let k=0;k<6;k++) pick.push(spinning?rand():(k===1?centerIdx:rand()));
     rows.innerHTML = pick.map((ix,k)=>rrow(ix,k===1)).join("");
-    $("rlbl"+side).textContent = spinning?"RANDOMIZING…":"LOCKED IN ✓"; $("spin"+side).textContent = spinning?"SPINNING…":"■ LOCKED"; }
+    $("rlbl"+side).textContent = spinning?"RANDOMIZING...":"LOCKED IN ✓"; $("spin"+side).textContent = spinning?"SPINNING...":"■ LOCKED"; }
   function setProgress(side, frac){ const p=$("prog"+side); p.innerHTML=""; for(let i=0;i<10;i++){const e=document.createElement("i"); if(i/10<frac)e.className="on"; p.appendChild(e);} }
   function rand(){ return allDex.length?byDex[allDex[Math.floor(Math.random()*allDex.length)]]:1; }
   function maybeStartReels(youIdx, oppIdx) { if (reelsStarted || !SP[youIdx] || !SP[oppIdx]) return; reelsStarted = true; startReels(youIdx, oppIdx); }
   // roulette: set the big card sprite/name/type to a random species (NOT locked yet)
-  function rollVisual(side, idx) { const s = SP[idx]; if (!s) return; setSprite(side, s.dex); setF(side, "name", s.name); setF(side, "type", s.types || "—"); }
+  function rollVisual(side, idx) { const s = SP[idx]; if (!s) return; setSprite(side, s.dex); setF(side, "name", s.name); setF(side, "type", s.types || "-"); }
   function startReels(youIdx, oppIdx) {
-    $("reelbox1").classList.remove("stopped"); $("reelbox2").classList.remove("stopped"); $("startbox").textContent="◖ ROLLING… ◗";
-    [1,2].forEach((s) => { $("lock"+s).classList.remove("locked"); $("locklbl"+s).textContent = "🎰 ROLLING…"; });
+    $("reelbox1").classList.remove("stopped"); $("reelbox2").classList.remove("stopped"); $("startbox").textContent="◖ ROLLING... ◗";
+    [1,2].forEach((s) => { $("lock"+s).classList.remove("locked"); $("locklbl"+s).textContent = "🎰 ROLLING..."; });
     let n=0; const total=28;
     const iv=setInterval(()=>{ n++;
       paintReel(1,youIdx,true); paintReel(2,oppIdx,true);
@@ -287,11 +287,11 @@
       setProgress(1,n/total); setProgress(2,n/total);
       if(n>=total){ clearInterval(iv); paintReel(1,youIdx,false); paintReel(2,oppIdx,false); setProgress(1,1); setProgress(2,1);
         $("reelbox1").classList.add("stopped"); $("reelbox2").classList.add("stopped");
-        lockCard(1,youIdx); lockCard(2,oppIdx); $("startbox").textContent="◖ BATTLE STARTING… ◗"; } }, 85);
+        lockCard(1,youIdx); lockCard(2,oppIdx); $("startbox").textContent="◖ BATTLE STARTING... ◗"; } }, 85);
   }
 
   function lockCard(side, idx) { lockedIdx[side]=idx; const s=SP[idx]; if(!s) return;
-    setSprite(side, s.dex); setF(side,"name",s.name); setF(side,"type",s.types||"—");
+    setSprite(side, s.dex); setF(side,"name",s.name); setF(side,"type",s.types||"-");
     $("lock"+side).classList.add("locked"); $("locklbl"+side).textContent="🔓 LOCKED IN";
   }
 
@@ -301,11 +301,11 @@
     const list = (moves && moves.length) ? moves : (lockedIdx[1] && SP[lockedIdx[1]] ? SP[lockedIdx[1]].moves.map((id,i)=>({slot:i,id,pp:""})) : []);
     list.forEach((mv) => { if(!mv.id) return;
       if (live && mv.pp !== "") ppMax[mv.id] = Math.max(ppMax[mv.id]||0, mv.pp);
-      const nm=moveName(mv.id); const pptxt = (mv.pp!=="" ? mv.pp+"/"+(ppMax[mv.id]||mv.pp) : "—");
+      const nm=moveName(mv.id); const pptxt = (mv.pp!=="" ? mv.pp+"/"+(ppMax[mv.id]||mv.pp) : "-");
       const row=document.createElement("div"); row.className="mvrow"+(live?" live":" dis"); row.dataset.slot=mv.slot;
       row.innerHTML = `<span class="cur">▶</span><span>${nm}</span><span class="pp">PP ${pptxt}</span>`;
       if (live) row.onclick=()=>{ if(!ws||ws.readyState!==1)return; ws.send(JSON.stringify({type:"commit_move",slot:mv.slot}));
-        renderMoves(myMoves,false); stopTimer(); $("p1card").classList.remove("myturn"); $("turnInfo").textContent="Locked in — resolving…"; };
+        renderMoves(myMoves,false); stopTimer(); $("p1card").classList.remove("myturn"); $("turnInfo").textContent="Locked in - resolving..."; };
       box.appendChild(row); });
   }
 
@@ -336,7 +336,7 @@
     try { (await (await fetch("/api/species")).json()).forEach((s)=>{ SP[s.index]={dex:s.dex,name:s.name,types:s.types,moves:s.moves}; byDex[s.dex]=s.index; allDex.push(s.dex); }); } catch(e){}
     paintReel(1, rand(), true); paintReel(2, rand(), true);
     await connectVideo().catch(()=>{}); openWs();
-    setInterval(()=>{ if(!resultShown && Date.now()-lastProgress>35000) bail("MATCH STALLED — RETURNING HOME"); }, 5000);
+    setInterval(()=>{ if(!resultShown && Date.now()-lastProgress>35000) bail("MATCH STALLED - RETURNING HOME"); }, 5000);
   })();
   </script>
 </body>

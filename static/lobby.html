@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>RED STADIUM ENGINE — Lobby</title>
+  <title>RED STADIUM ENGINE - Lobby</title>
   <style>
     @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
     :root { --bg:#e9e7dd; --red:#e8403f; --parch:#ffffff; --ink:#000000; --inkdim:#666; }
@@ -39,11 +39,11 @@
 </head>
 <body>
   <div class="balls"><span class="pball"></span><div class="logo">RED STADIUM ENGINE</div><span class="pball"></span></div>
-  <div class="sub">— RANDOM BATTLE ARENA —</div>
-  <div class="gb who" id="who">…</div>
+  <div class="sub">- RANDOM BATTLE ARENA -</div>
+  <div class="gb who" id="who">...</div>
   <button class="gb" id="find"><span class="pball"></span> FIND MATCH <span class="pball"></span></button>
   <div class="status" id="status"></div>
-  <div class="links"><a href="/console.html">DEV CONSOLE</a> · <span id="logout">LOGOUT</span></div>
+  <div class="links"><a href="/console.html">DEV CONSOLE</a> - <span id="logout">LOGOUT</span></div>
   <script>
     const $ = (id) => document.getElementById(id);
     let ws, searching = false;
@@ -52,7 +52,7 @@
       if (r.status === 401) return location.replace("/login.html");
       const d = await r.json();
       if (d.room && d.room.id != null) return location.replace("/room.html?id=" + d.room.id);
-      $("who").innerHTML = "TRAINER <b>" + d.user.username.toUpperCase() + "</b> · " + d.user.wins + "W / " + d.user.losses + "L";
+      $("who").innerHTML = "TRAINER <b>" + d.user.username.toUpperCase() + "</b> - " + d.user.wins + "W / " + d.user.losses + "L";
       openWs();
     })();
     function openWs() {
@@ -61,11 +61,11 @@
         const m = JSON.parse(e.data);
         if (m.type === "queued") { searching = true; setSearching(m.position); }
         else if (m.type === "lobby") { searching = false; setIdle(); }
-        else if (m.type === "matched") { $("status").innerHTML = "OPPONENT FOUND — ENTERING ARENA…"; setTimeout(() => location.replace("/room.html?id=" + m.room_id), 400); }
+        else if (m.type === "matched") { $("status").innerHTML = "OPPONENT FOUND - ENTERING ARENA..."; setTimeout(() => location.replace("/room.html?id=" + m.room_id), 400); }
       };
       ws.onclose = () => { if (!searching) setIdle(); };
     }
-    function setSearching(pos) { $("find").classList.add("searching"); $("find").innerHTML = "⏳ SEARCHING…  (CANCEL)"; $("status").innerHTML = '<span class="spin"></span> WAITING FOR AN OPPONENT' + (pos > 1 ? " · #" + pos : ""); }
+    function setSearching(pos) { $("find").classList.add("searching"); $("find").innerHTML = "⏳ SEARCHING...  (CANCEL)"; $("status").innerHTML = '<span class="spin"></span> WAITING FOR AN OPPONENT' + (pos > 1 ? " - #" + pos : ""); }
     function setIdle() { $("find").classList.remove("searching"); $("find").innerHTML = '<span class="pball"></span> FIND MATCH <span class="pball"></span>'; $("status").textContent = ""; }
     $("find").onclick = () => { if (!ws || ws.readyState !== 1) return; if (searching) { ws.send(JSON.stringify({ type: "cancel_queue" })); searching = false; setIdle(); } else ws.send(JSON.stringify({ type: "find_match" })); };
     $("logout").onclick = async () => { await fetch("/auth/logout", { method: "POST" }); location.replace("/login.html"); };

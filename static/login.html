@@ -53,7 +53,7 @@
       <div class="logo">RED STADIUM<br>ENGINE</div>
       <span class="pball"></span>
     </div>
-    <div class="sub">— RANDOM BATTLE ARENA —</div>
+    <div class="sub">- RANDOM BATTLE ARENA -</div>
 
     <div class="gb panel">
       <div class="press blink" id="press"><span class="pball"></span> PRESS START <span class="pball"></span></div>
@@ -72,7 +72,7 @@
     <div class="arrow" id="arrow">▾</div>
   </div>
 
-  <div class="foot"><span>BUILD 1.0.0</span><span>PREPARE. COMPETE. BE LEGEND.</span><span>© 2025 RSE</span></div>
+  <div class="foot"><span>BUILD 1.0.0</span><span>PREPARE. COMPETE. BE LEGEND.</span><span>(C) 2025 RSE</span></div>
 
   <script>
     const $ = (id) => document.getElementById(id);
@@ -85,7 +85,7 @@
       const username = $("u").value.trim(), password = $("p").value;
       if (username.length < 3) return msg("USERNAME NEEDS 3+ CHARACTERS");
       if (password.length < 6) return msg("PASSWORD NEEDS 6+ CHARACTERS (YOU TYPED " + password.length + ")");
-      msg("…", true);
+      msg("...", true);
       try {
         const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username, password }) });
         if (r.ok) { location.href = "/"; return; }
