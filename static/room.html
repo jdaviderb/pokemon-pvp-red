@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RETRO·VISION — Battle</title>
+  <style>
+    :root { --bg:#0a0a0f; --panel:#14141c; --accent:#46e07f; --you:#7fd4ff; --opp:#f1879b; --txt:#e8e8f0; --dim:#8a8aa0; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; color:var(--txt); font-family: ui-monospace, Menlo, monospace;
+      background: radial-gradient(1200px 700px at 50% -10%, #1a1a2a 0%, var(--bg) 65%);
+      display:flex; flex-direction:column; align-items:center; gap:14px; padding:18px; }
+    .top { font-size:13px; letter-spacing:1px; color:var(--dim); }
+    .top b { color:var(--accent); }
+    .stage { position:relative; width:min(96vw,560px); }
+    .screen { position:relative; aspect-ratio:160/144; background:#000; border-radius:14px; overflow:hidden;
+      border:3px solid #20202c; box-shadow:0 16px 50px rgba(0,0,0,.6); }
+    video { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; background:#9bbc0f; }
+    .overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+      justify-content:center; gap:18px; background:rgba(6,6,12,.86); backdrop-filter:blur(3px); }
+    .hidden { display:none; }
+    .reels { display:flex; gap:36px; align-items:center; }
+    .reel { text-align:center; }
+    .reel .win { width:120px; height:120px; image-rendering:pixelated; filter:drop-shadow(0 0 12px rgba(255,255,255,.25)); }
+    .reel.you .lbl { color:var(--you); } .reel.opp .lbl { color:var(--opp); }
+    .lbl { font-size:12px; margin-top:8px; letter-spacing:1px; }
+    .reels .vs { color:var(--dim); font-weight:800; }
+    .slot-title { font-size:15px; color:var(--accent); letter-spacing:2px; }
+    /* battle hud */
+    .hud { width:min(96vw,560px); display:flex; flex-direction:column; gap:12px; }
+    .bars { display:flex; flex-direction:column; gap:8px; }
+    .bar { background:var(--panel); border:1px solid #262633; border-radius:10px; padding:8px 12px; }
+    .bar .nm { display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px; }
+    .bar.opp .nm b { color:var(--opp); } .bar.you .nm b { color:var(--you); }
+    .track { height:9px; background:#0e0e15; border-radius:6px; overflow:hidden; }
+    .fill { height:100%; background:var(--accent); border-radius:6px; transition:width .4s; }
+    .fill.low { background:#f1c84b; } .fill.crit { background:var(--opp); }
+    .turn { display:flex; justify-content:space-between; align-items:center; font-size:13px; min-height:20px; }
+    #timer { font-weight:800; font-size:18px; color:var(--accent); }
+    #timer.urgent { color:var(--opp); }
+    .moves { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .mv { text-align:left; padding:12px; border-radius:9px; border:1px solid #2a2a38; background:#1c1c28;
+      color:var(--txt); font:inherit; cursor:pointer; transition:.12s; }
+    .mv:hover:not(:disabled) { border-color:var(--you); }
+    .mv:disabled { opacity:.4; cursor:default; }
+    .mv b { color:#e8e8f0; } .mv span { color:var(--dim); font-size:11px; }
+    .result { font-size:40px; font-weight:900; letter-spacing:3px; }
+    .result.win { color:var(--accent); } .result.lose { color:var(--opp); }
+    #home { padding:14px 26px; border-radius:10px; border:1px solid var(--accent); background:var(--accent);
+      color:#06120a; font:inherit; font-weight:800; cursor:pointer; }
+    #unmute { position:absolute; right:10px; bottom:10px; background:rgba(0,0,0,.5); color:#fff; border:0;
+      border-radius:8px; padding:6px 10px; cursor:pointer; font:inherit; font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="top">RETRO·VISION <b>ARENA</b> · <span id="phaseLbl">connecting…</span></div>
+  <div class="stage">
+    <div class="screen">
+      <video id="video" autoplay playsinline muted></video>
+      <button id="unmute">🔊 sound</button>
+      <div id="slot" class="overlay hidden">
+        <div class="slot-title">YOUR FIGHTER…</div>
+        <div class="reels">
+          <div class="reel you"><img id="reelYou" class="win" src="/sprites/1.png" /><div class="lbl" id="reelYouL">YOU</div></div>
+          <div class="vs">VS</div>
+          <div class="reel opp"><img id="reelOpp" class="win" src="/sprites/1.png" /><div class="lbl" id="reelOppL">OPP</div></div>
+        </div>
+      </div>
+      <div id="result" class="overlay hidden">
+        <div class="result" id="resultText">—</div>
+        <button id="home">Return Home</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hud">
+    <div class="bars">
+      <div class="bar opp"><div class="nm"><b id="oppName">opponent</b><span id="oppHp"></span></div>
+        <div class="track"><div class="fill" id="oppFill" style="width:100%"></div></div></div>
+      <div class="bar you"><div class="nm"><b id="youName">you</b><span id="youHp"></span></div>
+        <div class="track"><div class="fill" id="youFill" style="width:100%"></div></div></div>
+    </div>
+    <div class="turn"><span id="turnInfo">…</span><span id="timer"></span></div>
+    <div class="moves" id="moves">
+      <button class="mv" data-slot="0" disabled>—</button>
+      <button class="mv" data-slot="1" disabled>—</button>
+      <button class="mv" data-slot="2" disabled>—</button>
+      <button class="mv" data-slot="3" disabled>—</button>
+    </div>
+  </div>
+
+  <script>
+  const MOVE_NAMES = {1:"Pound",2:"Karate Chop",3:"DoubleSlap",4:"Comet Punch",5:"Mega Punch",6:"Pay Day",7:"Fire Punch",8:"Ice Punch",9:"ThunderPunch",10:"Scratch",11:"ViceGrip",12:"Guillotine",13:"Razor Wind",14:"Swords Dance",15:"Cut",16:"Gust",17:"Wing Attack",18:"Whirlwind",19:"Fly",20:"Bind",21:"Slam",22:"Vine Whip",23:"Stomp",24:"Double Kick",25:"Mega Kick",26:"Jump Kick",27:"Rolling Kick",28:"Sand-Attack",29:"Headbutt",30:"Horn Attack",31:"Fury Attack",32:"Horn Drill",33:"Tackle",34:"Body Slam",35:"Wrap",36:"Take Down",37:"Thrash",38:"Double-Edge",39:"Tail Whip",40:"Poison Sting",41:"Twineedle",42:"Pin Missile",43:"Leer",44:"Bite",45:"Growl",46:"Roar",47:"Sing",48:"Supersonic",49:"SonicBoom",50:"Disable",51:"Acid",52:"Ember",53:"Flamethrower",54:"Mist",55:"Water Gun",56:"Hydro Pump",57:"Surf",58:"Ice Beam",59:"Blizzard",60:"Psybeam",61:"BubbleBeam",62:"Aurora Beam",63:"Hyper Beam",64:"Peck",65:"Drill Peck",66:"Submission",67:"Low Kick",68:"Counter",69:"Seismic Toss",70:"Strength",71:"Absorb",72:"Mega Drain",73:"Leech Seed",74:"Growth",75:"Razor Leaf",76:"SolarBeam",77:"PoisonPowder",78:"Stun Spore",79:"Sleep Powder",80:"Petal Dance",81:"String Shot",82:"Dragon Rage",83:"Fire Spin",84:"ThunderShock",85:"Thunderbolt",86:"Thunder Wave",87:"Thunder",88:"Rock Throw",89:"Earthquake",90:"Fissure",91:"Dig",92:"Toxic",93:"Confusion",94:"Psychic",95:"Hypnosis",96:"Meditate",97:"Agility",98:"Quick Attack",99:"Rage",100:"Teleport",101:"Night Shade",102:"Mimic",103:"Screech",104:"Double Team",105:"Recover",106:"Harden",107:"Minimize",108:"SmokeScreen",109:"Confuse Ray",110:"Withdraw",111:"Defense Curl",112:"Barrier",113:"Light Screen",114:"Haze",115:"Reflect",116:"Focus Energy",117:"Bide",118:"Metronome",119:"Mirror Move",120:"Selfdestruct",121:"Egg Bomb",122:"Lick",123:"Smog",124:"Sludge",125:"Bone Club",126:"Fire Blast",127:"Waterfall",128:"Clamp",129:"Swift",130:"Skull Bash",131:"Spike Cannon",132:"Constrict",133:"Amnesia",134:"Kinesis",135:"Softboiled",136:"Hi Jump Kick",137:"Glare",138:"Dream Eater",139:"Poison Gas",140:"Barrage",141:"Leech Life",142:"Lovely Kiss",143:"Sky Attack",144:"Transform",145:"Bubble",146:"Dizzy Punch",147:"Spore",148:"Flash",149:"Psywave",150:"Splash",151:"Acid Armor",152:"Crabhammer",153:"Explosion",154:"Fury Swipes",155:"Bonemerang",156:"Rest",157:"Rock Slide",158:"Hyper Fang",159:"Sharpen",160:"Conversion",161:"Tri Attack",162:"Super Fang",163:"Slash",164:"Substitute",165:"Struggle"};
+  const moveName = (id) => MOVE_NAMES[id] || ("#" + id);
+  const $ = (id) => document.getElementById(id);
+
+  let ws, pc, mySeat = 0, timerHandle = null, roomId = new URLSearchParams(location.search).get("id");
+
+  // ---- WebRTC: subscribe to the shared room stream ----
+  async function connectVideo() {
+    pc = new RTCPeerConnection({ iceServers: [] });
+    pc.addTransceiver("video", { direction: "recvonly" });
+    pc.addTransceiver("audio", { direction: "recvonly" });
+    const remote = new MediaStream();
+    $("video").srcObject = remote;
+    pc.ontrack = (e) => remote.addTrack(e.track);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await new Promise((res) => {
+      if (pc.iceGatheringState === "complete") return res();
+      const c = () => { if (pc.iceGatheringState === "complete") { pc.removeEventListener("icegatheringstatechange", c); res(); } };
+      pc.addEventListener("icegatheringstatechange", c);
+      setTimeout(res, 2500);
+    });
+    const r = await fetch("/offer", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type }) });
+    if (r.ok) await pc.setRemoteDescription(await r.json());
+  }
+  $("unmute").onclick = () => { $("video").muted = false; $("unmute").style.display = "none"; };
+
+  // ---- WebSocket: game events ----
+  function openWs() {
+    ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+    ws.onopen = () => ws.send(JSON.stringify({ type: "resume" }));
+    ws.onmessage = (e) => handle(JSON.parse(e.data));
+    ws.onclose = () => setTimeout(openWs, 1500); // reconnect (F5 / network blip)
+  }
+
+  function handle(m) {
+    switch (m.type) {
+      case "room_state":
+        mySeat = m.seat;
+        $("youName").textContent = m.you.username;
+        $("oppName").textContent = m.opp.username;
+        $("phaseLbl").textContent = m.phase.replace("_", " ");
+        if (m.phase === "result" || m.phase === "done") {} // result msg drives the banner
+        break;
+      case "slot_result": runSlot(m.you_dex, m.opp_dex); break;
+      case "your_turn":
+        if (m.seat === mySeat) { setMoves(m.moves); startTimer(m.deadline_ms); $("turnInfo").textContent = "YOUR MOVE — choose!"; }
+        else { $("turnInfo").textContent = "opponent is choosing…"; }
+        break;
+      case "battle_state": setBars(m); break;
+      case "move_auto":
+        if (m.seat === mySeat) $("turnInfo").textContent = "time up — random move!";
+        break;
+      case "winner": showResult(m.you_won); break;
+      case "room_closed": break; // banner already shown; user clicks Return Home
+    }
+  }
+
+  // ---- slot machine ----
+  function runSlot(youDex, oppDex) {
+    $("slot").classList.remove("hidden");
+    $("phaseLbl").textContent = "slot machine";
+    let spins = 0;
+    const iv = setInterval(() => {
+      $("reelYou").src = "/sprites/" + (1 + Math.floor(Math.random() * 151)) + ".png";
+      $("reelOpp").src = "/sprites/" + (1 + Math.floor(Math.random() * 151)) + ".png";
+      if (++spins > 22) {
+        clearInterval(iv);
+        $("reelYou").src = "/sprites/" + youDex + ".png";
+        $("reelOpp").src = "/sprites/" + oppDex + ".png";
+        $("reelYouL").textContent = "YOU"; $("reelOppL").textContent = "OPP";
+        setTimeout(() => $("slot").classList.add("hidden"), 1100);
+      }
+    }, 90);
+  }
+
+  // ---- battle HUD ----
+  function setBars(m) {
+    $("phaseLbl").textContent = "battle · turn " + m.turn;
+    bar("you", m.you); bar("opp", m.opp);
+  }
+  function bar(side, mon) {
+    const pct = mon.max_hp ? Math.max(0, Math.round((mon.hp / mon.max_hp) * 100)) : 0;
+    const f = $(side + "Fill"); f.style.width = pct + "%";
+    f.className = "fill" + (pct <= 12 ? " crit" : pct <= 35 ? " low" : "");
+    $(side + "Hp").textContent = mon.hp + "/" + mon.max_hp;
+  }
+  function setMoves(moves) {
+    const byslot = {}; (moves || []).forEach((mv) => (byslot[mv.slot] = mv));
+    document.querySelectorAll("#moves .mv").forEach((b) => {
+      const mv = byslot[+b.dataset.slot];
+      if (mv) { b.innerHTML = "<b>" + moveName(mv.id) + "</b> <span>PP " + mv.pp + "</span>"; b.disabled = false; }
+      else { b.innerHTML = "—"; b.disabled = true; }
+    });
+  }
+  function lockMoves() { document.querySelectorAll("#moves .mv").forEach((b) => (b.disabled = true)); }
+  document.querySelectorAll("#moves .mv").forEach((b) => {
+    b.onclick = () => {
+      if (b.disabled || !ws || ws.readyState !== 1) return;
+      ws.send(JSON.stringify({ type: "commit_move", slot: +b.dataset.slot }));
+      lockMoves(); stopTimer(); $("turnInfo").textContent = "locked in — waiting for the turn…";
+    };
+  });
+
+  // ---- 15s timer ----
+  function startTimer(ms) {
+    stopTimer();
+    let end = Date.now() + (ms || 15000);
+    const upd = () => {
+      const left = Math.max(0, (end - Date.now()) / 1000);
+      $("timer").textContent = left.toFixed(0) + "s";
+      $("timer").classList.toggle("urgent", left <= 5);
+      if (left <= 0) { stopTimer(); lockMoves(); }
+    };
+    upd(); timerHandle = setInterval(upd, 100);
+  }
+  function stopTimer() { if (timerHandle) { clearInterval(timerHandle); timerHandle = null; } $("timer").textContent = ""; $("timer").classList.remove("urgent"); }
+
+  // ---- result ----
+  function showResult(youWon) {
+    lockMoves(); stopTimer();
+    $("phaseLbl").textContent = "result";
+    $("resultText").textContent = youWon ? "YOU WIN!" : "YOU LOSE";
+    $("resultText").className = "result " + (youWon ? "win" : "lose");
+    $("result").classList.remove("hidden");
+  }
+  $("home").onclick = () => location.replace("/lobby.html");
+
+  // ---- boot ----
+  (async () => {
+    const r = await fetch("/api/me");
+    if (r.status === 401) return location.replace("/login.html");
+    const d = await r.json();
+    if (!d.room) return location.replace("/lobby.html"); // battle already over -> home
+    await connectVideo().catch(() => {});
+    openWs();
+  })();
+  </script>
+</body>
+</html>

@@ -11,43 +11,67 @@
       background: radial-gradient(1200px 600px at 50% -10%, #1a1a2a 0%, var(--bg) 60%);
       font-family: ui-monospace, Menlo, monospace; }
     .card { width:min(92vw,440px); background:var(--panel); border:1px solid #262633;
-      border-radius:16px; padding:28px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.5); }
-    h1 { margin:0 0 2px; font-size:20px; letter-spacing:1px; } h1 b { color:var(--accent); }
-    .who { color:var(--dim); font-size:13px; margin-bottom:22px; }
-    .who b { color:var(--txt); }
-    button { padding:12px 18px; border-radius:10px; border:1px solid #2a2a38; background:#1c1c28;
-      color:var(--txt); font:inherit; font-weight:700; cursor:pointer; }
-    #find { width:100%; padding:18px; font-size:16px; background:var(--accent); color:#06120a;
-      border-color:var(--accent); }
-    #find:disabled { opacity:.5; cursor:default; }
-    .status { margin-top:16px; min-height:18px; color:var(--accent); font-size:13px; }
-    .links { margin-top:22px; font-size:12px; }
+      border-radius:16px; padding:30px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+    h1 { margin:0 0 2px; font-size:21px; letter-spacing:1px; } h1 b { color:var(--accent); }
+    .who { color:var(--dim); font-size:13px; margin-bottom:24px; } .who b { color:var(--txt); }
+    #find { width:100%; padding:20px; font-size:17px; border-radius:12px; font-weight:800; cursor:pointer;
+      background:var(--accent); color:#06120a; border:1px solid var(--accent); letter-spacing:.5px;
+      transition:.15s; }
+    #find:hover { filter:brightness(1.08); }
+    #find.searching { background:#1c1c28; color:var(--accent); }
+    .status { margin-top:18px; min-height:20px; color:var(--accent); font-size:13px; }
+    .spin { display:inline-block; width:14px; height:14px; border:2px solid #2a2a38;
+      border-top-color:var(--accent); border-radius:50%; animation:s .8s linear infinite; vertical-align:-2px; }
+    @keyframes s { to { transform:rotate(360deg); } }
+    .links { margin-top:24px; font-size:12px; }
     .links a, .links span { color:var(--dim); text-decoration:none; cursor:pointer; }
-    .links a:hover { color:var(--txt); }
+    .links a:hover, .links span:hover { color:var(--txt); }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>RETRO·VISION <b>ARENA</b></h1>
     <div class="who" id="who">…</div>
-    <button id="find">⚔  Find Match</button>
+    <button id="find">⚔  FIND MATCH</button>
     <div class="status" id="status"></div>
-    <div class="links">
-      <a href="/console.html">dev console</a> · <span id="logout">logout</span>
-    </div>
+    <div class="links"><a href="/console.html">dev console</a> · <span id="logout">logout</span></div>
   </div>
   <script>
     const $ = (id) => document.getElementById(id);
-    // Matchmaking gets wired to /ws in a later phase; for now just confirm session + show the user.
+    let ws, searching = false;
+
     (async () => {
       const r = await fetch("/api/me");
-      if (r.status === 401) { location.replace("/login.html"); return; }
+      if (r.status === 401) return location.replace("/login.html");
       const d = await r.json();
-      if (d.room && d.room.id != null) { location.replace("/room.html?id=" + d.room.id); return; }
-      $("who").innerHTML = "logged in as <b>" + d.user.username + "</b> · " +
-        d.user.wins + "W / " + d.user.losses + "L";
+      if (d.room && d.room.id != null) return location.replace("/room.html?id=" + d.room.id);
+      $("who").innerHTML = "logged in as <b>" + d.user.username + "</b> · " + d.user.wins + "W / " + d.user.losses + "L";
+      openWs();
     })();
-    $("find").onclick = () => { $("status").textContent = "matchmaking arrives in the next build…"; };
+
+    function openWs() {
+      ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+      ws.onmessage = (e) => {
+        const m = JSON.parse(e.data);
+        if (m.type === "queued") { searching = true; setSearching(m.position); }
+        else if (m.type === "lobby") { searching = false; setIdle(); }
+        else if (m.type === "matched") { $("status").innerHTML = "opponent found — entering arena…";
+          setTimeout(() => location.replace("/room.html?id=" + m.room_id), 400); }
+      };
+      ws.onclose = () => { if (!searching) setIdle(); };
+    }
+    function setSearching(pos) {
+      $("find").classList.add("searching"); $("find").textContent = "⏳ SEARCHING… (cancel)";
+      $("status").innerHTML = '<span class="spin"></span> waiting for an opponent' + (pos > 1 ? " · #" + pos : "");
+    }
+    function setIdle() {
+      $("find").classList.remove("searching"); $("find").textContent = "⚔  FIND MATCH"; $("status").textContent = "";
+    }
+    $("find").onclick = () => {
+      if (!ws || ws.readyState !== 1) return;
+      if (searching) { ws.send(JSON.stringify({ type: "cancel_queue" })); searching = false; setIdle(); }
+      else ws.send(JSON.stringify({ type: "find_match" }));
+    };
     $("logout").onclick = async () => { await fetch("/auth/logout", { method: "POST" }); location.replace("/login.html"); };
   </script>
 </body>
