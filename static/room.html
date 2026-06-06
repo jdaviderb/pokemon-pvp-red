@@ -7,18 +7,18 @@
   <style>
     /* Real Game Boy font extracted from pret/pokered (local, offline, pixel-exact em=8). */
     @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
-    :root { --bg:#04070a; --grn:#5ad17a; --grn-dim:#2c6e44; --red:#e8403f; --wht:#e9efe6; --txt:#9fe0b4;
-      --dim:#4f8a66; --line:#1c3a28; --blue:#5aa9ff; --bluedim:#23507e; --reddim:#7a2422;
-      --parch:#e9e2c6; --ink:#33301f; --inkdim:#6b6448; }
+    :root { --bg:#e9e7dd; --grn:#5ad17a; --grn-dim:#2c6e44; --red:#e8403f; --wht:#e9efe6; --txt:#000000;
+      --dim:#666; --line:#000; --blue:#5aa9ff; --bluedim:#23507e; --reddim:#7a2422;
+      --parch:#ffffff; --ink:#000000; --inkdim:#666; }
     * { box-sizing:border-box; }
     body { margin:0; height:100vh; overflow:hidden; background:var(--bg); color:var(--txt);
       font-family:"PokeRed", ui-monospace, "Courier New", monospace; font-size:16px; line-height:1.4; padding:9px;
       -webkit-font-smoothing:none; font-smooth:never;
-      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.32) 0 1px, transparent 1px 3px);
+      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.07) 0 1px, transparent 1px 3px);
       display:flex; flex-direction:column; gap:8px; }
     #arena { flex:1; min-height:0; }
     .px { font-family:"PokeRed", ui-monospace, monospace; }
-    .box { background:#d6d0b6; color:#171712; position:relative; border:14px solid transparent;
+    .box { background:#ffffff; color:#000000; position:relative; border:14px solid transparent;
       border-image:url("/gb-frame.png") 7 fill / 14px / 0 stretch; image-rendering:pixelated; }
     .box::after { content:none; }
     .pball { display:inline-block; width:20px; height:20px; border-radius:50%; background:linear-gradient(#e8403f 0 47%,#111 47% 53%,#e9efe6 53% 100%); border:2px solid #0a0a0a; position:relative; vertical-align:middle; }
@@ -33,14 +33,14 @@
     .rse-meta { display:grid; grid-template-columns:1fr 1fr 1fr; color:#7c7c68; font-size:15px; letter-spacing:1px; }
     .rse-meta > div { border-left:1px solid #34342a; padding:2px 0; }
     .rse-meta > div:first-child { border-left:0; }
-    .rse-meta b { display:block; color:#d6d0b6; font-size:18px; margin-top:2px; }
+    .rse-meta b { display:block; color:#000; font-size:18px; margin-top:2px; }
 
     /* ---- SELECTION VIEW (slot machine — Game Boy cream) ---- */
     .phase-battle .selview { display:none; }
     .phase-slot   .battleview { display:none; }
     .selview { display:flex; flex-direction:column; gap:10px; max-width:900px; margin:0 auto; width:100%; }
     .srow { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-    .ptag { font-size:20px; letter-spacing:2px; padding:2px 4px 8px; border-bottom:2px solid #171712; margin-bottom:6px; }
+    .ptag { font-size:20px; letter-spacing:2px; padding:2px 4px 8px; border-bottom:2px solid #000000; margin-bottom:6px; }
     .uname { color:#5a563f; margin-left:8px; font-size:16px; }
     .reelbox { padding:12px 14px; display:grid; grid-template-columns:1fr 116px; gap:10px; align-items:center; }
     .reel .lbl { color:#5a563f; font-size:16px; letter-spacing:2px; }
@@ -48,50 +48,50 @@
     .rrow { display:flex; align-items:center; gap:8px; padding:1px 6px; color:#5a563f; opacity:.7; font-size:18px; border-radius:3px; }
     .rrow img { width:18px; height:18px; image-rendering:pixelated; filter:grayscale(1) contrast(1.1) brightness(.5); }
     .rrow .no { color:#7a755a; width:34px; }
-    .rrow.hot { opacity:1; background:#171712; color:#d6d0b6; } .rrow.hot .no { color:#bdb491; }
+    .rrow.hot { opacity:1; background:#000000; color:#ffffff; } .rrow.hot .no { color:#d8d8d0; }
     .spincol { text-align:center; }
     .spinner { width:76px; height:76px; margin:0 auto 6px; border-radius:50%;
-      background:conic-gradient(#171712 0 25%, transparent 0 50%, #171712 0 75%, transparent 0); opacity:.9;
-      border:3px solid #171712; animation:spin .6s linear infinite; }
+      background:conic-gradient(#000000 0 25%, transparent 0 50%, #000000 0 75%, transparent 0); opacity:.9;
+      border:3px solid #000000; animation:spin .6s linear infinite; }
     .stopped .spinner{ animation:none; }
     @keyframes spin { to { transform:rotate(360deg); } }
-    .progress { display:flex; gap:2px; margin-top:4px; } .progress i{flex:1;height:9px;background:#bdb491;border:1px solid #171712;}
-    .progress i.on{background:#171712;}
+    .progress { display:flex; gap:2px; margin-top:4px; } .progress i{flex:1;height:9px;background:#d8d8d0;border:1px solid #000000;}
+    .progress i.on{background:#000000;}
     .spinlbl { color:#5a563f; font-size:15px; margin-top:4px; }
 
     .lockrow { display:grid; grid-template-columns:1fr 150px 1fr; gap:10px; align-items:stretch; }
     .lockcard { padding:12px 14px; display:grid; grid-template-columns:108px 1fr; gap:12px; align-content:center; }
     .bhpn { text-align:right; font-size:18px; margin-top:2px; }
     .lock { grid-column:1/-1; font-size:18px; letter-spacing:2px; color:#5a563f; }
-    .locked .lock{ color:#171712; }
+    .locked .lock{ color:#000000; }
     .sprite { width:108px; height:108px; image-rendering:pixelated; align-self:center; filter:grayscale(1) contrast(1.12) brightness(.5); }
     .nm { font-size:26px; letter-spacing:1px; }
     .lv { color:#5a563f; font-size:18px; }
-    .badge { display:inline-block; font-size:15px; padding:1px 10px; border:2px solid #171712; border-radius:5px; margin:4px 0; letter-spacing:1px; color:#171712; }
+    .badge { display:inline-block; font-size:15px; padding:1px 10px; border:2px solid #000000; border-radius:5px; margin:4px 0; letter-spacing:1px; color:#000000; }
     .hpline { font-size:16px; display:flex; align-items:center; gap:8px; margin-top:4px; }
-    .hptrack { flex:1; max-width:220px; height:11px; background:#bdb491; border:2px solid #171712; border-radius:2px; overflow:hidden; }
-    .hpfill { height:100%; width:100%; background:#171712; transition:width .4s; } .hpfill.low{background:#5a5640;} .hpfill.crit{background:#7a2c2c;}
+    .hptrack { flex:1; max-width:220px; height:11px; background:#d8d8d0; border:2px solid #000000; border-radius:2px; overflow:hidden; }
+    .hpfill { height:100%; width:100%; background:#000000; transition:width .4s; } .hpfill.low{background:#5a5640;} .hpfill.crit{background:#7a2c2c;}
     .vsbox { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; }
-    .vs { font-size:54px; color:#d6d0b6; text-shadow:2px 2px 0 #000; }
-    .startbox { padding:10px 16px; font-size:16px; color:#171712; letter-spacing:1px; text-align:center; }
+    .vs { font-size:54px; color:#000; text-shadow:none; }
+    .startbox { padding:10px 16px; font-size:16px; color:#000000; letter-spacing:1px; text-align:center; }
 
     /* ---- BATTLE VIEW (classic Game Boy: cream boxes + ornate double border, monochrome) ---- */
     .battleview { display:flex; flex-direction:column; gap:10px; max-width:900px; margin:0 auto; width:100%; height:100%; }
-    .gb { background:#d6d0b6; color:#171712; position:relative; border:14px solid transparent;
+    .gb { background:#ffffff; color:#000000; position:relative; border:14px solid transparent;
       border-image:url("/gb-frame.png") 7 fill / 14px / 0 stretch; image-rendering:pixelated; }
     .gb::after { content:none; }
     .screen-box { padding:7px; flex:1 1 auto; min-height:0; }
-    .screen { position:relative; height:100%; background:#0a0a08; overflow:hidden; border-radius:8px; }
-    video { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; background:#0a0a08; display:block; }
+    .screen { position:relative; height:100%; background:#ffffff; overflow:hidden; border-radius:8px; }
+    video { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; background:#ffffff; display:block; }
     .screen::before { content:""; position:absolute; inset:0; z-index:2; pointer-events:none; background:repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.16) 2px 3px); }
-    #unmute { position:absolute; right:8px; bottom:8px; z-index:4; font:inherit; font-size:14px; background:#171712; color:#d6d0b6; border:0; border-radius:6px; padding:4px 9px; cursor:pointer; }
+    #unmute { position:absolute; right:8px; bottom:8px; z-index:4; font:inherit; font-size:14px; background:#000000; color:#ffffff; border:0; border-radius:6px; padding:4px 9px; cursor:pointer; }
     .bz-row { display:grid; grid-template-columns:1.7fr 1fr; gap:10px; flex:0 0 auto; }
     /* move list (left) */
     .movelist { padding:14px 18px; display:flex; flex-direction:column; justify-content:space-evenly; }
     .mvrow { position:relative; display:flex; justify-content:space-between; align-items:center; padding:4px 6px 4px 30px; font-size:22px; letter-spacing:1px; cursor:default; border-radius:5px; }
     .mvrow .cur { position:absolute; left:8px; opacity:0; } .mvrow .pp { color:#3e3e2e; }
     .movelist.you .mvrow.live { cursor:pointer; }
-    .movelist.you .mvrow.live:hover { background:#171712; color:#d6d0b6; }
+    .movelist.you .mvrow.live:hover { background:#000000; color:#ffffff; }
     .movelist.you .mvrow.live:hover .cur { opacity:1; } .movelist.you .mvrow.live:hover .pp { color:#b8b298; }
     .mvrow.dis { opacity:.4; }
     /* stat box (right = your active mon) */
@@ -99,10 +99,10 @@
     .sb-name { display:flex; justify-content:space-between; align-items:baseline; font-size:22px; letter-spacing:1px; }
     .sb-lv { font-size:18px; }
     .sb-hp { display:flex; align-items:center; gap:8px; font-size:18px; }
-    .statbox .hptrack { flex:1; height:11px; background:#bdb491; border:2px solid #171712; border-radius:2px; max-width:none; }
-    .statbox .hpfill { height:100%; width:100%; background:#171712; } .statbox .hpfill.low{background:#5a5640;} .statbox .hpfill.crit{background:#7a2c2c;}
+    .statbox .hptrack { flex:1; height:11px; background:#d8d8d0; border:2px solid #000000; border-radius:2px; max-width:none; }
+    .statbox .hpfill { height:100%; width:100%; background:#000000; } .statbox .hpfill.low{background:#5a5640;} .statbox .hpfill.crit{background:#7a2c2c;}
     .sb-hpn { text-align:right; font-size:20px; }
-    .statbox .badge { display:inline-block; font-size:15px; padding:2px 12px; border:2px solid #171712; border-radius:5px; background:transparent; color:#171712; letter-spacing:1px; }
+    .statbox .badge { display:inline-block; font-size:15px; padding:2px 12px; border:2px solid #000000; border-radius:5px; background:transparent; color:#000000; letter-spacing:1px; }
     .statbox .sb-sprite { display:block; width:78px; height:78px; margin:auto auto 0; image-rendering:pixelated; filter:grayscale(1) contrast(1.12) brightness(.55); }
     .gb.myturn { box-shadow:0 0 20px rgba(232,64,63,.6); }
     /* message box (bottom) */

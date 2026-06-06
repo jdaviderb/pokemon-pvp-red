@@ -6,11 +6,11 @@
   <title>RED STADIUM ENGINE</title>
   <style>
     @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
-    :root { --bg:#04070a; --red:#e8403f; --parch:#d6d0b6; --field:#ece6cf; --ink:#171712; --inkdim:#5a563f; }
+    :root { --bg:#e9e7dd; --red:#e8403f; --parch:#ffffff; --field:#f0f0f0; --ink:#000000; --inkdim:#666; }
     * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; background:var(--bg); color:var(--parch);
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
       font-family:"PokeRed", ui-monospace, "Courier New", monospace; font-size:16px; -webkit-font-smoothing:none; font-smooth:never;
-      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.32) 0 1px, transparent 1px 3px);
+      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.07) 0 1px, transparent 1px 3px);
       display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; position:relative; }
     .gb { background:var(--parch); color:var(--ink); position:relative; border:14px solid transparent;
       border-image:url("/gb-frame.png") 7 fill / 14px / 0 stretch; image-rendering:pixelated; }
@@ -30,7 +30,7 @@
       display:flex; align-items:center; justify-content:center; gap:16px; cursor:pointer; padding:10px; }
     .press .pball { width:18px; height:18px; } .press.blink { animation:bk 1s steps(2) infinite; }
     @keyframes bk { 50% { opacity:.45; } }
-    .arrow { color:var(--parch); font-size:20px; margin-top:8px; }
+    .arrow { color:var(--ink); font-size:20px; margin-top:8px; }
     .form { display:none; } .form.on { display:block; }
     label { display:block; text-align:left; color:var(--inkdim); font-size:16px; letter-spacing:2px; margin:10px 0 4px; }
     input { width:100%; background:var(--field); border:3px solid var(--ink); border-radius:6px; color:var(--ink);
