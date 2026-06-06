@@ -209,7 +209,7 @@
   const setSprite = (side, dex) => document.querySelectorAll(".s" + side + ".sprite").forEach((e) => (e.src = "/sprites/" + dex + ".png"));
 
   let ws, pc, mySeat = 0, timerHandle = null, resultShown = false, lastProgress = Date.now();
-  let SP = {}, byDex = {}, allDex = [], lockedIdx = { 1:null, 2:null }, myMoves = null;
+  let SP = {}, byDex = {}, allDex = [], lockedIdx = { 1:null, 2:null }, myMoves = null, reelsStarted = false;
 
   // pips decoration
   [1,2].forEach((s) => { const p = $("pips" + s); for (let i=0;i<8;i++){ const e=document.createElement("i"); if(i<6)e.className="on"; p.appendChild(e);} });
@@ -241,11 +241,16 @@
         mySeat = m.seat; setF(1,"uname",m.you.username.toUpperCase()); setF(2,"uname",m.opp.username.toUpperCase());
         $("lvcap").textContent=m.level; $("lv1").textContent=m.level; $("lv2").textContent=m.level;
         $("seed").textContent = "BATTLE_" + String(m.room_id).padStart(4,"0");
-        if (m.you.species) lockCard(1, m.you.species);
-        if (m.opp.species) lockCard(2, m.opp.species);
-        if (m.phase === "battle") setView("battle");
+        if (m.phase === "battle") {
+          reelsStarted = true; // resuming into a live battle: reveal, don't re-roll
+          if (m.you.species) lockCard(1, m.you.species);
+          if (m.opp.species) lockCard(2, m.opp.species);
+          setView("battle");
+        } else if (m.you.species && m.opp.species) {
+          maybeStartReels(m.you.species, m.opp.species); // pre-battle: run the roulette to the rolled mons
+        }
         break;
-      case "slot_result": startReels(m.you_species, m.opp_species); break;
+      case "slot_result": maybeStartReels(m.you_species, m.opp_species); break;
       case "your_turn": {
         myMoves = m.moves || [];
         const mine = (lockedIdx[1] && SP[lockedIdx[1]]) ? SP[lockedIdx[1]].name : "your Pokémon";
@@ -277,10 +282,17 @@
     $("rlbl"+side).textContent = spinning?"RANDOMIZING…":"LOCKED IN ✓"; $("spin"+side).textContent = spinning?"SPINNING…":"■ LOCKED"; }
   function setProgress(side, frac){ const p=$("prog"+side); p.innerHTML=""; for(let i=0;i<10;i++){const e=document.createElement("i"); if(i/10<frac)e.className="on"; p.appendChild(e);} }
   function rand(){ return allDex.length?byDex[allDex[Math.floor(Math.random()*allDex.length)]]:1; }
+  function maybeStartReels(youIdx, oppIdx) { if (reelsStarted || !SP[youIdx] || !SP[oppIdx]) return; reelsStarted = true; startReels(youIdx, oppIdx); }
+  // roulette: set the big card sprite/name/type to a random species (NOT locked yet)
+  function rollVisual(side, idx) { const s = SP[idx]; if (!s) return; setSprite(side, s.dex); setF(side, "name", s.name); setF(side, "type", s.types || "—"); }
   function startReels(youIdx, oppIdx) {
     $("reelbox1").classList.remove("stopped"); $("reelbox2").classList.remove("stopped"); $("startbox").textContent="◖ ROLLING… ◗";
-    let n=0; const total=26;
-    const iv=setInterval(()=>{ n++; paintReel(1,youIdx,true); paintReel(2,oppIdx,true); setProgress(1,n/total); setProgress(2,n/total);
+    [1,2].forEach((s) => { $("lock"+s).classList.remove("locked"); $("locklbl"+s).textContent = "🎰 ROLLING…"; });
+    let n=0; const total=28;
+    const iv=setInterval(()=>{ n++;
+      paintReel(1,youIdx,true); paintReel(2,oppIdx,true);
+      rollVisual(1, rand()); rollVisual(2, rand());            // big card sprite/name spins too
+      setProgress(1,n/total); setProgress(2,n/total);
       if(n>=total){ clearInterval(iv); paintReel(1,youIdx,false); paintReel(2,oppIdx,false); setProgress(1,1); setProgress(2,1);
         $("reelbox1").classList.add("stopped"); $("reelbox2").classList.add("stopped");
         lockCard(1,youIdx); lockCard(2,oppIdx); $("startbox").textContent="◖ BATTLE STARTING… ◗"; } }, 85);
