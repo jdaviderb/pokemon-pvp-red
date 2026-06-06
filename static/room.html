@@ -88,7 +88,7 @@
     #unmute { position:absolute; right:8px; bottom:8px; z-index:4; font:inherit; font-size:14px; background:#171712; color:#d6d0b6; border:0; border-radius:6px; padding:4px 9px; cursor:pointer; }
     .bz-row { display:grid; grid-template-columns:1.7fr 1fr; gap:12px; }
     /* move list (left) */
-    .movelist { padding:12px 18px; }
+    .movelist { padding:14px 18px; display:flex; flex-direction:column; justify-content:space-evenly; }
     .mvrow { position:relative; display:flex; justify-content:space-between; align-items:center; padding:4px 6px 4px 30px; font-size:22px; letter-spacing:1px; cursor:default; border-radius:5px; }
     .mvrow .cur { position:absolute; left:8px; opacity:0; } .mvrow .pp { color:#3e3e2e; }
     .movelist.you .mvrow.live { cursor:pointer; }
@@ -104,7 +104,7 @@
     .statbox .hpfill { height:100%; width:100%; background:#171712; } .statbox .hpfill.low{background:#5a5640;} .statbox .hpfill.crit{background:#7a2c2c;}
     .sb-hpn { text-align:right; font-size:20px; }
     .statbox .badge { display:inline-block; font-size:15px; padding:2px 12px; border:2px solid #171712; border-radius:5px; background:transparent; color:#171712; letter-spacing:1px; }
-    .statbox .sb-sprite { display:block; width:96px; height:96px; margin:8px auto 0; image-rendering:pixelated; filter:grayscale(1) contrast(1.12) brightness(.55); }
+    .statbox .sb-sprite { display:block; width:104px; height:104px; margin:auto auto 0; image-rendering:pixelated; filter:grayscale(1) contrast(1.12) brightness(.55); }
     .gb.myturn { box-shadow:0 0 20px rgba(232,64,63,.6); }
     /* message box (bottom) */
     .msgbox { padding:14px 18px; font-size:24px; letter-spacing:1px; display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:56px; }
@@ -118,9 +118,6 @@
 </head>
 <body>
   <header class="rse">
-    <div class="rse-title"><span class="pball"></span><h1 class="px">RED STADIUM ENGINE</h1><span class="pball"></span></div>
-    <div class="rse-sub">— RANDOM BATTLE ARENA —</div>
-    <div class="rse-rule"></div>
     <div class="rse-meta">
       <div>SEED<b id="seed">BATTLE_0000</b></div>
       <div>MODE<b>1 VS 1</b></div>
