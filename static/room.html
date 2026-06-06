@@ -62,13 +62,13 @@
     .progress i.on{background:#000000;}
     .spinlbl { color:#5a563f; font-size:15px; margin-top:4px; }
 
-    .lockrow { display:grid; grid-template-columns:minmax(0,1fr) 116px minmax(0,1fr); gap:10px; align-items:stretch; }
-    .lockcard { padding:12px 14px; display:grid; grid-template-columns:84px minmax(0,1fr); gap:10px; align-content:center; min-width:0; }
+    .lockrow { display:grid; grid-template-columns:minmax(0,1fr) 96px minmax(0,1fr); gap:10px; align-items:stretch; }
+    .lockcard { padding:12px 14px; display:grid; grid-template-columns:116px minmax(0,1fr); gap:12px; align-content:center; min-width:0; }
     .lockcard > div { min-width:0; overflow:hidden; }
     .bhpn { text-align:right; font-size:18px; margin-top:2px; }
     .lock { grid-column:1/-1; font-size:18px; letter-spacing:2px; color:#5a563f; }
     .locked .lock{ color:#000000; }
-    .sprite { width:84px; height:84px; image-rendering:pixelated; align-self:center; filter:grayscale(1) contrast(1.12) brightness(.5); }
+    .sprite { width:116px; height:116px; image-rendering:pixelated; align-self:center; filter:grayscale(1) contrast(1.12) brightness(.5); }
     .nm { font-size:17px; letter-spacing:0; white-space:nowrap; overflow:hidden; text-overflow:clip; }
     .lv { color:#5a563f; font-size:18px; }
     .badge { display:inline-block; font-size:15px; padding:1px 10px; border:2px solid #000000; border-radius:5px; margin:4px 0; letter-spacing:1px; color:#000000; }
@@ -77,7 +77,6 @@
     .hpfill { height:100%; width:100%; background:#000000; transition:width .4s; } .hpfill.low{background:#888;} .hpfill.crit{background:#333;}
     .vsbox { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; }
     .vs { font-size:54px; color:#000; text-shadow:none; }
-    .startbox { padding:10px 16px; font-size:16px; color:#000000; letter-spacing:1px; text-align:center; }
 
     /* ---- BATTLE VIEW (classic Game Boy: cream boxes + ornate double border, monochrome) ---- */
     .battleview { display:flex; flex-direction:column; gap:10px; max-width:900px; margin:0 auto; width:100%; height:100%; }
@@ -89,7 +88,7 @@
     video { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; background:#ffffff; display:block; }
     .screen::before { content:""; position:absolute; inset:0; z-index:2; pointer-events:none; background:repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.16) 2px 3px); }
     #unmute { position:absolute; right:8px; bottom:8px; z-index:4; font:inherit; font-size:14px; background:#000000; color:#ffffff; border:0; border-radius:6px; padding:4px 9px; cursor:pointer; }
-    .bz-row { display:grid; grid-template-columns:1.7fr 1fr; gap:10px; flex:0 0 auto; }
+    .bz-row { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); gap:10px; flex:0 0 auto; }
     /* move list (left) */
     .movelist { padding:14px 18px; display:flex; flex-direction:column; justify-content:space-evenly; }
     .mvrow { position:relative; display:flex; justify-content:space-between; align-items:center; gap:10px; white-space:nowrap; padding:4px 6px 4px 26px; font-size:18px; letter-spacing:0; cursor:default; border-radius:5px; }
@@ -153,7 +152,7 @@
             <div class="badge s1 type">-</div>
             <div class="hpline">HP: <span class="hptrack"><span class="hpfill s1 hpfill"></span></span><span class="s1 hpnum"></span></div></div>
         </div>
-        <div class="vsbox"><div class="vs" id="vs">VS</div><div class="box startbox" id="startbox">◖ START BATTLE ◗</div></div>
+        <div class="vsbox"><div class="vs" id="vs">VS</div></div>
         <div class="box p2box p2 lockcard" id="lock2">
           <div class="lock" id="locklbl2">🔒 LOCKED</div>
           <img class="sprite s2 sprite" src="/sprites/1.png" alt="" />
@@ -284,7 +283,7 @@
   // roulette: set the big card sprite/name/type to a random species (NOT locked yet)
   function rollVisual(side, idx) { const s = SP[idx]; if (!s) return; setSprite(side, s.dex); setF(side, "name", s.name); setF(side, "type", s.types || "-"); }
   function startReels(youIdx, oppIdx) {
-    $("reelbox1").classList.remove("stopped"); $("reelbox2").classList.remove("stopped"); $("startbox").textContent="◖ ROLLING... ◗";
+    $("reelbox1").classList.remove("stopped"); $("reelbox2").classList.remove("stopped");
     [1,2].forEach((s) => { $("lock"+s).classList.remove("locked"); $("locklbl"+s).textContent = "🎰 ROLLING..."; });
     let n=0; const total=28;
     const iv=setInterval(()=>{ n++;
@@ -293,7 +292,7 @@
       setProgress(1,n/total); setProgress(2,n/total);
       if(n>=total){ clearInterval(iv); paintReel(1,youIdx,false); paintReel(2,oppIdx,false); setProgress(1,1); setProgress(2,1);
         $("reelbox1").classList.add("stopped"); $("reelbox2").classList.add("stopped");
-        lockCard(1,youIdx); lockCard(2,oppIdx); $("startbox").textContent="◖ BATTLE STARTING... ◗"; } }, 85);
+        lockCard(1,youIdx); lockCard(2,oppIdx); } }, 85);
   }
 
   function lockCard(side, idx) { lockedIdx[side]=idx; const s=SP[idx]; if(!s) return;
