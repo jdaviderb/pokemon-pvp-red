@@ -7,52 +7,43 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
   <style>
-    :root { --bg:#04070a; --grn:#5ad17a; --grn-dim:#2c6e44; --red:#e8403f; --wht:#e9efe6; --txt:#9fe0b4; --dim:#4f8a66; --line:#1c3a28; }
+    :root { --bg:#04070a; --red:#e8403f; --parch:#d6d0b6; --ink:#171712; --inkdim:#5a563f; }
     * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; background:var(--bg); color:var(--txt);
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--parch);
       font-family:"VT323", ui-monospace, monospace; font-size:22px;
-      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0 1px, transparent 1px 3px);
-      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:20px; }
-    .corner { position:absolute; padding:8px 14px; border:2px solid var(--line); border-radius:6px; background:#070d0a; font-size:18px; color:var(--dim); line-height:1.25; }
-    .corner b { color:var(--grn); font-size:20px; } .corner .led{color:var(--red);}
-    .tl{top:18px;left:18px;} .tr{top:18px;right:18px;text-align:right;} .br{bottom:18px;right:18px;}
-    .balls { display:flex; align-items:center; gap:24px; }
-    .pball { width:26px; height:26px; border-radius:50%; background:linear-gradient(#e8403f 0 47%, #111 47% 53%, #e9efe6 53% 100%); border:2px solid #0a0a0a; position:relative; }
+      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.32) 0 1px, transparent 1px 3px);
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:20px; }
+    .balls { display:flex; align-items:center; gap:22px; }
+    .pball { width:26px; height:26px; border-radius:50%; background:linear-gradient(var(--red) 0 47%,#111 47% 53%,#e9efe6 53% 100%); border:2px solid #0a0a0a; position:relative; }
     .pball::after { content:""; position:absolute; inset:0; margin:auto; width:7px; height:7px; background:#e9efe6; border:2px solid #0a0a0a; border-radius:50%; }
-    .logo { font-family:"Press Start 2P", monospace; line-height:1.05; text-align:center; }
-    .logo .red { color:var(--red); font-size:46px; text-shadow:3px 3px 0 #5a0f0e; display:block; }
-    .logo .wht { color:var(--wht); font-size:38px; text-shadow:3px 3px 0 #555; display:block; margin:5px 0; }
-    .logo .eng { color:var(--red); font-size:24px; text-shadow:2px 2px 0 #5a0f0e; display:block; }
-    .sub { color:var(--grn); letter-spacing:3px; margin-top:2px; }
-    .who { color:var(--dim); margin-top:18px; } .who b { color:var(--wht); }
-    .panel { margin-top:14px; border:3px solid var(--grn-dim); border-radius:10px; background:#060f0a; padding:6px; min-width:min(86vw,460px); }
-    #find { width:100%; font-family:"Press Start 2P", monospace; font-size:20px; color:#06120a; background:var(--grn);
-      border:0; border-radius:7px; padding:20px; cursor:pointer; letter-spacing:2px; display:flex; align-items:center; justify-content:center; gap:16px; }
-    #find .pball{width:18px;height:18px;}
-    #find.searching { background:#0c1a12; color:var(--grn); }
-    .status { margin-top:16px; min-height:22px; color:var(--grn); text-align:center; }
-    .spin { display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--grn); border-radius:50%; animation:s .8s linear infinite; vertical-align:-2px; }
+    .logo { font-family:"Press Start 2P", monospace; color:var(--red); font-size:30px; letter-spacing:3px; text-shadow:2px 2px 0 #5a0f0e; }
+    .sub { color:#9a9a86; letter-spacing:4px; font-size:15px; margin-top:2px; }
+    /* Game Boy cream box */
+    .gb { background:var(--parch); color:var(--ink); border:4px solid var(--ink); border-radius:12px; position:relative; }
+    .gb::after { content:""; position:absolute; inset:5px; border:2px solid var(--ink); border-radius:7px; pointer-events:none; }
+    .who { margin-top:16px; padding:10px 22px; font-size:20px; letter-spacing:1px; }
+    .who b { font-weight:400; }
+    #find { width:min(86vw,460px); margin-top:14px; font-family:"Press Start 2P", monospace; font-size:18px;
+      color:var(--ink); background:var(--parch); padding:22px; cursor:pointer; letter-spacing:2px;
+      display:flex; align-items:center; justify-content:center; gap:16px; }
+    #find .pball{width:16px;height:16px;}
+    #find:hover { filter:brightness(1.04); }
+    #find.searching { animation:bk 1s steps(2) infinite; }
+    @keyframes bk { 50% { opacity:.55; } }
+    .status { margin-top:16px; min-height:22px; color:var(--parch); text-align:center; }
+    .spin { display:inline-block; width:14px; height:14px; border:2px solid #34342a; border-top-color:var(--red); border-radius:50%; animation:s .8s linear infinite; vertical-align:-2px; }
     @keyframes s { to { transform:rotate(360deg); } }
-    .links { margin-top:18px; font-size:18px; color:var(--dim); }
-    .links a, .links span { color:var(--dim); text-decoration:none; cursor:pointer; } .links a:hover,.links span:hover{color:var(--wht);}
+    .links { margin-top:20px; font-size:18px; color:var(--inkdim); }
+    .links a, .links span { color:#7c7c68; text-decoration:none; cursor:pointer; } .links a:hover,.links span:hover{color:var(--parch);}
   </style>
 </head>
 <body>
-  <div class="corner tl"><span class="led">▪</span> SEED<br><b>RANDOM</b></div>
-  <div class="corner tr"><span class="led">▪</span> MODE<br><b>1 VS 1</b><br>LEVEL CAP: 50</div>
-
-  <div class="balls"><span class="pball"></span>
-    <div class="logo"><span class="red">RED</span><span class="wht">STADIUM</span><span class="eng">ENGINE</span></div>
-    <span class="pball"></span>
-  </div>
-  <div class="sub">◂─── RANDOM BATTLE ARENA ───▸</div>
-  <div class="who" id="who">…</div>
-
-  <div class="panel"><button id="find"><span class="pball"></span> FIND MATCH <span class="pball"></span></button></div>
+  <div class="balls"><span class="pball"></span><div class="logo">RED STADIUM ENGINE</div><span class="pball"></span></div>
+  <div class="sub">— RANDOM BATTLE ARENA —</div>
+  <div class="gb who" id="who">…</div>
+  <button class="gb" id="find"><span class="pball"></span> FIND MATCH <span class="pball"></span></button>
   <div class="status" id="status"></div>
   <div class="links"><a href="/console.html">DEV CONSOLE</a> · <span id="logout">LOGOUT</span></div>
-
-  <div class="corner br">© 2025 RSE</div>
   <script>
     const $ = (id) => document.getElementById(id);
     let ws, searching = false;
@@ -74,7 +65,7 @@
       };
       ws.onclose = () => { if (!searching) setIdle(); };
     }
-    function setSearching(pos) { $("find").classList.add("searching"); $("find").innerHTML = "⏳ SEARCHING… (CANCEL)"; $("status").innerHTML = '<span class="spin"></span> WAITING FOR AN OPPONENT' + (pos > 1 ? " · #" + pos : ""); }
+    function setSearching(pos) { $("find").classList.add("searching"); $("find").innerHTML = "⏳ SEARCHING…  (CANCEL)"; $("status").innerHTML = '<span class="spin"></span> WAITING FOR AN OPPONENT' + (pos > 1 ? " · #" + pos : ""); }
     function setIdle() { $("find").classList.remove("searching"); $("find").innerHTML = '<span class="pball"></span> FIND MATCH <span class="pball"></span>'; $("status").textContent = ""; }
     $("find").onclick = () => { if (!ws || ws.readyState !== 1) return; if (searching) { ws.send(JSON.stringify({ type: "cancel_queue" })); searching = false; setIdle(); } else ws.send(JSON.stringify({ type: "find_match" })); };
     $("logout").onclick = async () => { await fetch("/auth/logout", { method: "POST" }); location.replace("/login.html"); };
