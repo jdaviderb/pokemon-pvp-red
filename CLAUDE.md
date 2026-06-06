@@ -4,104 +4,105 @@ Guidance for Claude Code when working in this repository.
 
 ## What this is
 
-`nes-web` is a Rust server that runs a **NES emulator entirely server-side** and streams the
-live game to a browser over **WebRTC** (VP8 video + Opus audio), with **keyboard input** sent
-back over a WebRTC data channel. Open `http://localhost:3000`, click **Connect**, watch/play.
-The emulator runs continuously regardless of viewers — emulation is server-only by design.
+`nes-web` runs a **console emulator entirely server-side** and streams the live game to a browser
+over **WebRTC** (VP8 video + Opus audio), with **keyboard input** sent back over a WebRTC data
+channel. Open `http://localhost:3000`, click **Connect**, watch/play.
 
-Default ROM: `~/projects-2026/nes-MK1/out/MK1.nes` (Mortal Kombat hack, mapper 4
-/ MMC3). Override with a CLI arg: `cargo run --release -- /path/to/other.nes`.
+The crate name is historical: it started as **NES** (tetanes-core) and now runs **N64** (Super
+Smash Bros. 64) via a **libretro** core. The NES/SNES lineage is documented in `DESIGN.md`
+(NES) and `DESIGN-N64.md` (current). Emulation is server-only by design — the browser only
+receives the stream.
+
+Default ROM/core: `Super Smash Bros. (U) [!].z64` + `cores/parallel_n64_libretro.dylib`.
+Override: `cargo run --release -- "<rom.z64>" "<core.dylib>"`.
 
 ## Build & run
 
 ```sh
-./run.sh                       # build + run; opens nothing, just serves :3000
-cargo run --release            # equivalent (env comes from .cargo/config.toml)
+cargo run --release            # env + toolchain come from .cargo/config.toml + rust-toolchain.toml
 cargo build --release
+./cores/fetch.sh               # (re)download the libretro N64 cores if cores/*.dylib are missing
 ```
+Then open **http://localhost:3000** in **Chrome** and click **Connect**.
+Controls (P1): arrows = control stick, `X`=A, `Z`=B, `C`=Z-trigger, `Q`/`E`=L/R, `Enter`=Start,
+`IJKL`=C-buttons.
 
-Then open **http://localhost:3000** in **Chrome** (primary target) and click **Connect**.
-Controls — **P1**: arrows = D-pad, `Z` = B, `X` = A, `Enter` = Start, `Shift` = Select.
-**P2**: `WASD` = D-pad, `J` = B, `K` = A, `O` = Select, `P` = Start. (Input carries a
-`player` field; see `InputEvent`.)
+### Build prerequisites (satisfied on this machine)
 
-### Build prerequisites (already satisfied on this machine)
-
-- **Toolchain is pinned to Rust 1.92** via `rust-toolchain.toml` — do NOT remove it. `webrtc`
-  0.17.x (webrtc-util) uses `is_multiple_of` (stable since 1.87) and `home`/`time` need 1.88+.
-  The machine's default `stable` is 1.86, which cannot build this; 1.92 is installed and pinned
-  here only, leaving the global default untouched.
-- **System libs**: homebrew `libvpx` and `libopus` under `/opt/homebrew`. `.cargo/config.toml`
-  exports `PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig` and `LIBRARY_PATH=/opt/homebrew/lib` so
-  the `vpx-encode` and `opus` sys-crates link. If a fresh checkout fails to find them, that file
-  is why.
+- **Toolchain pinned to Rust 1.92** via `rust-toolchain.toml` — do NOT remove it (webrtc 0.17.x
+  needs ≥1.87; the global default is 1.86).
+- homebrew `libvpx` + `libopus` under `/opt/homebrew`; `.cargo/config.toml` exports
+  `PKG_CONFIG_PATH`/`LIBRARY_PATH` so the `vpx-encode`/`opus` sys-crates link.
+- `clang` for `build.rs` (compiles `logshim.c`).
+- A libretro N64 core dylib in `cores/` (arm64). `cores/*.dylib` is gitignored; `cores/fetch.sh`
+  pulls them from the libretro buildbot.
 
 ## Architecture
 
 ```
-emulator thread (60fps, std::thread)        WebRTC (per browser peer, tokio)
-  clock_frame -> RGBA 256x240 + f32 48k        VP8 track <- video_tx.subscribe()
-  RGBA->I420->VP8  --video_tx (broadcast)-->   Opus track <- audio_tx.subscribe()
-  f32->i16->Opus   --audio_tx (broadcast)-->   write_sample(Sample{data,duration})
+emulator thread (one dedicated OS thread, core-fps ~60.13)      WebRTC (per browser peer, tokio)
+  retro_run() -> XRGB8888 640x240 + i16 stereo @44100              VP8 track <- video broadcast
+  XRGB(BGRX)->I420->VP8  --video_tx (broadcast)-->                 Opus stereo track <- audio
+  i16 -> resample 48k -> stereo Opus  --audio_tx-->                write_sample(Sample{data,duration})
         ^ input_rx (mpsc)  <-- DataChannel "input" <-- browser keydown/keyup
 axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
 ```
 
-- **Master clock = the emulator thread** (`src/pipeline.rs::run_loop`), one dedicated OS thread
-  drift-paced to NTSC ~60.0988 Hz. The `ControlDeck` and both encoders live only on that thread.
-- Encoded media is fanned out via `tokio::sync::broadcast`; each peer's writer task subscribes
-  and pushes `Sample`s into its track. `Sample.duration` (video 16.639 ms, audio 20 ms) drives
-  the RTP timestamps; the browser does final A/V sync.
-- One peer = one `RTCPeerConnection` built per `POST /offer`. Multiple peers are supported.
+- **Master clock = the emulator thread** (`src/pipeline.rs::run_loop`), drift-paced to the core's
+  reported fps. The libretro core + both encoders live only on that thread (the core also spawns
+  angrylion worker threads that hit the same global buffers).
+- libretro callbacks are bare `extern "C" fn` with no user-data, so per-instance buffers are
+  process globals (`static Mutex<FRAME/AUDIO/PAD>` in `src/n64.rs`). One emulator, one thread.
+- Encoded media is fanned out via `tokio::sync::broadcast`; each peer's writer task subscribes.
 
 ### File map
 
 | File | Role |
 |---|---|
-| `src/main.rs` | entry: read ROM, start pipeline, build WebRTC API, serve axum |
-| `src/emu.rs` | `tetanes-core` wrapper: ROM load (+ NES 2.0 header fix), frame/audio/input |
-| `src/video.rs` | RGBA→I420 (BT.601 limited) + realtime VP8 encoder (`vpx-encode`) |
-| `src/audio.rs` | f32→i16 ring + Opus encoder (exact 960-sample / 20 ms packets) |
-| `src/pipeline.rs` | the 60fps loop; broadcast channels; `AppInner`; input apply; stats |
-| `src/webrtc.rs` | per-peer PeerConnection, tracks, RTCP drain, data channel, signaling, cleanup |
-| `src/signaling.rs` | axum `Router`, `POST /offer` handler, `AppState` |
-| `static/index.html` | browser client (recvonly transceivers, data channel, key capture) |
-| `test/*.cjs` | Puppeteer end-to-end checks (media, input, cleanup) — see `test/README.md` |
-| `DESIGN.md` | full verified design + 10 risks/mitigations |
-| `research/*.md` | grounded API research (each was compiled/run against the real ROM) |
+| `src/n64.rs` | libretro frontend: dlopen core, 6 callbacks, force angrylion software, load .z64, input |
+| `src/video.rs` | XRGB8888(BGRX)→I420 (`xrgb_to_i420`) + VP8 encoder; canvas sized from 1st frame |
+| `src/audio.rs` | i16 stereo → 44100→48000 linear resample → stereo Opus 960-frame packets |
+| `src/pipeline.rs` | the core-fps loop; broadcast channels; `AppInner`; N64 input; stats |
+| `src/webrtc.rs` | per-peer PeerConnection, tracks (Opus stereo cap), RTCP drain, data channel, signaling, cleanup |
+| `src/signaling.rs` | axum `Router`, `POST /offer`, `AppState` |
+| `src/main.rs` | entry: ROM + core paths, start pipeline, serve axum |
+| `logshim.c` + `build.rs` | C-variadic log fn for `GET_LOG_INTERFACE` (mupen-next needs it) |
+| `static/index.html` | browser client (N64 keymap) |
+| `cores/` | libretro core dylibs (`fetch.sh`; gitignored) |
+| `DESIGN-N64.md` | full verified N64 design + risks |
+| `research/*.md`, `research/ssb64-*.png` | grounded probe findings + proof screenshots |
 
 ## Non-obvious things — READ before editing these areas
 
-- **NES 2.0 header bug** (`src/emu.rs::sanitize_nes2_ram_header`): `MK1.nes` has header byte 10 =
-  `0x70`, and tetanes-core 0.14.1 does `64usize.checked_shl(0x70)` → overflow → `load_rom` fails
-  with `InvalidHeader`. We zero header bytes 10 & 11 before load. Keep this unconditional; it's a
-  no-op for clean headers. Do not "simplify" it away.
-- **`vpx-encode` needs `features = ["ffi-generate"]`** because homebrew libvpx is 1.16 and the
-  crate's pre-generated FFI only covers ≤1.13. Without it the build panics at compile time.
-- **Module name `webrtc` shadows the `webrtc` crate.** Inside `src/webrtc.rs`, always refer to the
-  crate as `::webrtc::...` (leading `::`); `crate::webrtc::` is our module.
-- **Force-keyframe trick**: `vpx-encode` 0.6.2 can't force a keyframe, so when a peer reaches
-  `Connected` we set `AppInner.keyframe_req`; the emulator thread then recreates the encoder
-  (`make_vp8_encoder`) whose first frame is a keyframe. This is why a new viewer sees a clean
-  picture immediately instead of garbage. Don't drop the reset without another keyframe mechanism.
-- **Per-peer cleanup**: `write_sample` does NOT error on a dead track, so writer tasks gate on a
-  per-peer `alive: AtomicBool` cleared when the connection hits Disconnected/Failed/Closed.
-  Removing that flag reintroduces a per-connection task leak.
-- **Audio is mono** (the APU mixes to one stream), buffered into exact 960-sample Opus frames.
-  ~799 samples/frame is not a legal Opus size — never pad/truncate, always buffer.
-- **Signaling order is load-bearing**: `create_answer → gathering_complete_promise →
-  set_local_description → gather_complete.recv() → local_description` (non-trickle, single HTTP
-  round trip). ICE servers are empty (localhost host candidates only).
+- **Headless = refuse `SET_HW_RENDER`** (`src/n64.rs` env cmd 14 → return false). That keeps the
+  core in angrylion software mode delivering CPU framebuffers via `video_refresh`. Accepting it
+  would require an offscreen GL context. Don't change this without the CGL plan in DESIGN-N64 §10.
+- **`GET_LOG_INTERFACE` (env cmd 27)** must return a REAL C-variadic fn pointer (`n64_core_log`
+  from `logshim.c`). Declining it makes mupen64plus-next SIGSEGV in `retro_load_game`. Harmless
+  for parallel_n64. `build.rs` links the shim; don't drop it.
+- **Pixel format is XRGB8888 = memory bytes B,G,R,X** (not R,G,B). `xrgb_to_i420` reads
+  `src[p]=B, src[p+1]=G, src[p+2]=R`. Use the callback's real `pitch`, never `width*4`.
+- **VP8 canvas is fixed at the first frame's dims** (640×240 for SSB64; angrylion line-doubles
+  320→640). Frame dims can change (interlace/menus); `xrgb_to_i420` letterboxes onto the fixed
+  canvas because VP8 can't resize mid-stream.
+- **Audio is i16 stereo @ the core's `sample_rate` (44100)**, linear-resampled to 48000 for
+  stereo Opus; never pad/truncate, the resampler carries fractional position across calls.
+- **ROM lifetime**: `need_fullpath==false`, so the core reads our ROM bytes after `load_game`;
+  `N64::new` `mem::forget`s the 16 MiB buffer to keep it alive. Don't "fix" that leak.
+- **Forced core options** (`forced_option` in `n64.rs`) cover BOTH cores (parallel-n64-* and
+  mupen64plus-*); a core only queries its own keys. To switch cores, just change the dylib path.
+- **`.z64` is native big-endian** → no byteswap. Keep `webrtc.rs` referring to the crate as
+  `::webrtc` (our module shadows it).
 
 ## Testing
 
-End-to-end is verified with headless Chrome (Puppeteer), not just compilation. With the server
-running, see `test/README.md`. Quick signal that the pipeline is alive: the server logs
-`emu: ~60.0 fps | N video pkts | M audio pkts | viewers v=.. a=..` every 5 s.
+End-to-end is verified with headless Chrome (Puppeteer) — see `test/e2e-n64-*.cjs` and
+`test/README.md`. They confirm 640×240 VP8 decode, stereo Opus, and that keyboard input reaches
+the N64 core (before/after screenshots differ). Liveness signal in the server log:
+`n64: ~60.0 fps | N video pkts | M audio pkts | viewers v=.. a=..` every 5 s.
 
 ## Conventions
 
-- Edition 2021, `rust-version = "1.92"`. Keep code in the surrounding style (terse, commented
-  where non-obvious). `tracing` for logs (`RUST_LOG=nes_web=info,webrtc=warn`).
-- When bumping `webrtc`, re-check the API against the pinned version's source (the master branch
-  is restructured toward a different release and is misleading).
+- Edition 2021, `rust-version = "1.92"`. `tracing` for logs (`RUST_LOG=nes_web=info,webrtc=warn`).
+- When bumping `webrtc`, re-check the API against the pinned version's source (master is
+  restructured toward a different release and is misleading).

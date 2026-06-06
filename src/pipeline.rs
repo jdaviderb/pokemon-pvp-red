@@ -1,7 +1,7 @@
-//! The master clock: one dedicated OS thread runs the NES core at real-time 60 fps,
-//! encodes each frame to VP8 + Opus, and fans the encoded media out over broadcast
-//! channels to every connected peer. Browser input arrives on `input_rx`.
+//! One dedicated OS thread runs the N64 core at real-time core-fps, encodes each frame to
+//! VP8 + stereo Opus, and fans the encoded media out over broadcast channels to every peer.
 
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -10,11 +10,8 @@ use bytes::Bytes;
 use tokio::sync::{broadcast, mpsc};
 
 use crate::audio::OpusStreamer;
-use crate::emu::{map_button, Emu};
-use crate::video::{make_vp8_encoder, rgba_to_i420, H, I420_LEN, W};
-
-/// NTSC NES frame period: 1e9 / 60.098814 Hz ≈ 16_639_267 ns.
-pub const NTSC_FRAME_NANOS: u64 = 16_639_267;
+use crate::n64::{map_button, N64Action, AXIS_MAX, N64};
+use crate::video::{i420_len, make_vp8_encoder, xrgb_to_i420};
 
 #[derive(Clone)]
 pub struct EncodedVideo {
@@ -24,47 +21,40 @@ pub struct EncodedVideo {
 #[derive(Clone)]
 pub struct EncodedAudio {
     pub data: Bytes,
-    pub samples: u32,
+    pub samples: u32, // per-channel (960)
 }
 
-/// Input event from the browser data channel:
-/// {"type":"down"|"up","button":"A","player":1|2}. `player` defaults to 1 if omitted.
+/// Browser input event: {"type":"down"|"up","button":"A","player":1}.
 #[derive(serde::Deserialize)]
 pub struct InputEvent {
     #[serde(rename = "type")]
-    pub kind: String, // "down" | "up"
-    pub button: String, // "A" "B" "Up" "Down" "Left" "Right" "Start" "Select"
+    pub kind: String,
+    pub button: String,
     #[serde(default = "default_player")]
-    pub player: u8, // 1 or 2
+    pub player: u8,
 }
-
 fn default_player() -> u8 {
     1
 }
 
-/// Shared state behind AppState (see signaling.rs).
 pub struct AppInner {
     pub video_tx: broadcast::Sender<EncodedVideo>,
     pub audio_tx: broadcast::Sender<EncodedAudio>,
     pub input_tx: mpsc::UnboundedSender<InputEvent>,
-    /// Set true to make the emulator reset the VP8 encoder next frame -> a fresh
-    /// keyframe, so a newly-connected viewer gets a clean picture immediately.
     pub keyframe_req: Arc<AtomicBool>,
 }
 
-/// Build channels + spawn the emulator thread. Returns the AppInner to share.
-pub fn start(rom_bytes: Vec<u8>, rom_name: String) -> Arc<AppInner> {
+pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
     let (video_tx, _) = broadcast::channel::<EncodedVideo>(16);
-    let (audio_tx, _) = broadcast::channel::<EncodedAudio>(32);
+    let (audio_tx, _) = broadcast::channel::<EncodedAudio>(64);
     let (input_tx, input_rx) = mpsc::unbounded_channel::<InputEvent>();
     let keyframe_req = Arc::new(AtomicBool::new(false));
 
     let v = video_tx.clone();
     let a = audio_tx.clone();
     let kf = keyframe_req.clone();
-    // Dedicated OS thread (NOT tokio): steady 60 fps, encoders never cross threads.
     std::thread::spawn(move || {
-        if let Err(e) = run_loop(rom_bytes, rom_name, v, a, input_rx, kf) {
+        if let Err(e) = run_loop(core_path, rom_path, v, a, input_rx, kf) {
             tracing::error!("emulator loop ended: {e:?}");
         }
     });
@@ -77,55 +67,114 @@ pub fn start(rom_bytes: Vec<u8>, rom_name: String) -> Arc<AppInner> {
     })
 }
 
+/// Recompute an analog vector from currently-held direction keys (8-way).
+fn stick_vec(held: &HashSet<String>, up: &str, down: &str, left: &str, right: &str) -> (i16, i16) {
+    let mut x = 0i32;
+    let mut y = 0i32;
+    if held.contains(left) {
+        x -= AXIS_MAX as i32;
+    }
+    if held.contains(right) {
+        x += AXIS_MAX as i32;
+    }
+    if held.contains(up) {
+        y -= AXIS_MAX as i32;
+    }
+    if held.contains(down) {
+        y += AXIS_MAX as i32;
+    }
+    (x.clamp(-32768, 32767) as i16, y.clamp(-32768, 32767) as i16)
+}
+
 fn run_loop(
-    rom_bytes: Vec<u8>,
-    rom_name: String,
+    core_path: String,
+    rom_path: String,
     video_tx: broadcast::Sender<EncodedVideo>,
     audio_tx: broadcast::Sender<EncodedAudio>,
     mut input_rx: mpsc::UnboundedReceiver<InputEvent>,
     keyframe_req: Arc<AtomicBool>,
 ) -> anyhow::Result<()> {
-    let mut emu = Emu::new(&rom_bytes, &rom_name)?;
-    let mut vpx = make_vp8_encoder().map_err(|e| anyhow::anyhow!("vpx init: {e:?}"))?;
-    let mut opus = OpusStreamer::new().map_err(|e| anyhow::anyhow!("opus init: {e:?}"))?;
+    let mut emu = N64::new(&core_path, &rom_path)?;
+    let mut opus =
+        OpusStreamer::new(emu.sample_rate).map_err(|e| anyhow::anyhow!("opus init: {e:?}"))?;
 
-    let mut i420 = vec![0u8; I420_LEN]; // reused scratch
-    let frame_period = Duration::from_nanos(NTSC_FRAME_NANOS);
+    // Warm up until the core delivers a real framebuffer, then size the VP8 canvas to it
+    // (VP8 can't resize mid-stream; later size changes are letterboxed onto this canvas).
+    let frame_period = Duration::from_nanos((1_000_000_000.0 / emu.fps).max(1.0) as u64);
+    let (cw, ch) = {
+        let mut dims = (0u32, 0u32);
+        for _ in 0..240 {
+            emu.clock_frame();
+            dims = emu.with_frame(|f| (f.w, f.h));
+            if dims.0 >= 2 && dims.1 >= 2 {
+                break;
+            }
+        }
+        ((dims.0 & !1).max(2), (dims.1 & !1).max(2)) // even dims for the encoder
+    };
+    tracing::info!("VP8 canvas fixed at {cw}x{ch} (from first frame)");
+
+    let mut vpx = make_vp8_encoder(cw, ch).map_err(|e| anyhow::anyhow!("vpx init: {e:?}"))?;
+    let mut i420 = vec![0u8; i420_len(cw as usize, ch as usize)];
+
+    emu.audio_drain(); // discard audio accumulated during warmup (avoid a startup burst)
+
     let mut next = Instant::now();
     let mut frame_idx: u64 = 0;
+    let mut held: HashSet<String> = HashSet::new();
 
-    // Lightweight throughput stats (logged ~every 5 s) so the pipeline is observable.
     let mut stat_t = Instant::now();
     let mut stat_frames: u64 = 0;
     let mut stat_vpkts: u64 = 0;
     let mut stat_apkts: u64 = 0;
 
     loop {
-        // 1. Apply all pending input to player one (sticky until released).
+        // 1. Apply pending input (P1). Direction keys feed analog vectors; rest are digital.
+        let mut stick_dirty = false;
         while let Ok(ev) = input_rx.try_recv() {
-            if let Some(btn) = map_button(&ev.button) {
-                tracing::info!("input P{}: {} {}", ev.player, ev.kind, ev.button);
-                emu.set_button(ev.player, btn, ev.kind == "down");
+            let pressed = ev.kind == "down";
+            match map_button(&ev.button) {
+                Some(N64Action::Btn(id)) => {
+                    tracing::info!("input P{}: {} {} (btn {id})", ev.player, ev.kind, ev.button);
+                    emu.set_button(id, pressed);
+                }
+                Some(N64Action::Stick) | Some(N64Action::CStick) => {
+                    tracing::info!("input P{}: {} {} (analog)", ev.player, ev.kind, ev.button);
+                    if pressed {
+                        held.insert(ev.button.clone());
+                    } else {
+                        held.remove(&ev.button);
+                    }
+                    stick_dirty = true;
+                }
+                None => {}
             }
         }
+        if stick_dirty {
+            let (sx, sy) = stick_vec(&held, "StickUp", "StickDown", "StickLeft", "StickRight");
+            emu.set_stick(sx, sy);
+            let (cx, cy) = stick_vec(&held, "CUp", "CDown", "CLeft", "CRight");
+            emu.set_cstick(cx, cy);
+        }
 
-        // 2. A viewer just connected -> reset the encoder so the next frame is a keyframe.
+        // 2. New viewer -> reset encoder for a fresh keyframe.
         if keyframe_req.swap(false, Ordering::Relaxed) {
-            match make_vp8_encoder() {
-                Ok(e) => {
-                    vpx = e;
-                    tracing::info!("vp8 encoder reset -> forcing keyframe for new viewer");
-                }
-                Err(e) => tracing::warn!("vp8 reset failed: {e:?}"),
+            if let Ok(e) = make_vp8_encoder(cw, ch) {
+                vpx = e;
+                tracing::info!("vp8 encoder reset -> keyframe for new viewer");
             }
         }
 
         // 3. Advance one frame.
-        emu.clock_frame()?;
+        emu.clock_frame();
 
-        // 4. VIDEO: RGBA -> I420 -> VP8 -> broadcast (copy out of the encoder's buffer).
-        rgba_to_i420(emu.frame_buffer(), W, H, &mut i420);
-        let pts_ms = (frame_idx * 1000 / 60) as i64; // ms pts for timebase [1,1000]
+        // 4. VIDEO: latest XRGB8888 -> I420 -> VP8 -> broadcast.
+        emu.with_frame(|f| {
+            if !f.bytes.is_empty() {
+                xrgb_to_i420(&f.bytes, f.w as usize, f.h as usize, f.pitch, &mut i420, cw as usize, ch as usize);
+            }
+        });
+        let pts_ms = (frame_idx as f64 * 1000.0 / emu.fps) as i64;
         match vpx.encode(pts_ms, &i420) {
             Ok(packets) => {
                 for frame in packets {
@@ -138,9 +187,9 @@ fn run_loop(
             Err(e) => tracing::warn!("vpx encode: {e:?}"),
         }
 
-        // 5. AUDIO: f32 -> i16 ring -> 960-sample Opus packets -> broadcast.
-        opus.push_f32(emu.audio_samples());
-        emu.clear_audio_samples(); // REQUIRED every frame
+        // 5. AUDIO: drain i16 stereo @ core rate -> resample 48k -> stereo Opus -> broadcast.
+        let pcm = emu.audio_drain();
+        opus.push_i16_stereo(&pcm);
         match opus.take_packets() {
             Ok(pkts) => {
                 for p in pkts {
@@ -154,12 +203,12 @@ fn run_loop(
             Err(e) => tracing::warn!("opus encode: {e:?}"),
         }
 
-        // 6. Periodic throughput stats.
+        // 6. Stats.
         stat_frames += 1;
         if stat_t.elapsed() >= Duration::from_secs(5) {
             let secs = stat_t.elapsed().as_secs_f64();
             tracing::info!(
-                "emu: {:.1} fps | {} video pkts | {} audio pkts (last {:.0}s) | viewers v={} a={}",
+                "n64: {:.1} fps | {} video pkts | {} audio pkts (last {:.0}s) | viewers v={} a={}",
                 stat_frames as f64 / secs,
                 stat_vpkts,
                 stat_apkts,
@@ -173,15 +222,14 @@ fn run_loop(
             stat_apkts = 0;
         }
 
-        // 7. Drift-compensated pacing to the next 16.639 ms deadline.
+        // 7. Drift-compensated pacing to the next core-fps deadline.
         frame_idx += 1;
         next += frame_period;
         let now = Instant::now();
         if next > now {
             std::thread::sleep(next - now);
         } else {
-            // Fell behind (encode took too long); resync the clock to avoid a burst.
-            next = now;
+            next = now; // fell behind; resync to avoid a burst
         }
     }
 }

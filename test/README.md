@@ -18,3 +18,11 @@ Verified results:
 - e2e-media:   ICE connected; video framesDecoded>0 at 256x240; audio bytesReceived>0.
 - e2e-input:   server logs `input P1: down/up <Button>` for each key pressed.
 - e2e-cleanup: after pc.close(), server `viewers` returns to 0 (writer tasks stop).
+
+## N64 tests (current)
+
+- `e2e-n64-media.cjs`  — connect, confirm 640x240 VP8 decode + stereo Opus, save a screenshot.
+- `e2e-n64-input.cjs`  — drive the N64 pad (Start/stick/A/C-buttons), before/after screenshots must differ.
+
+Verified: SSB64 renders the intro + title screen over WebRTC; all inputs reach the core
+(server logs `input P1: <kind> <button>`).

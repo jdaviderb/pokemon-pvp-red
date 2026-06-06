@@ -26,7 +26,11 @@ use ::webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use ::webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use ::webrtc::track::track_local::TrackLocal;
 
-use crate::pipeline::{AppInner, NTSC_FRAME_NANOS};
+use crate::pipeline::AppInner;
+
+/// Video Sample duration (~1/60 s). N64 runs ~60 fps; this drives the 90 kHz RTP step.
+/// Exact A/V sync is handled by the browser jitter buffer + RTCP sender reports.
+const VIDEO_FRAME_NANOS: u64 = 16_666_667;
 
 /// Build the shared API once (MediaEngine + default codecs (VP8/Opus) + interceptors).
 pub fn build_api() -> anyhow::Result<Arc<API>> {
@@ -62,7 +66,7 @@ pub async fn build_peer_and_answer(
             ..Default::default()
         },
         "video".to_owned(),
-        "nes".to_owned(),
+        "n64".to_owned(),
     ));
     let video_sender = pc
         .add_track(Arc::clone(&video_track) as Arc<dyn TrackLocal + Send + Sync>)
@@ -73,14 +77,17 @@ pub async fn build_peer_and_answer(
         while video_sender.read(&mut buf).await.is_ok() {}
     });
 
-    // --- AUDIO track (Opus) ---
+    // --- AUDIO track (Opus, STEREO) ---
     let audio_track = Arc::new(TrackLocalStaticSample::new(
         RTCRtpCodecCapability {
             mime_type: MIME_TYPE_OPUS.to_owned(),
+            clock_rate: 48000,
+            channels: 2,
+            sdp_fmtp_line: "minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1".to_owned(),
             ..Default::default()
         },
         "audio".to_owned(),
-        "nes".to_owned(),
+        "n64".to_owned(),
     ));
     let audio_sender = pc
         .add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal + Send + Sync>)
@@ -98,7 +105,7 @@ pub async fn build_peer_and_answer(
         let mut vrx = inner.video_tx.subscribe();
         let vtrack = Arc::clone(&video_track);
         let valive = Arc::clone(&alive);
-        let video_dur = Duration::from_nanos(NTSC_FRAME_NANOS); // ~16.639 ms -> 90kHz RTP step
+        let video_dur = Duration::from_nanos(VIDEO_FRAME_NANOS); // ~16.67 ms -> 90kHz RTP step
         tokio::spawn(async move {
             loop {
                 match vrx.recv().await {

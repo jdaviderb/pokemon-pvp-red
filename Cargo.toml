@@ -6,8 +6,8 @@ edition = "2021"
 rust-version = "1.92"
 
 [dependencies]
-# --- NES emulation (pure Rust, no C deps) ---
-tetanes-core = "0.14.1"
+# --- N64 emulation: load a libretro core (parallel_n64 / mupen64plus-next) via dlopen ---
+libloading = "0.8"
 
 # --- async runtime (shared by axum + webrtc-rs) ---
 tokio = { version = "1", features = ["full"] }

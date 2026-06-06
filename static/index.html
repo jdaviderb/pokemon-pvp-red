@@ -14,7 +14,7 @@
     }
     h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: .5px; }
     #video {
-      width: 512px; height: 480px; background: #000;
+      width: 512px; height: 384px; background: #000;          /* 4:3 (N64 aspect) */
       image-rendering: pixelated; border: 1px solid #23232e; border-radius: 6px;
     }
     .row { display: flex; gap: 10px; align-items: center; }
@@ -34,42 +34,41 @@
   </style>
 </head>
 <body>
-  <h1>NES over WebRTC · emulación en el servidor</h1>
+  <h1>Super Smash Bros. 64 over WebRTC · emulación en el servidor</h1>
   <video id="video" autoplay playsinline></video>
   <div class="row">
     <button id="connect">Connect</button>
     <span id="status">idle</span>
   </div>
   <p class="hint">
-    <b>P1:</b> <kbd>←↑↓→</kbd> D-pad · <kbd>Z</kbd> B · <kbd>X</kbd> A ·
-    <kbd>Enter</kbd> Start · <kbd>Shift</kbd> Select.
-    <br /><b>P2:</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> D-pad ·
-    <kbd>J</kbd> B · <kbd>K</kbd> A · <kbd>O</kbd> Select · <kbd>P</kbd> Start.
+    <b>Stick:</b> <kbd>←↑↓→</kbd> · <b>A</b> <kbd>X</kbd> · <b>B</b> <kbd>Z</kbd> ·
+    <b>Z-trig</b> <kbd>C</kbd> · <b>L</b> <kbd>Q</kbd> · <b>R</b> <kbd>E</kbd> ·
+    <b>Start</b> <kbd>Enter</kbd>.
+    <br /><b>C-buttons:</b> <kbd>I</kbd> up · <kbd>J</kbd> left · <kbd>K</kbd> down · <kbd>L</kbd> right.
     <br />El audio/vídeo se generan en el servidor; este navegador solo recibe el stream.
   </p>
 
   <script>
-    // Physical-key -> { player, NES button }. Uses e.code so layout doesn't matter.
+    // Physical-key (e.code) -> { player, N64 wire button }. The server folds the
+    // Stick*/C* names into the analog control stick / C-stick; the rest are digital.
     const KEYMAP = {
-      // Player 1: arrows + Z/X + Enter/Shift
-      ArrowUp:    { p: 1, b: "Up" },
-      ArrowDown:  { p: 1, b: "Down" },
-      ArrowLeft:  { p: 1, b: "Left" },
-      ArrowRight: { p: 1, b: "Right" },
-      KeyZ:       { p: 1, b: "B" },
-      KeyX:       { p: 1, b: "A" },
-      Enter:      { p: 1, b: "Start" },
-      ShiftLeft:  { p: 1, b: "Select" },
-      ShiftRight: { p: 1, b: "Select" },
-      // Player 2: WASD + J/K + O/P
-      KeyW: { p: 2, b: "Up" },
-      KeyS: { p: 2, b: "Down" },
-      KeyA: { p: 2, b: "Left" },
-      KeyD: { p: 2, b: "Right" },
-      KeyJ: { p: 2, b: "B" },
-      KeyK: { p: 2, b: "A" },
-      KeyO: { p: 2, b: "Select" },
-      KeyP: { p: 2, b: "Start" },
+      // control stick (analog) on the arrows
+      ArrowUp:    { p: 1, b: "StickUp" },
+      ArrowDown:  { p: 1, b: "StickDown" },
+      ArrowLeft:  { p: 1, b: "StickLeft" },
+      ArrowRight: { p: 1, b: "StickRight" },
+      // face / shoulder / start
+      KeyX:  { p: 1, b: "A" },
+      KeyZ:  { p: 1, b: "B" },
+      KeyC:  { p: 1, b: "Z" },      // N64 Z trigger
+      KeyQ:  { p: 1, b: "L" },
+      KeyE:  { p: 1, b: "R" },
+      Enter: { p: 1, b: "Start" },
+      // C-buttons on IJKL (up/left/down/right)
+      KeyI:  { p: 1, b: "CUp" },
+      KeyJ:  { p: 1, b: "CLeft" },
+      KeyK:  { p: 1, b: "CDown" },
+      KeyL:  { p: 1, b: "CRight" },
     };
 
     const statusEl = document.getElementById("status");

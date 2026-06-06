@@ -7,3 +7,14 @@
 # Editor
 *.rs.bk
 *.swp
+
+# SNES/NES ROM images (copyrighted, large)
+*.sfc
+*.smc
+*.nes
+*.z64
+*.n64
+*.v64
+
+# Prebuilt libretro cores (fetch with cores/fetch.sh)
+cores/*.dylib

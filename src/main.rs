@@ -1,11 +1,13 @@
-//! Server-side NES emulation streamed to the browser over WebRTC.
+//! Server-side N64 emulation streamed to the browser over WebRTC.
 //!
-//! The emulator runs entirely on the server; the browser at http://localhost:3000
-//! receives live VP8 video + Opus audio and sends keyboard input back over a data
-//! channel. Pass a ROM path as the first CLI arg to override the default.
+//! A libretro core (parallel_n64 / mupen64plus-next, angrylion software RDP) runs headless on
+//! the server; the browser at http://localhost:3000 receives live VP8 video + stereo Opus audio
+//! and sends keyboard input back over a data channel.
+//!
+//! Args: [1] ROM path (.z64), [2] core dylib path. Both optional.
 
 mod audio;
-mod emu;
+mod n64;
 mod pipeline;
 mod signaling;
 mod video;
@@ -15,7 +17,9 @@ use std::net::SocketAddr;
 
 use signaling::{router, AppState};
 
-const DEFAULT_ROM: &str = "~/projects-2026/nes-MK1/out/MK1.nes";
+const DEFAULT_ROM: &str = "~/pokemon-pvp-red/Super Smash Bros. (U) [!].z64";
+const DEFAULT_CORE: &str =
+    "~/pokemon-pvp-red/cores/parallel_n64_libretro.dylib";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -26,23 +30,17 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    // 1. Resolve + read the ROM (header sanitizer runs inside Emu::new).
     let rom_path = std::env::args().nth(1).unwrap_or_else(|| DEFAULT_ROM.to_string());
-    let rom_name = std::path::Path::new(&rom_path)
-        .file_name()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "room.nes".to_string());
-    let rom_bytes =
-        std::fs::read(&rom_path).map_err(|e| anyhow::anyhow!("read {rom_path}: {e}"))?;
-    tracing::info!("loaded room '{rom_name}' ({} bytes) from {rom_path}", rom_bytes.len());
+    let core_path = std::env::args().nth(2).unwrap_or_else(|| DEFAULT_CORE.to_string());
+    tracing::info!("ROM:  {rom_path}");
+    tracing::info!("core: {core_path}");
 
-    // 2. Start the emulator thread + broadcast channels.
-    let inner = pipeline::start(rom_bytes, rom_name);
+    // The N64 core is loaded on the emulator thread inside pipeline::start.
+    let inner = pipeline::start(core_path, rom_path);
 
-    // 3. Build the shared WebRTC API once.
+    // Build the shared WebRTC API once.
     let api = crate::webrtc::build_api()?;
 
-    // 4. Serve.
     let state = AppState { api, inner };
     let app = router(state);
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
