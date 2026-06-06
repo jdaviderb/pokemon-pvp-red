@@ -72,8 +72,11 @@ impl Emu {
         self.deck.clear_audio_samples();
     }
 
-    pub fn set_button(&mut self, btn: JoypadBtn, pressed: bool) {
-        self.deck.joypad_mut(Player::One).set_button(btn, pressed);
+    /// Apply a button edge to player 1 or 2 (sticky until released). Any value other
+    /// than 2 is treated as player 1.
+    pub fn set_button(&mut self, player: u8, btn: JoypadBtn, pressed: bool) {
+        let slot = if player == 2 { Player::Two } else { Player::One };
+        self.deck.joypad_mut(slot).set_button(btn, pressed);
     }
 }
 

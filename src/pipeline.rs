@@ -27,12 +27,19 @@ pub struct EncodedAudio {
     pub samples: u32,
 }
 
-/// Input event from the browser data channel: {"type":"down"|"up","button":"A"}.
+/// Input event from the browser data channel:
+/// {"type":"down"|"up","button":"A","player":1|2}. `player` defaults to 1 if omitted.
 #[derive(serde::Deserialize)]
 pub struct InputEvent {
     #[serde(rename = "type")]
     pub kind: String, // "down" | "up"
     pub button: String, // "A" "B" "Up" "Down" "Left" "Right" "Start" "Select"
+    #[serde(default = "default_player")]
+    pub player: u8, // 1 or 2
+}
+
+fn default_player() -> u8 {
+    1
 }
 
 /// Shared state behind AppState (see signaling.rs).
@@ -97,8 +104,8 @@ fn run_loop(
         // 1. Apply all pending input to player one (sticky until released).
         while let Ok(ev) = input_rx.try_recv() {
             if let Some(btn) = map_button(&ev.button) {
-                tracing::info!("input P1: {} {}", ev.kind, ev.button);
-                emu.set_button(btn, ev.kind == "down");
+                tracing::info!("input P{}: {} {}", ev.player, ev.kind, ev.button);
+                emu.set_button(ev.player, btn, ev.kind == "down");
             }
         }
 

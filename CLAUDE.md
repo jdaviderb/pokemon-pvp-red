@@ -21,7 +21,9 @@ cargo build --release
 ```
 
 Then open **http://localhost:3000** in **Chrome** (primary target) and click **Connect**.
-Controls: arrows = D-pad, `Z` = B, `X` = A, `Enter` = Start, `Shift` = Select.
+Controls — **P1**: arrows = D-pad, `Z` = B, `X` = A, `Enter` = Start, `Shift` = Select.
+**P2**: `WASD` = D-pad, `J` = B, `K` = A, `O` = Select, `P` = Start. (Input carries a
+`player` field; see `InputEvent`.)
 
 ### Build prerequisites (already satisfied on this machine)
 

@@ -33,6 +33,8 @@ Luego abre **http://localhost:3000** en **Chrome** y pulsa **Connect**.
 
 ### Controles
 
+**Player 1**
+
 | Tecla            | Botón NES |
 |------------------|-----------|
 | ← ↑ ↓ →          | D-pad     |
@@ -40,6 +42,16 @@ Luego abre **http://localhost:3000** en **Chrome** y pulsa **Connect**.
 | `X`              | A         |
 | `Enter`          | Start     |
 | `Shift`          | Select    |
+
+**Player 2**
+
+| Tecla            | Botón NES |
+|------------------|-----------|
+| `W` `A` `S` `D`  | D-pad     |
+| `J`              | B         |
+| `K`              | A         |
+| `O`              | Select    |
+| `P`              | Start     |
 
 ## Estructura
 

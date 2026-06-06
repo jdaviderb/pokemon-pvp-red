@@ -41,16 +41,35 @@
     <span id="status">idle</span>
   </div>
   <p class="hint">
-    Controles: <kbd>←↑↓→</kbd> D-pad · <kbd>Z</kbd> B · <kbd>X</kbd> A ·
+    <b>P1:</b> <kbd>←↑↓→</kbd> D-pad · <kbd>Z</kbd> B · <kbd>X</kbd> A ·
     <kbd>Enter</kbd> Start · <kbd>Shift</kbd> Select.
+    <br /><b>P2:</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> D-pad ·
+    <kbd>J</kbd> B · <kbd>K</kbd> A · <kbd>O</kbd> Select · <kbd>P</kbd> Start.
     <br />El audio/vídeo se generan en el servidor; este navegador solo recibe el stream.
   </p>
 
   <script>
-    // Physical-key -> NES button. Uses e.code so layout doesn't matter.
+    // Physical-key -> { player, NES button }. Uses e.code so layout doesn't matter.
     const KEYMAP = {
-      ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
-      KeyZ: "B", KeyX: "A", Enter: "Start", ShiftLeft: "Select", ShiftRight: "Select",
+      // Player 1: arrows + Z/X + Enter/Shift
+      ArrowUp:    { p: 1, b: "Up" },
+      ArrowDown:  { p: 1, b: "Down" },
+      ArrowLeft:  { p: 1, b: "Left" },
+      ArrowRight: { p: 1, b: "Right" },
+      KeyZ:       { p: 1, b: "B" },
+      KeyX:       { p: 1, b: "A" },
+      Enter:      { p: 1, b: "Start" },
+      ShiftLeft:  { p: 1, b: "Select" },
+      ShiftRight: { p: 1, b: "Select" },
+      // Player 2: WASD + J/K + O/P
+      KeyW: { p: 2, b: "Up" },
+      KeyS: { p: 2, b: "Down" },
+      KeyA: { p: 2, b: "Left" },
+      KeyD: { p: 2, b: "Right" },
+      KeyJ: { p: 2, b: "B" },
+      KeyK: { p: 2, b: "A" },
+      KeyO: { p: 2, b: "Select" },
+      KeyP: { p: 2, b: "Start" },
     };
 
     const statusEl = document.getElementById("status");
@@ -127,25 +146,25 @@
 
     // Capture keys; de-dupe key-repeat with a Set; send {type, button} as JSON.
     const pressed = new Set();
-    function sendInput(kind, button) {
+    function sendInput(kind, button, player) {
       if (inputChannel && inputChannel.readyState === "open") {
-        inputChannel.send(JSON.stringify({ type: kind, button }));
+        inputChannel.send(JSON.stringify({ type: kind, button, player }));
       }
     }
     window.addEventListener("keydown", (e) => {
-      const btn = KEYMAP[e.code];
-      if (!btn) return;
+      const m = KEYMAP[e.code];
+      if (!m) return;
       e.preventDefault();
       if (pressed.has(e.code)) return;
       pressed.add(e.code);
-      sendInput("down", btn);
+      sendInput("down", m.b, m.p);
     });
     window.addEventListener("keyup", (e) => {
-      const btn = KEYMAP[e.code];
-      if (!btn) return;
+      const m = KEYMAP[e.code];
+      if (!m) return;
       e.preventDefault();
       pressed.delete(e.code);
-      sendInput("up", btn);
+      sendInput("up", m.b, m.p);
     });
   </script>
 </body>
