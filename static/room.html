@@ -59,6 +59,7 @@
 
     .lockrow { display:grid; grid-template-columns:1fr 150px 1fr; gap:10px; align-items:stretch; }
     .lockcard { padding:12px 14px; display:grid; grid-template-columns:108px 1fr; gap:12px; align-content:center; }
+    .bhpn { text-align:right; font-size:18px; margin-top:2px; }
     .lock { grid-column:1/-1; font-size:18px; letter-spacing:2px; color:#5a563f; }
     .locked .lock{ color:#171712; }
     .sprite { width:108px; height:108px; image-rendering:pixelated; align-self:center; filter:grayscale(1) contrast(1.12) brightness(.5); }
@@ -159,12 +160,16 @@
       <div class="gb screen-box"><div class="screen" id="screenWrap"><video id="video" autoplay playsinline muted></video><button id="unmute">🔊 SOUND</button></div></div>
       <div class="bz-row">
         <div class="gb movelist you" id="movebar"></div>
-        <div class="gb statbox" id="p1card">
-          <div class="sb-name"><span class="s1 name">—</span><span class="sb-lv">:L50</span></div>
-          <div class="sb-hp">HP: <span class="hptrack"><span class="hpfill s1 hpfill"></span></span></div>
-          <div class="sb-hpn s1 hpnum"></div>
-          <div class="sb-type"><span class="badge s1 type">—</span></div>
-          <img class="sb-sprite s1 sprite" src="/sprites/1.png" alt="" />
+        <div class="gb lockcard you" id="p1card">
+          <div class="lock locked" id="p1lbl">🔒 LOCKED IN</div>
+          <img class="sprite s1 sprite" src="/sprites/1.png" alt="" />
+          <div>
+            <div class="nm s1 name">—</div>
+            <div class="lv">Lv.50</div>
+            <div class="badge s1 type">—</div>
+            <div class="hpline">HP: <span class="hptrack"><span class="hpfill s1 hpfill"></span></span></div>
+            <div class="bhpn"><span class="s1 hpnum"></span></div>
+          </div>
         </div>
       </div>
       <div class="gb msgbox"><span id="turnInfo">Choose your move.</span><span class="tmr" id="timer"></span></div>
@@ -242,15 +247,15 @@
         if (m.seat === mySeat) {
           renderMoves(myMoves, true); startTimer(m.deadline_ms);
           $("turnInfo").textContent = "YOUR TURN — choose " + mine + "'s move!";
-          $("p1card").classList.add("myturn");
+          $("p1card").classList.add("myturn"); $("p1lbl").textContent = "▶ YOUR TURN";
         } else {
           $("turnInfo").textContent = "Opponent's " + opp + " is choosing…";
-          $("p1card").classList.remove("myturn");
+          $("p1card").classList.remove("myturn"); $("p1lbl").textContent = "🔒 LOCKED IN";
         }
         break;
       }
       case "battle_state": onBattle(m); break;
-      case "move_auto": if (m.seat === mySeat) { $("turnInfo").textContent = "Time's up — random move chosen!"; $("p1card").classList.remove("myturn"); } break;
+      case "move_auto": if (m.seat === mySeat) { $("turnInfo").textContent = "Time's up — random move chosen!"; $("p1card").classList.remove("myturn"); $("p1lbl").textContent = "🔒 LOCKED IN"; } break;
       case "winner": resultShown = true; showResult(m.you_won); break;
       case "room_closed": if (!resultShown) bail(m.reason === "battle_ended" ? "MATCH ENDED" : "MATCH COULDN'T START"); break;
     }
@@ -303,7 +308,7 @@
 
   function onBattle(m) {
     setView("battle"); $("turnNo").textContent = (m.turn || 0);
-    $("p1card").classList.remove("myturn");
+    $("p1card").classList.remove("myturn"); $("p1lbl").textContent = "🔒 LOCKED IN";
     hpBar(1, m.you); hpBar(2, m.opp);
     if (m.you.species && SP[m.you.species]) lockCard(1, m.you.species);
     if (m.opp.species && SP[m.opp.species]) lockCard(2, m.opp.species);
