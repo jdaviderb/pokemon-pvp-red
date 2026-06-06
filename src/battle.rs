@@ -192,6 +192,9 @@ fn tap(b: usize) -> Tap {
 pub fn action_to_taps(a: &AgentAction) -> Vec<Tap> {
     match a {
         AgentAction::Move { slot } => {
+            // A opens FIGHT (the move cursor resets to the top each turn), Down*slot, A confirms.
+            // (No Up-homing: the Gen-1 move list wraps, so a fixed number of Ups can shift the
+            // cursor and cause an off-by-one — the plain form below selects the right move.)
             let mut v = vec![tap(ID_A)];
             for _ in 0..(*slot).min(3) {
                 v.push(tap(ID_DOWN));
@@ -287,21 +290,20 @@ impl TapMachine {
 
 // ---------- MenuPhase software state machine (no single RAM flag for "move list open") ----------
 /// Derive the menu phase each frame from D057 + whether a macro is in flight. v1 heuristic.
-pub fn next_menu_phase(prev: MenuPhase, ram: &[u8], macro_busy: bool) -> MenuPhase {
-    let in_battle = rd8(ram, 0xD057);
-    let player_lvl = rd8(ram, 0xD022);
-    if in_battle == 0 {
+pub fn next_menu_phase(_prev: MenuPhase, ram: &[u8], macro_busy: bool) -> MenuPhase {
+    if rd8(ram, 0xD057) == 0 {
         return MenuPhase::Overworld;
     }
     if macro_busy {
-        return MenuPhase::Animating; // a player action is being played out / resolving
+        return MenuPhase::Animating; // a player action / send-out is being played out
     }
-    match prev {
-        MenuPhase::Overworld => MenuPhase::BattleIntro,
-        MenuPhase::BattleIntro if player_lvl != 0 => MenuPhase::MainMenu,
-        MenuPhase::Animating => MenuPhase::MainMenu, // macro finished -> back to the action menu
-        other => other,
+    // wBattleMon species (D014) is 0 until the player mon is actually sent out — the send-out
+    // animation runs for ~4 s, well past the input macro. Only call it MainMenu once the player
+    // is on the field, so "wait for MainMenu" truly means the FIGHT menu is ready.
+    if rd8(ram, 0xD014) == 0 {
+        return MenuPhase::BattleIntro;
     }
+    MenuPhase::MainMenu
 }
 
 // ======================================================================================
@@ -346,48 +348,8 @@ pub mod gen1_type {
 }
 
 /// Selectable species table. The internal index is the dropdown value the browser POSTs.
-pub static SPECIES: &[Gen1Species] = &[
-    Gen1Species {
-        name: "ARTICUNO",
-        species: 0x4A,
-        type1: gen1_type::ICE,
-        type2: gen1_type::FLYING,
-        catch_rate: 3,
-        base_stats: [90, 85, 100, 85, 125],
-        moves: [(0x3A, 10), (0x3B, 5), (0x40, 35), (0x61, 30)], // IceBeam, Blizzard, Peck, Agility
-        growth: GrowthRate::Slow,
-    },
-    Gen1Species {
-        name: "ZAPDOS",
-        species: 0x4B,
-        type1: gen1_type::ELECTRIC,
-        type2: gen1_type::FLYING,
-        catch_rate: 3,
-        base_stats: [90, 90, 85, 100, 125],
-        moves: [(0x55, 15), (0x57, 10), (0x41, 20), (0x61, 30)], // Tbolt, Thunder, DrillPeck, Agility
-        growth: GrowthRate::Slow,
-    },
-    Gen1Species {
-        name: "MOLTRES",
-        species: 0x49,
-        type1: gen1_type::FIRE,
-        type2: gen1_type::FLYING,
-        catch_rate: 3,
-        base_stats: [90, 100, 90, 90, 125],
-        moves: [(0x53, 15), (0x2B, 30), (0x61, 30), (0x8F, 5)], // FireSpin, Leer, Agility, SkyAttack
-        growth: GrowthRate::Slow,
-    },
-    Gen1Species {
-        name: "DRAGONITE",
-        species: 0x42,
-        type1: gen1_type::DRAGON,
-        type2: gen1_type::FLYING,
-        catch_rate: 9,
-        base_stats: [91, 134, 95, 80, 100],
-        moves: [(0x23, 20), (0x2B, 30), (0x56, 20), (0x61, 30)], // Wrap, Leer, ThunderWave, Agility
-        growth: GrowthRate::Slow,
-    },
-];
+/// The full 151-species Gen-1 table is auto-generated in `src/species_data.rs` (from pret/pokered).
+pub use crate::species_data::SPECIES;
 
 /// Find a species row by its internal index (the value the browser POSTs).
 pub fn species_by_index(idx: u8) -> Option<&'static Gen1Species> {
@@ -508,18 +470,40 @@ const E_NICK0: u16 = 0xD9EE;
 /// Set up a 1-vs-1 custom matchup in WRAM. Call AFTER load_state(legendary_intro.state) and BEFORE
 /// resuming (intro is pre-send-out: D057=2, D014=0, CFE5=0). The engine then sends out both mons
 /// with correct sprites/names/cries.
-pub fn setup_matchup(ram: &mut [u8], player: &Gen1Species, enemy: &Gen1Species, level: u8) {
+pub fn setup_matchup(
+    ram: &mut [u8],
+    player: &Gen1Species,
+    enemy: &Gen1Species,
+    level: u8,
+    player_nick: &str,
+    enemy_nick: &str,
+) {
+    // Custom names override the species name; empty falls back to the species name.
+    let pnick = if player_nick.is_empty() { player.name } else { player_nick };
+    let enick = if enemy_nick.is_empty() { enemy.name } else { enemy_nick };
+
     wr8(ram, P_PARTY_COUNT, 1);
     wr8(ram, P_PARTY_SPECIES, player.species);
     wr8(ram, P_PARTY_SPECIES + 1, 0xFF);
     write_party_mon(ram, P_MON0, &build_party_mon(player, level));
-    write_nick(ram, P_NICK0, &encode_name(player.name)); // REQUIRED: player name is the nick
+    write_nick(ram, P_NICK0, &encode_name(pnick)); // REQUIRED: player name is the nick
+
+    // OBEDIENCE: an injected Lv mon whose OT (trainer) doesn't match the player counts as "traded"
+    // and disobeys above the badge level cap ("POKéMON won't obey!"). Two belt-and-suspenders fixes:
+    //   1) grant all 8 badges (wObtainedBadges D356 = 0xFF) -> obedience cap rises to Lv100, and
+    //   2) stamp the mon's OT id (struct +12, BE) with the player's trainer id (wPlayerID D359),
+    //      so it's considered caught-by-you, not traded.
+    wr8(ram, 0xD356, 0xFF);
+    let pid_hi = rd8(ram, 0xD359);
+    let pid_lo = rd8(ram, 0xD35A);
+    wr8(ram, P_MON0 + 12, pid_hi);
+    wr8(ram, P_MON0 + 13, pid_lo);
 
     wr8(ram, E_PARTY_COUNT, 1);
     wr8(ram, E_PARTY_SPECIES, enemy.species);
     wr8(ram, E_PARTY_SPECIES + 1, 0xFF);
     write_party_mon(ram, E_MON0, &build_party_mon(enemy, level));
-    write_nick(ram, E_NICK0, &encode_name(enemy.name));
+    write_nick(ram, E_NICK0, &encode_name(enick));
 }
 
 /// Lightweight species list for the browser dropdowns: (internal_index, NAME).

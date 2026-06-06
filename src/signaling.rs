@@ -46,6 +46,7 @@ pub fn router(state: AppState) -> Router {
         .route("/battle/load", post(battle_load_handler))
         .route("/battle/setup", post(battle_setup_handler))
         .route("/battle/species", get(battle_species_handler))
+        .route("/battle/enemy", post(battle_enemy_handler))
         .fallback_service(static_service)
         .with_state(state)
 }
@@ -133,6 +134,10 @@ pub struct SetupRequest {
     pub enemy: u8,  // internal species index
     #[serde(default = "default_level")]
     pub level: u8,
+    #[serde(default)]
+    pub player_name: String, // custom nickname ("" = species name)
+    #[serde(default)]
+    pub enemy_name: String,
 }
 fn default_level() -> u8 {
     50
@@ -154,6 +159,8 @@ async fn battle_setup_handler(
         player: req.player,
         enemy: req.enemy,
         level: req.level,
+        player_name: req.player_name,
+        enemy_name: req.enemy_name,
         reply: tx,
     });
     match rx.await {
@@ -161,4 +168,24 @@ async fn battle_setup_handler(
         Ok(Err(e)) => Err((StatusCode::BAD_REQUEST, e)),
         Err(_) => Err((StatusCode::INTERNAL_SERVER_ERROR, "emu thread gone".into())),
     }
+}
+
+#[derive(Deserialize)]
+pub struct EnemyRequest {
+    /// Enemy move slot to force every turn (0..3), or 255 = let the game AI decide.
+    #[serde(default = "ai_slot")]
+    pub slot: u8,
+}
+fn ai_slot() -> u8 {
+    0xFF
+}
+
+/// POST /battle/enemy {"slot":0..3}  -> YOU pick the opponent's move (forces wEnemySelectedMove
+/// each turn). {"slot":255} or empty -> hand control back to the game AI.
+async fn battle_enemy_handler(State(state): State<AppState>, Json(req): Json<EnemyRequest>) -> StatusCode {
+    state
+        .inner
+        .enemy_force
+        .store(req.slot, std::sync::atomic::Ordering::Relaxed);
+    StatusCode::ACCEPTED
 }

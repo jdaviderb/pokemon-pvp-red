@@ -10,6 +10,7 @@ mod audio;
 mod battle;
 mod n64;
 mod pipeline;
+mod species_data;
 mod signaling;
 mod video;
 mod webrtc; // our module; refer to the crate as `::webrtc`

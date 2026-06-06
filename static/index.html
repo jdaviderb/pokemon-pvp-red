@@ -220,10 +220,17 @@
     .hpbar { height: 100%; width: 100%; background: var(--accent); transition: width .25s, background .25s; }
     .hpbar.mid { background: #d9c04a; } .hpbar.low { background: #e06262; }
     .mon-sub { font-size: 12px; color: #9a9aab; margin-top: 6px; }
-    .moves { display: grid; grid-template-columns: repeat(2, 1fr) auto; gap: 8px; }
-    .moves .mv { text-align: left; }
-    .moves .mv b { color: #e8e8f0; } .moves .mv span { color: #8a8aa0; font-weight: 400; font-size: 11px; }
-    #btnRun { color: #f1879b; }
+    .duel { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .side-h { font-size: 11px; font-weight: 700; margin: 0 0 6px; letter-spacing: .5px; }
+    .side-h.you { color: #7fd4ff; } .side-h.enemy { color: #f1879b; }
+    #botMode { color: var(--accent); }
+    .moves { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .moves .mv, .moves .bmv { text-align: left; }
+    .moves .mv b, .moves .bmv b { color: #e8e8f0; }
+    .moves .mv span { color: #8a8aa0; font-weight: 400; font-size: 11px; }
+    .bmv.active { border-color: #f1879b !important; color: #f1879b; box-shadow: 0 0 10px rgba(241,135,155,.4); }
+    #btnRun { color: #f1879b; margin-top: 8px; }
+    #btnAI { margin-top: 8px; color: #9a9aab; }
     .arena-state {
       margin-top: 10px; font-size: 12px; color: #8a8aa0;
       font-variant-numeric: tabular-nums; border-top: 1px solid #20202b; padding-top: 8px;
@@ -280,8 +287,10 @@
     <div class="arena-bar" style="margin-top:10px">
       <span class="arena-title" style="font-size:12px">MATCHUP</span>
       YOU <select id="selPlayer"></select>
+      <input id="selPlayerName" placeholder="name" maxlength="10" style="width:84px" />
       vs <select id="selEnemy"></select>
-      Lv <input id="selLevel" type="number" min="1" max="100" value="50" style="width:54px" />
+      <input id="selEnemyName" placeholder="name" maxlength="10" style="width:84px" />
+      Lv <input id="selLevel" type="number" min="1" max="100" value="50" style="width:48px" />
       <button id="btnMatchup">Start Matchup</button>
     </div>
     <div class="arena-grid">
@@ -296,12 +305,27 @@
         <div class="mon-sub" id="playerSub">—</div>
       </div>
     </div>
-    <div class="moves" id="moves">
-      <button class="mv" data-slot="0" disabled>—</button>
-      <button class="mv" data-slot="1" disabled>—</button>
-      <button class="mv" data-slot="2" disabled>—</button>
-      <button class="mv" data-slot="3" disabled>—</button>
-      <button id="btnRun" disabled>Run</button>
+    <div class="duel">
+      <div class="side">
+        <div class="side-h you">◀ YOU — your move</div>
+        <div class="moves" id="movesYou">
+          <button class="mv" data-slot="0" disabled>—</button>
+          <button class="mv" data-slot="1" disabled>—</button>
+          <button class="mv" data-slot="2" disabled>—</button>
+          <button class="mv" data-slot="3" disabled>—</button>
+        </div>
+        <button id="btnRun" disabled>Run</button>
+      </div>
+      <div class="side">
+        <div class="side-h enemy">BOT — you pick its move ▶ · <span id="botMode">AI</span></div>
+        <div class="moves" id="movesBot">
+          <button class="bmv" data-slot="0" disabled>—</button>
+          <button class="bmv" data-slot="1" disabled>—</button>
+          <button class="bmv" data-slot="2" disabled>—</button>
+          <button class="bmv" data-slot="3" disabled>—</button>
+        </div>
+        <button id="btnAI">↺ Let AI decide</button>
+      </div>
     </div>
     <div class="arena-state" id="arenaState">battle: <span class="k">—</span></div>
     <p class="arena-note">
@@ -440,6 +464,7 @@
     43:"Leer",44:"Bite",45:"Growl",52:"Ember",53:"Flamethrower",55:"Water Gun",56:"Hydro Pump",
     57:"Surf",58:"Ice Beam",64:"Peck",65:"Drill Peck",84:"ThunderShock",85:"Thunderbolt",
     91:"Dig",94:"Psychic",98:"Quick Attack",111:"Defense Curl",116:"Focus Energy",145:"Bubble",
+    35:"Wrap",43:"Leer",59:"Blizzard",83:"Fire Spin",86:"Thunder Wave",87:"Thunder",97:"Agility",143:"Sky Attack",
   };
   const SPECIES = { 153:"Bulbasaur", 176:"Charmander", 177:"Squirtle" };
   const moveName = (id) => (id === 0 ? "—" : (MOVE_NAMES[id] || "#" + id));
@@ -464,9 +489,31 @@
   };
   $("btnAdvance").onclick = () => act({ type: "buttons", presses: ["A"] }, "advance ▶A");
   $("btnRun").onclick = () => act({ type: "run" }, "run");
-  document.querySelectorAll("#moves .mv").forEach((b) => {
+  document.querySelectorAll("#movesYou .mv").forEach((b) => {
     b.onclick = () => act({ type: "move", slot: +b.dataset.slot }, "move " + (+b.dataset.slot + 1));
   });
+  // BOT side — YOU pick the opponent's move (forces it every turn until "Let AI decide").
+  let enemyForce = 255;
+  document.querySelectorAll("#movesBot .bmv").forEach((b) => {
+    b.onclick = async () => {
+      enemyForce = +b.dataset.slot;
+      $("botMode").textContent = "move " + (enemyForce + 1);
+      await api("/battle/enemy", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slot: enemyForce }),
+      });
+      msg("bot forced → move " + (enemyForce + 1));
+    };
+  });
+  $("btnAI").onclick = async () => {
+    enemyForce = 255;
+    $("botMode").textContent = "AI";
+    await api("/battle/enemy", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ slot: 255 }),
+    });
+    msg("bot → AI decides");
+  };
   async function act(body, label) {
     msg(label + "…");
     const r = await api("/battle/action", {
@@ -480,11 +527,17 @@
   const hpClass = (f) => (f > 0.5 ? "" : f > 0.2 ? "mid" : "low");
   function setMoves(d) {
     const ready = d && d.in_battle !== 0;
-    document.querySelectorAll("#moves .mv").forEach((b, i) => {
+    document.querySelectorAll("#movesYou .mv").forEach((b, i) => {
       const id = d ? d.player.moves[i] : 0;
       const pp = d ? d.player.pp[i] & 0x3f : 0;
       b.innerHTML = id ? "<b>" + moveName(id) + "</b> <span>PP " + pp + "</span>" : "—";
       b.disabled = !(ready && id);
+    });
+    document.querySelectorAll("#movesBot .bmv").forEach((b, i) => {
+      const id = d ? d.enemy.moves[i] : 0;
+      b.innerHTML = id ? "<b>" + moveName(id) + "</b>" : "—";
+      b.disabled = !(ready && id);
+      b.classList.toggle("active", i === enemyForce);
     });
     $("btnRun").disabled = !ready;
   }
@@ -533,11 +586,13 @@
     const player = +$("selPlayer").value;
     const enemy = +$("selEnemy").value;
     const level = Math.max(1, Math.min(100, +$("selLevel").value || 50));
+    const player_name = $("selPlayerName").value.trim();
+    const enemy_name = $("selEnemyName").value.trim();
     msg("starting matchup…");
     const r = await api("/battle/setup", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ player, enemy, level }),
+      body: JSON.stringify({ player, enemy, level, player_name, enemy_name }),
     });
     if (!r) msg("no server");
     else if (r.ok) msg("matchup live ✓");
