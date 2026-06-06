@@ -12,6 +12,24 @@ servidor** — el navegador solo recibe el stream.
 > El crate se llama `nes-web` por historia: NES (tetanes-core) → N64 (libretro) → ahora también
 > Game Boy/GBC (libretro). El frontend libretro (`src/n64.rs`) carga **cualquier** core.
 
+## 🕹️ Multijugador online (2 jugadores)
+
+Encima de la battle-arena hay un **juego online para 2 jugadores**: registro/login → **Find Match**
+→ te empareja en una **room** → una **tragaperras** te asigna un Pokémon aleatorio a cada uno →
+**batalla por turnos** (15 s/movimiento, si no eliges juega el CPU) → ganador → al lobby. Ambos
+jugadores ven **la misma** Game Boy en vivo por WebRTC; con **F5** sigues en tu room hasta acabar.
+
+```sh
+cargo run --release -- "Pokemon Red.gb"      # OJO: el .gb (el savestate es de esa ROM)
+```
+Abre **http://localhost:3000**, **Register** (usuario ≥3, password **≥6**). Para jugar de verdad
+necesitas **2 sesiones**: una ventana normal + otra **en incógnito** (cada una su cookie); registra
+un usuario en cada una y pulsa **Find Match** en ambas.
+
+**DB swappable** (SeaORM): SQLite por defecto (`data.db` se autocrea + migra al arrancar);
+`export DATABASE_URL=postgres://…` cambia a Postgres **sin tocar código**. Guía completa →
+[`docs/multiplayer.md`](docs/multiplayer.md). La consola de un jugador sigue en `/console.html`.
+
 ```
 Navegador  ──POST /offer (SDP)──►  axum :3000
    <video> ◄═══ VP8 + Opus RTP ═══  ┌──────────────────────────────────────────────┐
@@ -127,16 +145,23 @@ Win/loss: `enemy.hp==0` (ganas) / `player.hp==0` (pierdes); batalla terminada cu
 | `src/pipeline.rs` | hilo maestro @core-fps: retro_run → encode → broadcast; re-init en cambio de resolución |
 | `src/webrtc.rs` | PeerConnection, tracks (Opus estéreo), RTCP, data channel, señalización |
 | `src/battle.rs` | battle-arena: `BattleState` reader (WRAM, big-endian), `AgentAction`, tap-macro del menú |
-| `src/signaling.rs` | router axum + `POST /offer` + `/battle/{state,action,save,load}` |
-| `src/main.rs` | arranque (ROM + core path por argv) |
+| `src/signaling.rs` | router axum: `/offer`, `/battle/*`, `/auth/*`, `/api/{me,species}`, `/ws` |
+| `src/db.rs` · `src/migrations/` · `src/entities/` | SeaORM: conexión + crear-si-falta + migrar; modelos |
+| `src/auth.rs` | argon2id, register/login/logout, sesión en cookie, extractor `AuthUser` |
+| `src/rooms.rs` | matchmaking + FSM de room + motor de batalla por turnos (timer 15 s, CPU, ganador, resume) |
+| `src/ws.rs` | WebSocket por cliente (`WsHub`, protocolo de eventos JSON) |
+| `src/main.rs` | arranque (ROM + core por argv; conecta DB; lanza el matchmaker) |
 | `logshim.c` / `build.rs` | shim C-variádico para `GET_LOG_INTERFACE` (lo necesita mupen-next) |
 | `scripts/apply_ips.py` | aplicar parches IPS (genera el `.gbc` de Pokémon Red Color) |
 | `cores/` | dylibs libretro (`fetch.sh` los baja; ignorados por git) |
-| `static/index.html` | cliente navegador (TV CRT + teclado) |
+| `static/{login,lobby,room}.html` | multijugador: login · lobby (Find Match) · room (tragaperras + batalla + timer) |
+| `static/console.html` | consola de un jugador (la TV CRT + teclado; antes `index.html`) |
+| `static/index.html` · `static/sprites/` | router de primer-paint (`/api/me`) · 151 sprites Gen-1 por nº Pokédex |
 | `docs/ARCHITECTURE.md` | **guía completa del proyecto** (lineage, componentes, cores, API HTTP, build, extender) |
+| `docs/multiplayer.md` | **guía del multijugador** (DB/auth/rooms/ws, flujo, API, F5, run/jugar) |
 | `docs/battle-arena.md` | guía de la battle-arena de IA + matchup de legendarios |
 | `docs/pokemon-red-ram-map.md` | RAM map de batalla (direcciones + endianness) |
-| `DESIGN*.md` | diseños verificados + riesgos (NES, N64, GB, BATTLE, LEGENDARY) |
+| `DESIGN*.md` | diseños verificados + riesgos (NES, N64, GB, BATTLE, LEGENDARY, MULTIPLAYER) |
 | `test/e2e-*.cjs` | pruebas headless (Chrome/Puppeteer) |
 | `research/` | notas de investigación + capturas de prueba |
 

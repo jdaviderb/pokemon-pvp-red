@@ -13,9 +13,18 @@ The crate name is historical: NES (tetanes-core) → N64 (libretro) → now also
 browser only receives the stream.
 
 > **Full docs:** `docs/ARCHITECTURE.md` (complete project guide: lineage, components, cores, HTTP
-> API, build, extending) and `docs/battle-arena.md` (the AI battle arena + matchup). Verified
-> design records: `DESIGN.md` (NES), `DESIGN-N64.md`, `DESIGN-GB.md`, `DESIGN-BATTLE.md`,
-> `DESIGN-LEGENDARY.md`. Gen-1 RAM map: `docs/pokemon-red-ram-map.md`.
+> API, build, extending), `docs/battle-arena.md` (the AI battle arena + matchup), and
+> `docs/multiplayer.md` (the **2-player online arena**: DB/auth/rooms/WebSocket, flow, run/play).
+> Verified design records: `DESIGN.md` (NES), `DESIGN-N64.md`, `DESIGN-GB.md`, `DESIGN-BATTLE.md`,
+> `DESIGN-LEGENDARY.md`, `DESIGN-MULTIPLAYER.md`. Gen-1 RAM map: `docs/pokemon-red-ram-map.md`.
+
+There is also a **2-player online game** on top of the arena (register/login → Find Match → room →
+slot-machine random Pokémon → 15s/turn battle → winner). It REUSES the single-emulator engine: P1 =
+YOU side (`action_tx`), P2 = enemy (`enemy_force`/CCDD), slot roll → `setup_tx`. DB is SeaORM (SQLite
+auto-created on boot; `DATABASE_URL` → Postgres, no code change). See `src/{db,auth,rooms,ws}.rs`,
+`src/migrations`, `src/entities`, `static/{login,lobby,room,console}.html`, `docs/multiplayer.md`.
+Run it with `Pokemon Red.gb` (savestate-specific); register needs username ≥3 / password ≥6; play
+needs two sessions (normal + incognito). One emulator ⇒ one concurrent battle (extras queue).
 
 Default ROM/core: `Pokemon Red Color.gbc` + `cores/gambatte_libretro.dylib` (GBC, color).
 The .gbc is `Pokemon Red.gb` with `pokered_color/pokered_color_vanilla.ips` applied (see
@@ -73,14 +82,19 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
 | `src/pipeline.rs` | the core-fps loop; broadcast channels; `AppInner`; N64 input; stats |
 | `src/webrtc.rs` | per-peer PeerConnection, tracks (Opus stereo cap), RTCP drain, data channel, signaling, cleanup |
 | `src/battle.rs` | Pokémon Red battle arena: `BattleState`/`BattlePokemon`/`AgentAction`, `read_battle_state` (WRAM, BIG-ENDIAN), inject_*, `TapMachine` (action→menu input) |
-| `src/signaling.rs` | axum `Router`, `POST /offer`, `AppState`, `/battle/{state,action,save,load,setup,species}` |
-| `src/main.rs` | entry: ROM + core paths, start pipeline, serve axum |
+| `src/signaling.rs` | axum `Router` + `AppState`; `/offer`, `/battle/*`, `/auth/*`, `/api/{me,species}`, `/ws` |
+| `src/db.rs` · `src/migrations/` · `src/entities/` | SeaORM: connect + create-if-missing + migrate; models (users/sessions/rooms/matches/user_room) |
+| `src/auth.rs` | argon2id, register/login/logout, session cookie, `AuthUser` extractor |
+| `src/rooms.rs` | multiplayer: matchmaking, room FSM, turn-based battle engine (15s timer, CPU, winner, resume) |
+| `src/ws.rs` | per-client WebSocket (`WsHub`, JSON event protocol) |
+| `src/main.rs` | entry: ROM + core paths, start pipeline, connect DB, spawn matchmaker, serve axum |
 | `logshim.c` + `build.rs` | C-variadic log fn for `GET_LOG_INTERFACE` (mupen-next needs it) |
 | `scripts/apply_ips.py` | IPS patcher (makes `Pokemon Red Color.gbc`) |
-| `static/index.html` | browser client: CRT-TV UI, per-system keymap, AI battle console + matchup picker |
-| `cores/` | libretro core dylibs (`fetch.sh`; gitignored). `states/` = savestates (gitignored) |
-| `docs/` | `ARCHITECTURE.md`, `battle-arena.md`, `pokemon-red-ram-map.md` |
-| `DESIGN*.md` | verified design records (NES, N64, GB, BATTLE, LEGENDARY) |
+| `static/{login,lobby,room}.html` | multiplayer UI; `console.html` = single-player dev console (was `index.html`); `index.html` = `/api/me` router |
+| `static/sprites/` | 151 Gen-1 front sprites by National Dex number (slot machine) |
+| `cores/` | libretro core dylibs (`fetch.sh`; gitignored). `states/` = savestates, `data.db` = sqlite (gitignored) |
+| `docs/` | `ARCHITECTURE.md`, `multiplayer.md`, `battle-arena.md`, `pokemon-red-ram-map.md` |
+| `DESIGN*.md` | verified design records (NES, N64, GB, BATTLE, LEGENDARY, MULTIPLAYER) |
 | `research/*.md`, `research/*.png` | grounded probe findings + proof screenshots |
 
 ## Non-obvious things — READ before editing these areas
