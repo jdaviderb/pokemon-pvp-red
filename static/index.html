@@ -3,49 +3,230 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NES over WebRTC — server-side emulation</title>
+  <title>SMASH·O·VISION 64 — server-side emulation over WebRTC</title>
   <style>
-    :root { color-scheme: dark; }
+    :root {
+      color-scheme: dark;
+      --w: min(90vw, 940px);   /* TV screen width; height is 4:3 */
+      --accent: #58e08a;
+    }
+    * { box-sizing: border-box; }
     body {
-      margin: 0; min-height: 100vh; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 14px;
-      background: #0b0b10; color: #e6e6ef;
+      margin: 0; min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 22px; padding: 28px 16px;
+      color: #d7d7e2;
       font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      /* dark room with a warm glow behind the set */
+      background:
+        radial-gradient(120% 90% at 50% 18%, #1a1622 0%, #0c0b12 45%, #050509 100%),
+        #050509;
     }
-    h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: .5px; }
+
+    /* ---------------- the television ---------------- */
+    .tv { width: var(--w); display: flex; flex-direction: column; align-items: center; }
+
+    .cabinet {
+      width: 100%;
+      padding: 26px 26px 18px;
+      border-radius: 26px;
+      background:
+        linear-gradient(180deg, #3a3a42 0%, #26262d 9%, #1c1c22 70%, #141418 100%);
+      box-shadow:
+        inset 0 2px 0 rgba(255,255,255,.10),
+        inset 0 -8px 22px rgba(0,0,0,.6),
+        0 40px 70px -25px rgba(0,0,0,.85),
+        0 0 0 1px #000;
+      position: relative;
+    }
+    /* subtle plastic speckle */
+    .cabinet::before {
+      content: ""; position: absolute; inset: 0; border-radius: 26px; pointer-events: none;
+      background-image: radial-gradient(rgba(255,255,255,.025) 1px, transparent 1px);
+      background-size: 4px 4px; opacity: .5;
+    }
+
+    .screen-wrap {
+      border-radius: 18px;
+      padding: 14px;
+      background: linear-gradient(180deg, #0a0a0d, #050507);
+      box-shadow:
+        inset 0 0 0 2px #2c2c34,
+        inset 0 6px 16px rgba(0,0,0,.9),
+        inset 0 -2px 6px rgba(255,255,255,.04);
+    }
+
+    .screen {
+      position: relative;
+      width: 100%; aspect-ratio: 4 / 3;
+      border-radius: 16px / 22px;            /* slight CRT bulge */
+      overflow: hidden;
+      background: #04040a;
+      box-shadow:
+        inset 0 0 60px 12px rgba(0,0,0,.9),  /* corner darkening (tube vignette) */
+        inset 0 0 0 2px rgba(0,0,0,.8),
+        0 0 24px rgba(88,224,138,.10);        /* faint screen glow */
+    }
+
+    /* the actual game stream */
     #video {
-      width: 512px; height: 384px; background: #000;          /* 4:3 (N64 aspect) */
-      image-rendering: pixelated; border: 1px solid #23232e; border-radius: 6px;
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: fill;                       /* stretch 640x240 -> 4:3 (N64 display) */
+      background: transparent;                /* show standby behind when not playing */
+      transform: scale(1.015);                /* fake the tube curvature: bow past edges */
+      filter: saturate(1.22) contrast(1.07) brightness(1.05);
+      z-index: 2;
     }
-    .row { display: flex; gap: 10px; align-items: center; }
-    button {
-      background: #2d6cdf; color: #fff; border: 0; border-radius: 6px;
-      padding: 8px 18px; font: inherit; font-weight: 600; cursor: pointer;
+
+    /* standby card (visible until a stream is playing) */
+    .standby {
+      position: absolute; inset: 0; z-index: 1;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; text-align: center; color: #4a5a52;
+      letter-spacing: 3px; font-size: 13px;
+      text-shadow: 0 0 8px rgba(88,224,138,.25);
+      transition: opacity .35s ease;
     }
-    button:disabled { background: #33384a; cursor: default; }
-    #status { padding: 3px 10px; border-radius: 999px; background: #1b1b25; }
-    #status.ok { background: #143d22; color: #7ee2a0; }
-    #status.err { background: #4a1620; color: #f1879b; }
-    .hint { color: #8a8aa0; font-size: 12px; max-width: 512px; text-align: center; }
+    .standby b { color: var(--accent); font-size: 22px; letter-spacing: 6px; }
+    .tv.on .standby { opacity: 0; }
+
+    /* CRT effect layers (never block clicks) */
+    .fx { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+    .scanlines {
+      background: repeating-linear-gradient(
+        to bottom, rgba(0,0,0,.20) 0 1px, rgba(0,0,0,0) 1px 3px);
+      mix-blend-mode: multiply; opacity: .8;
+      animation: flicker 5.5s steps(60) infinite;
+    }
+    .mask {
+      background: repeating-linear-gradient(
+        to right,
+        rgba(255,0,0,.05) 0 1px, rgba(0,255,0,.05) 1px 2px, rgba(0,0,255,.05) 2px 3px);
+      mix-blend-mode: screen; opacity: .35;
+    }
+    .vignette {
+      background: radial-gradient(120% 120% at 50% 50%,
+        transparent 55%, rgba(0,0,0,.35) 85%, rgba(0,0,0,.7) 100%);
+    }
+    .glare {
+      background: radial-gradient(60% 40% at 26% 16%, rgba(255,255,255,.10), transparent 60%);
+      z-index: 4;
+    }
+    .roll { z-index: 4; opacity: .06; }
+    .roll::before {
+      content: ""; position: absolute; left: 0; right: 0; height: 22%;
+      background: linear-gradient(to bottom, transparent, rgba(255,255,255,.9), transparent);
+      animation: roll 7s linear infinite;
+    }
+    .tv.on .screen { animation: turnon .55s ease-out; }
+
+    @keyframes flicker { 0%,100%{opacity:.8} 48%{opacity:.74} 50%{opacity:.86} 52%{opacity:.78} }
+    @keyframes roll { 0%{top:-25%} 100%{top:125%} }
+    @keyframes turnon {
+      0%   { filter: brightness(6) saturate(0); transform: scaleY(.004); }
+      45%  { filter: brightness(2); transform: scaleY(1); }
+      100% { filter: none; }
+    }
+
+    /* ---------------- control panel ---------------- */
+    .panel {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 18px; margin-top: 16px; padding: 0 6px;
+    }
+    .brand {
+      font-weight: 800; letter-spacing: 2px; font-size: 15px; color: #c8c8d2;
+      text-shadow: 0 1px 0 rgba(0,0,0,.8);
+    }
+    .brand span { color: var(--accent); }
+    .controls { display: flex; align-items: center; gap: 16px; }
+
+    .power {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: linear-gradient(180deg, #2b2b33, #17171c);
+      color: #e8e8f0; border: 1px solid #000; border-radius: 999px;
+      padding: 10px 20px; font: inherit; font-weight: 700; letter-spacing: 1px; cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 4px 10px rgba(0,0,0,.5);
+      transition: transform .06s, box-shadow .2s, color .2s;
+    }
+    .power:hover { color: var(--accent); box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 0 16px rgba(88,224,138,.35); }
+    .power:active { transform: translateY(1px); }
+    .power:disabled { color: #6a6a78; cursor: default; box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+
+    .readout { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; color: #9a9aab; }
+    #status::before {
+      content: ""; width: 10px; height: 10px; border-radius: 50%;
+      display: inline-block; margin-right: 7px; vertical-align: -1px;
+      background: #c9913f; box-shadow: 0 0 8px #c9913f; transition: all .2s;
+    }
+    #status.ok::before { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+    #status.err::before { background: #f1879b; box-shadow: 0 0 10px #f1879b; }
+    #status.ok { color: var(--accent); }
+    #status.err { color: #f1879b; }
+
+    .knobs { display: flex; gap: 12px; }
+    .knobs i {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #4a4a54, #1a1a1f 70%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 2px 4px rgba(0,0,0,.6);
+      position: relative;
+    }
+    .knobs i::after {
+      content: ""; position: absolute; left: 50%; top: 3px; width: 2px; height: 7px;
+      background: #7d7d88; transform: translateX(-50%); border-radius: 2px;
+    }
+
+    /* little stand/feet */
+    .stand { width: 36%; height: 16px; margin-top: -2px;
+      background: linear-gradient(180deg, #15151a, #0a0a0e);
+      border-radius: 0 0 12px 12px;
+      box-shadow: 0 18px 30px -16px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.05); }
+
+    /* caption + controls hint */
+    .caption { font-size: 13px; color: #8a8aa0; text-align: center; }
+    .caption b { color: #cfcfe0; }
+    .hint { color: #7c7c90; font-size: 12px; max-width: var(--w); text-align: center; margin: 0; }
     kbd {
-      background: #1b1b25; border: 1px solid #2c2c3a; border-bottom-width: 2px;
-      border-radius: 4px; padding: 1px 6px; color: #cfcfe6;
+      background: #15151b; border: 1px solid #2c2c3a; border-bottom-width: 2px;
+      border-radius: 4px; padding: 1px 6px; color: #cfcfe6; font-size: 11px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .scanlines, .roll::before, .tv.on .screen { animation: none !important; }
     }
   </style>
 </head>
 <body>
-  <h1>Super Smash Bros. 64 over WebRTC · emulación en el servidor</h1>
-  <video id="video" autoplay playsinline></video>
-  <div class="row">
-    <button id="connect">Connect</button>
-    <span id="status">idle</span>
+  <div class="tv">
+    <div class="cabinet">
+      <div class="screen-wrap">
+        <div class="screen">
+          <video id="video" autoplay playsinline></video>
+          <div class="standby"><b>SMASH·O·VISION</b><span>NO SIGNAL — press POWER</span></div>
+          <div class="fx mask"></div>
+          <div class="fx scanlines"></div>
+          <div class="fx vignette"></div>
+          <div class="fx glare"></div>
+          <div class="fx roll"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="brand">SMASH·O·VISION <span>64</span></div>
+        <div class="controls">
+          <button id="connect" class="power">⏻ <span>POWER</span></button>
+          <span class="readout"><span id="status">standby</span></span>
+        </div>
+        <div class="knobs"><i></i><i></i></div>
+      </div>
+    </div>
+    <div class="stand"></div>
   </div>
+
+  <p class="caption"><b>Super Smash Bros. 64</b> · emulación 100% en el servidor, streaming por WebRTC</p>
   <p class="hint">
     <b>Stick:</b> <kbd>←↑↓→</kbd> · <b>A</b> <kbd>X</kbd> · <b>B</b> <kbd>Z</kbd> ·
-    <b>Z-trig</b> <kbd>C</kbd> · <b>L</b> <kbd>Q</kbd> · <b>R</b> <kbd>E</kbd> ·
-    <b>Start</b> <kbd>Enter</kbd>.
-    <br /><b>C-buttons:</b> <kbd>I</kbd> up · <kbd>J</kbd> left · <kbd>K</kbd> down · <kbd>L</kbd> right.
-    <br />El audio/vídeo se generan en el servidor; este navegador solo recibe el stream.
+    <b>Z-trig</b> <kbd>C</kbd> · <b>L</b> <kbd>Q</kbd> · <b>R</b> <kbd>E</kbd> · <b>Start</b> <kbd>Enter</kbd>
+    · <b>C</b> <kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd>
   </p>
 
   <script>
@@ -165,6 +346,11 @@
       pressed.delete(e.code);
       sendInput("up", m.b, m.p);
     });
+
+    // --- CRT "power on" flair (additive; does not touch the logic above) ---
+    const tv = document.querySelector(".tv");
+    video.addEventListener("playing", () => tv.classList.add("on"));
+    video.addEventListener("emptied", () => tv.classList.remove("on"));
   </script>
 </body>
 </html>
