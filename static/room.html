@@ -4,372 +4,307 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RED STADIUM ENGINE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
   <style>
-    :root {
-      --bg:#05080a; --panel:#0a1410; --line:#1f3a2c; --grn:#46e07f; --grn-dim:#2a7a4e;
-      --blue:#5aa9ff; --blue-bg:#0a1422; --red:#ff5a5a; --red-bg:#1a0c0e; --txt:#cfeede; --dim:#5f8f73;
-    }
+    :root { --bg:#04070a; --grn:#5ad17a; --grn-dim:#2c6e44; --red:#e8403f; --wht:#e9efe6; --txt:#9fe0b4;
+      --dim:#4f8a66; --line:#1c3a28; --blue:#5aa9ff; --bluedim:#23507e; --reddim:#7a2422; }
     * { box-sizing:border-box; }
-    body {
-      margin:0; min-height:100vh; background:var(--bg); color:var(--txt);
-      font-family: "Courier New", ui-monospace, Menlo, monospace; font-weight:700;
-      letter-spacing:.5px; padding:14px; display:flex; flex-direction:column; gap:12px;
-      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.25) 0 1px, transparent 1px 3px);
-    }
-    .box { border:2px solid var(--line); border-radius:8px; background:var(--panel); position:relative; }
-    .box::before, .box::after { content:""; position:absolute; width:9px; height:9px; border:2px solid var(--grn-dim); }
-    .box::before { left:-2px; top:-2px; border-right:0; border-bottom:0; }
-    .box::after  { right:-2px; bottom:-2px; border-left:0; border-top:0; }
-    h1 { margin:0; font-size:30px; color:var(--red); letter-spacing:3px; text-shadow:0 0 10px rgba(255,90,90,.4); }
-    .pball { display:inline-block; width:22px; height:22px; border-radius:50%;
-      background:linear-gradient(#ff4d4d 0 50%, #fff 50% 100%); border:2px solid #111;
-      box-shadow:0 0 0 2px #111 inset; vertical-align:middle; position:relative; }
-    .pball::after { content:""; position:absolute; left:50%; top:50%; width:6px; height:6px;
-      transform:translate(-50%,-50%); background:#fff; border:2px solid #111; border-radius:50%; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--txt);
+      font-family:"VT323", ui-monospace, monospace; font-size:21px; line-height:1.15; padding:12px;
+      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.32) 0 1px, transparent 1px 3px);
+      display:flex; flex-direction:column; gap:10px; }
+    .px { font-family:"Press Start 2P", monospace; }
+    .box { border:2px solid var(--grn-dim); border-radius:8px; background:#060f0a; position:relative; }
+    .p1box { border-color:var(--bluedim); } .p2box { border-color:var(--reddim); }
+    .pball { display:inline-block; width:20px; height:20px; border-radius:50%; background:linear-gradient(#e8403f 0 47%,#111 47% 53%,#e9efe6 53% 100%); border:2px solid #0a0a0a; position:relative; vertical-align:middle; }
+    .pball::after { content:""; position:absolute; inset:0; margin:auto; width:6px; height:6px; background:#e9efe6; border:2px solid #0a0a0a; border-radius:50%; }
 
     /* header */
-    .hdr { display:grid; grid-template-columns:200px 1fr 200px; gap:12px; align-items:stretch; }
-    .hdr .cell { padding:8px 12px; font-size:11px; color:var(--dim); }
-    .hdr .cell b { color:var(--grn); font-size:14px; }
-    .hdr .title { text-align:center; padding:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; }
-    .hdr .title .row { display:flex; align-items:center; gap:14px; }
-    .hdr .sub { color:var(--grn); font-size:12px; letter-spacing:2px; }
+    header { display:grid; grid-template-columns:200px 1fr 200px; gap:10px; }
+    header .cell { padding:7px 12px; color:var(--dim); font-size:18px; line-height:1.25; }
+    header .cell b { color:var(--grn); font-size:20px; } header .cell .led{color:var(--red);}
+    header .title { text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+    header .title .row { display:flex; align-items:center; gap:14px; }
+    header h1 { margin:0; color:var(--red); font-size:24px; letter-spacing:2px; text-shadow:2px 2px 0 #5a0f0e; }
+    header .sub { color:var(--grn); font-size:16px; letter-spacing:2px; }
 
-    /* arena: P1 | center | P2 */
-    .arena { display:grid; grid-template-columns:1fr 280px 1fr; gap:12px; align-items:start; }
-    @media (max-width:1000px){ .arena { grid-template-columns:1fr; } .center{order:-1;} }
-    .side { display:flex; flex-direction:column; gap:10px; }
-    .ptag { font-size:15px; letter-spacing:2px; padding:6px 12px; }
-    .p1 .ptag, .p1 .box.acc { color:var(--blue); }
-    .p2 .ptag, .p2 .box.acc { color:var(--red); }
-    .p1 .box.acc { border-color:#1d3a5c; } .p2 .box.acc { border-color:#5c1d22; }
-    .p1 .uname { color:var(--blue); } .p2 .uname { color:var(--red); }
-    .uname { font-size:12px; color:var(--dim); margin-left:auto; }
+    /* ---- SELECTION VIEW (slot machine) ---- */
+    .phase-battle .selview { display:none; }
+    .phase-slot   .battleview { display:none; }
+    .selview { display:flex; flex-direction:column; gap:10px; }
+    .srow { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .ptag { font-size:20px; letter-spacing:2px; padding:6px 10px; }
+    .p1 .ptag,.p1 .nm { color:var(--blue);} .p2 .ptag,.p2 .nm { color:var(--red);}
+    .uname { color:var(--dim); margin-left:8px; font-size:16px; }
+    .reelbox { padding:10px 12px; display:grid; grid-template-columns:1fr 130px; gap:10px; align-items:center; }
+    .reel .lbl { color:var(--dim); font-size:16px; letter-spacing:2px; }
+    .rows { margin-top:4px; display:flex; flex-direction:column; }
+    .rrow { display:flex; align-items:center; gap:8px; padding:1px 6px; color:#7fae92; opacity:.55; font-size:18px; }
+    .rrow img { width:18px; height:18px; image-rendering:pixelated; }
+    .rrow .no { color:var(--dim); width:34px; }
+    .p1 .rrow.hot { opacity:1; background:rgba(90,169,255,.18); color:#d6e9ff; border-radius:3px; }
+    .p2 .rrow.hot { opacity:1; background:rgba(232,64,63,.18); color:#ffd9d8; border-radius:3px; }
+    .spincol { text-align:center; }
+    .spinner { width:84px; height:84px; margin:0 auto 6px; border-radius:50%;
+      background:conic-gradient(var(--grn) 0 25%, transparent 0 50%, var(--grn) 0 75%, transparent 0); opacity:.85;
+      border:3px solid var(--grn-dim); animation:spin .6s linear infinite; }
+    .p1 .spinner{background:conic-gradient(var(--blue) 0 25%,transparent 0 50%,var(--blue) 0 75%,transparent 0);border-color:var(--bluedim);}
+    .p2 .spinner{background:conic-gradient(var(--red) 0 25%,transparent 0 50%,var(--red) 0 75%,transparent 0);border-color:var(--reddim);}
+    .stopped .spinner{ animation:none; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .progress { display:flex; gap:2px; margin-top:4px; } .progress i{flex:1;height:9px;background:#0b1610;border:1px solid var(--line);}
+    .p1 .progress i.on{background:var(--blue);} .p2 .progress i.on{background:var(--red);}
+    .spinlbl { color:var(--dim); font-size:15px; margin-top:4px; }
 
-    /* reel */
-    .reel { padding:10px 12px; }
-    .reel .rl { display:flex; align-items:center; justify-content:space-between; font-size:12px; }
-    .reel .rl .lbl { color:var(--dim); letter-spacing:2px; }
-    .rows { margin-top:8px; display:flex; flex-direction:column; gap:2px; min-height:120px; }
-    .row { display:flex; align-items:center; gap:8px; font-size:13px; padding:2px 6px; color:#8fbfa3; opacity:.6; }
-    .row img { width:18px; height:18px; image-rendering:pixelated; }
-    .row .no { color:var(--dim); width:32px; }
-    .row.hot { opacity:1; background:rgba(70,224,127,.12); border-radius:4px; }
-    .p1 .row.hot { background:rgba(90,169,255,.15); color:#cfe6ff; }
-    .p2 .row.hot { background:rgba(255,90,90,.15); color:#ffd6d6; }
-    .progress { margin-top:8px; height:10px; display:flex; gap:2px; }
-    .progress i { flex:1; background:#0e2018; border:1px solid var(--line); border-radius:1px; }
-    .p1 .progress i.on { background:var(--blue); } .p2 .progress i.on { background:var(--red); }
-    .spin { color:var(--dim); font-size:11px; text-align:right; margin-top:4px; }
+    .lockrow { display:grid; grid-template-columns:1fr 150px 1fr; gap:10px; align-items:stretch; }
+    .lockcard { padding:12px; display:grid; grid-template-columns:120px 1fr; gap:12px; }
+    .lock { grid-column:1/-1; font-size:18px; letter-spacing:2px; color:var(--dim); }
+    .p1 .locked .lock{color:var(--blue);} .p2 .locked .lock{color:var(--red);}
+    .sprite { width:120px; height:120px; image-rendering:pixelated; align-self:center;
+      filter:grayscale(1) brightness(1.5) sepia(.6) hue-rotate(58deg) saturate(1.3); }
+    .nm { font-size:26px; letter-spacing:1px; }
+    .lv { color:var(--dim); font-size:18px; }
+    .badge { display:inline-block; font-size:15px; padding:1px 8px; border:1px solid var(--line); border-radius:4px; margin:4px 0; letter-spacing:1px; }
+    .p1 .badge{color:var(--blue);border-color:var(--bluedim);} .p2 .badge{color:var(--red);border-color:var(--reddim);}
+    .hpline { font-size:16px; display:flex; align-items:center; gap:8px; margin-top:4px; }
+    .hptrack { flex:1; max-width:200px; height:10px; background:#0b1610; border:1px solid var(--line); border-radius:5px; overflow:hidden; }
+    .hpfill { height:100%; width:100%; background:var(--grn); transition:width .4s; } .hpfill.low{background:#e0c64b;} .hpfill.crit{background:var(--red);}
+    .vsbox { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; }
+    .vs { font-size:54px; color:var(--grn); text-shadow:0 0 16px rgba(90,209,122,.5); }
+    .startbox { padding:12px 18px; font-size:16px; color:var(--grn); letter-spacing:1px; text-align:center; }
 
-    /* card */
-    .card { padding:12px; display:grid; grid-template-columns:104px 1fr; gap:12px; }
-    .card .lock { grid-column:1/-1; font-size:12px; letter-spacing:2px; color:var(--dim); display:flex; align-items:center; gap:6px; }
-    .card.locked .lock { color:var(--grn); }
-    .card .sprite { width:104px; height:104px; image-rendering:pixelated; align-self:center;
-      filter:grayscale(1) brightness(1.6) sepia(.5) hue-rotate(70deg) saturate(1.4); }
-    .p2 .card .sprite { filter:grayscale(1) brightness(1.5) sepia(.5) hue-rotate(-30deg) saturate(2); }
-    .card .nm { font-size:20px; letter-spacing:1px; color:#eafff2; }
-    .card .lv { font-size:13px; color:var(--dim); }
-    .badge { display:inline-block; font-size:11px; padding:2px 8px; border:1px solid var(--line); border-radius:4px; margin:4px 0; }
-    .p1 .badge { color:var(--blue); border-color:#1d3a5c; } .p2 .badge { color:var(--red); border-color:#5c1d22; }
-    .hpline { font-size:12px; display:flex; align-items:center; gap:8px; }
-    .hptrack { flex:1; height:9px; background:#0e2018; border:1px solid var(--line); border-radius:5px; overflow:hidden; }
-    .hpfill { height:100%; width:100%; background:var(--grn); transition:width .4s; }
-    .hpfill.low{background:#e0c64b;} .hpfill.crit{background:var(--red);}
-    .moves { grid-column:1/-1; margin-top:4px; }
-    .moves .mt { font-size:11px; color:var(--dim); letter-spacing:2px; margin-bottom:4px; }
-    .mv { display:block; width:100%; text-align:left; font:inherit; color:#bfe6d0; background:transparent;
-      border:1px solid transparent; border-radius:5px; padding:5px 8px; font-size:13px; }
-    .you .mv.live { border-color:var(--grn-dim); cursor:pointer; color:#eafff2; }
-    .you .mv.live:hover { background:rgba(70,224,127,.15); border-color:var(--grn); }
-    .mv:disabled { cursor:default; }
-    .mv .n { color:var(--dim); margin-right:8px; }
-
-    /* center column */
-    .center { display:flex; flex-direction:column; align-items:center; gap:10px; padding-top:34px; }
-    .vs { font-size:54px; color:var(--grn); text-shadow:0 0 16px rgba(70,224,127,.5); letter-spacing:2px; }
-    .screen { width:100%; aspect-ratio:160/144; background:#000; border:2px solid var(--line); border-radius:8px; overflow:hidden; display:none; }
-    .screen.on { display:block; }
+    /* ---- BATTLE VIEW ---- */
+    .battleview { display:grid; grid-template-rows:auto auto auto; gap:10px; }
+    .brow { display:grid; grid-template-columns:230px 1fr 230px; gap:10px; align-items:start; }
+    .sidecard { padding:12px; text-align:center; }
+    .sidecard .nm { font-size:24px; } .sidecard .sprite { width:130px; height:130px; }
+    .pips { display:flex; gap:3px; margin-top:8px; justify-content:center; }
+    .pips i { width:14px; height:14px; background:#0b1610; border:1px solid var(--line); }
+    .p1 .pips i.on{background:var(--blue);} .p2 .pips i.on{background:var(--red);}
+    .screen { height:min(52vh,440px); background:#000; overflow:hidden; }
     video { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; background:#9bbc0f; }
-    .turnbar { text-align:center; font-size:13px; min-height:20px; }
-    #timer { font-size:26px; color:var(--grn); } #timer.urgent{color:var(--red);}
-    .startline { font-size:12px; color:var(--grn); letter-spacing:2px; min-height:16px; text-align:center; }
-    #unmute { font-size:11px; background:#0e2018; color:var(--grn); border:1px solid var(--line); border-radius:6px; padding:5px 10px; cursor:pointer; font-family:inherit; }
+    .movebar { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; padding:10px; }
+    .mv { text-align:left; font:inherit; font-size:19px; color:#bfe6d0; background:#0a160f; border:2px solid var(--line); border-radius:7px; padding:9px 12px; cursor:default; }
+    .mv .ic{margin-right:8px;} .mv small{display:block;color:var(--dim);font-size:15px;letter-spacing:1px;}
+    .you .mv.live { cursor:pointer; } .you .mv.live:hover { border-color:var(--grn); color:#eafff2; }
+    .mv.live { border-color:var(--reddim); color:#ffe2e1; }
+    .mv:disabled { opacity:.5; }
+    .cmd { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; font-size:21px; }
+    #timer { color:var(--grn); font-size:24px; } #timer.urgent{color:var(--red);}
+    #turnNo { color:var(--dim); border:2px solid var(--line); border-radius:6px; padding:4px 12px; font-size:18px; letter-spacing:1px; }
+    #unmute { position:absolute; right:8px; bottom:8px; font:inherit; font-size:15px; background:#0a160f; color:var(--grn); border:1px solid var(--line); border-radius:6px; padding:4px 9px; cursor:pointer; }
 
-    .overlay { position:fixed; inset:0; display:grid; place-items:center; background:rgba(3,6,8,.92); z-index:50; }
+    .overlay { position:fixed; inset:0; background:rgba(3,6,8,.93); display:grid; place-items:center; z-index:50; }
     .overlay.hidden { display:none; }
-    .rcard { text-align:center; }
-    .result { font-size:48px; font-weight:900; letter-spacing:4px; }
-    .result.win{color:var(--grn);} .result.lose{color:var(--red);}
-    #home { margin-top:18px; font:inherit; font-weight:800; padding:13px 26px; border-radius:8px;
-      background:var(--grn); color:#06120a; border:2px solid var(--grn); cursor:pointer; letter-spacing:1px; }
+    .result { font-size:52px; text-shadow:3px 3px 0 #000; } .result.win{color:var(--grn);} .result.lose{color:var(--red);}
+    #home { margin-top:20px; font-family:"Press Start 2P",monospace; font-size:14px; background:var(--grn); color:#06120a; border:0; border-radius:8px; padding:14px 22px; cursor:pointer; }
   </style>
 </head>
 <body>
-  <!-- HEADER -->
-  <header class="hdr">
-    <div class="box cell seed">▸ SEED<br><b id="seed">BATTLE_0000</b></div>
+  <header>
+    <div class="box cell"><span class="led">▪</span> SEED<br><b id="seed">BATTLE_0000</b></div>
     <div class="box title">
-      <div class="row"><span class="pball"></span><h1>RED STADIUM ENGINE</h1><span class="pball"></span></div>
-      <div class="sub">▸▸▸ RANDOM BATTLE ARENA ◂◂◂</div>
+      <div class="row"><span class="pball"></span><h1 class="px">RED STADIUM ENGINE</h1><span class="pball"></span></div>
+      <div class="sub">◂─── RANDOM BATTLE ARENA ───▸</div>
     </div>
-    <div class="box cell mode" style="text-align:right">MODE ◂<br><b>1 VS 1</b><br>LEVEL CAP: <span id="lvcap">50</span></div>
+    <div class="box cell" style="text-align:right"><span class="led">▪</span> MODE<br><b>1 VS 1</b><br>LEVEL CAP: <span id="lvcap">50</span></div>
   </header>
 
-  <!-- ARENA -->
-  <main class="arena">
-    <section class="side p1 you">
-      <div class="ptag">◖ PLAYER 1 ◗ <span class="uname" id="u1">you</span></div>
-      <div class="box acc reel" id="reel1">
-        <div class="rl"><span class="lbl" id="rlbl1">RANDOMIZING…</span></div>
-        <div class="rows" id="rows1"></div>
-        <div class="progress" id="prog1"></div>
-        <div class="spin" id="spin1">SPINNING…</div>
-      </div>
-      <div class="box acc card" id="card1">
-        <div class="lock" id="lock1">🔒 LOCKED</div>
-        <img class="sprite" id="sprite1" src="/sprites/1.png" alt="" />
-        <div>
-          <div class="nm" id="nm1">—</div>
-          <div class="lv">Lv.<span id="lv1">50</span></div>
-          <div class="badge" id="ty1">—</div>
-          <div class="hpline">HP: <span class="hptrack"><span class="hpfill" id="hp1"></span></span><span id="hpn1"></span></div>
+  <main id="arena" class="phase-slot">
+    <!-- ============ SELECTION (slot machine) ============ -->
+    <div class="selview">
+      <div class="srow">
+        <div class="box p1box p1 reel reelbox stopped" id="reelbox1">
+          <div><div class="lbl ptag">◖ PLAYER 1 ◗<span class="uname s1 uname">you</span></div>
+            <div class="lbl" id="rlbl1">RANDOMIZING…</div><div class="rows" id="rows1"></div></div>
+          <div class="spincol"><div class="spinner"></div><div class="progress" id="prog1"></div><div class="spinlbl" id="spin1">SPINNING…</div></div>
         </div>
-        <div class="moves"><div class="mt">MOVES</div><div id="mv1"></div></div>
-      </div>
-    </section>
-
-    <section class="center">
-      <div class="vs" id="vs">VS</div>
-      <div class="screen" id="screenWrap"><video id="video" autoplay playsinline muted></video></div>
-      <div class="turnbar"><div id="turnInfo">connecting…</div><div id="timer"></div></div>
-      <div class="startline" id="startLine"></div>
-      <button id="unmute">🔊 SOUND</button>
-    </section>
-
-    <section class="side p2 opp">
-      <div class="ptag" style="justify-content:flex-end;display:flex">◖ PLAYER 2 ◗ <span class="uname" id="u2">opponent</span></div>
-      <div class="box acc reel" id="reel2">
-        <div class="rl"><span class="lbl" id="rlbl2">RANDOMIZING…</span></div>
-        <div class="rows" id="rows2"></div>
-        <div class="progress" id="prog2"></div>
-        <div class="spin" id="spin2">SPINNING…</div>
-      </div>
-      <div class="box acc card" id="card2">
-        <div class="lock" id="lock2">🔒 LOCKED</div>
-        <img class="sprite" id="sprite2" src="/sprites/1.png" alt="" />
-        <div>
-          <div class="nm" id="nm2">—</div>
-          <div class="lv">Lv.<span id="lv2">50</span></div>
-          <div class="badge" id="ty2">—</div>
-          <div class="hpline">HP: <span class="hptrack"><span class="hpfill" id="hp2"></span></span><span id="hpn2"></span></div>
+        <div class="box p2box p2 reel reelbox stopped" id="reelbox2">
+          <div><div class="lbl ptag">◖ PLAYER 2 ◗<span class="uname s2 uname">opp</span></div>
+            <div class="lbl" id="rlbl2">RANDOMIZING…</div><div class="rows" id="rows2"></div></div>
+          <div class="spincol"><div class="spinner"></div><div class="progress" id="prog2"></div><div class="spinlbl" id="spin2">SPINNING…</div></div>
         </div>
-        <div class="moves"><div class="mt">MOVES</div><div id="mv2"></div></div>
       </div>
-    </section>
+      <div class="lockrow">
+        <div class="box p1box p1 lockcard" id="lock1">
+          <div class="lock" id="locklbl1">🔒 LOCKED</div>
+          <img class="sprite s1 sprite" src="/sprites/1.png" alt="" />
+          <div><div class="nm s1 name">—</div><div class="lv">Lv.<span id="lv1">50</span></div>
+            <div class="badge s1 type">—</div>
+            <div class="hpline">HP: <span class="hptrack"><span class="hpfill s1 hpfill"></span></span><span class="s1 hpnum"></span></div></div>
+        </div>
+        <div class="vsbox"><div class="vs" id="vs">VS</div><div class="box startbox" id="startbox">◖ START BATTLE ◗</div></div>
+        <div class="box p2box p2 lockcard" id="lock2">
+          <div class="lock" id="locklbl2">🔒 LOCKED</div>
+          <img class="sprite s2 sprite" src="/sprites/1.png" alt="" />
+          <div><div class="nm s2 name">—</div><div class="lv">Lv.<span id="lv2">50</span></div>
+            <div class="badge s2 type">—</div>
+            <div class="hpline">HP: <span class="hptrack"><span class="hpfill s2 hpfill"></span></span><span class="s2 hpnum"></span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ BATTLE ============ -->
+    <div class="battleview">
+      <div class="brow">
+        <div class="box p1box p1 sidecard">
+          <div class="ptag">◖ PLAYER 1 ◗</div>
+          <div class="nm s1 name">—</div>
+          <img class="sprite s1 sprite" src="/sprites/1.png" alt="" />
+          <div class="lv">Lv.50</div><div class="badge s1 type">—</div>
+          <div class="hpline" style="justify-content:center">HP: <span class="hptrack"><span class="hpfill s1 hpfill"></span></span><span class="s1 hpnum"></span></div>
+          <div class="pips" id="pips1"></div>
+        </div>
+        <div class="box screen" id="screenWrap"><video id="video" autoplay playsinline muted></video><button id="unmute">🔊 SOUND</button></div>
+        <div class="box p2box p2 sidecard">
+          <div class="ptag" style="text-align:right">◖ PLAYER 2 ◗</div>
+          <div class="nm s2 name">—</div>
+          <img class="sprite s2 sprite" src="/sprites/1.png" alt="" />
+          <div class="lv">Lv.50</div><div class="badge s2 type">—</div>
+          <div class="hpline" style="justify-content:center">HP: <span class="hptrack"><span class="hpfill s2 hpfill"></span></span><span class="s2 hpnum"></span></div>
+          <div class="pips" id="pips2"></div>
+        </div>
+      </div>
+      <div class="box movebar you" id="movebar"></div>
+      <div class="box cmd"><span id="turnInfo">Choose your move.</span><span id="timer"></span><span id="turnNo" class="px">TURN 1</span></div>
+    </div>
   </main>
 
-  <div id="result" class="overlay hidden"><div class="rcard">
-    <div class="result" id="resultText">—</div><button id="home">RETURN HOME ▸</button>
-  </div></div>
+  <div id="result" class="overlay hidden"><div style="text-align:center">
+    <div class="result px" id="resultText">—</div><button id="home" class="px">RETURN HOME ▸</button></div></div>
 
   <script>
   const MOVE_NAMES = {1:"Pound",2:"Karate Chop",3:"DoubleSlap",4:"Comet Punch",5:"Mega Punch",6:"Pay Day",7:"Fire Punch",8:"Ice Punch",9:"ThunderPunch",10:"Scratch",11:"ViceGrip",12:"Guillotine",13:"Razor Wind",14:"Swords Dance",15:"Cut",16:"Gust",17:"Wing Attack",18:"Whirlwind",19:"Fly",20:"Bind",21:"Slam",22:"Vine Whip",23:"Stomp",24:"Double Kick",25:"Mega Kick",26:"Jump Kick",27:"Rolling Kick",28:"Sand-Attack",29:"Headbutt",30:"Horn Attack",31:"Fury Attack",32:"Horn Drill",33:"Tackle",34:"Body Slam",35:"Wrap",36:"Take Down",37:"Thrash",38:"Double-Edge",39:"Tail Whip",40:"Poison Sting",41:"Twineedle",42:"Pin Missile",43:"Leer",44:"Bite",45:"Growl",46:"Roar",47:"Sing",48:"Supersonic",49:"SonicBoom",50:"Disable",51:"Acid",52:"Ember",53:"Flamethrower",54:"Mist",55:"Water Gun",56:"Hydro Pump",57:"Surf",58:"Ice Beam",59:"Blizzard",60:"Psybeam",61:"BubbleBeam",62:"Aurora Beam",63:"Hyper Beam",64:"Peck",65:"Drill Peck",66:"Submission",67:"Low Kick",68:"Counter",69:"Seismic Toss",70:"Strength",71:"Absorb",72:"Mega Drain",73:"Leech Seed",74:"Growth",75:"Razor Leaf",76:"SolarBeam",77:"PoisonPowder",78:"Stun Spore",79:"Sleep Powder",80:"Petal Dance",81:"String Shot",82:"Dragon Rage",83:"Fire Spin",84:"ThunderShock",85:"Thunderbolt",86:"Thunder Wave",87:"Thunder",88:"Rock Throw",89:"Earthquake",90:"Fissure",91:"Dig",92:"Toxic",93:"Confusion",94:"Psychic",95:"Hypnosis",96:"Meditate",97:"Agility",98:"Quick Attack",99:"Rage",100:"Teleport",101:"Night Shade",102:"Mimic",103:"Screech",104:"Double Team",105:"Recover",106:"Harden",107:"Minimize",108:"SmokeScreen",109:"Confuse Ray",110:"Withdraw",111:"Defense Curl",112:"Barrier",113:"Light Screen",114:"Haze",115:"Reflect",116:"Focus Energy",117:"Bide",118:"Metronome",119:"Mirror Move",120:"Selfdestruct",121:"Egg Bomb",122:"Lick",123:"Smog",124:"Sludge",125:"Bone Club",126:"Fire Blast",127:"Waterfall",128:"Clamp",129:"Swift",130:"Skull Bash",131:"Spike Cannon",132:"Constrict",133:"Amnesia",134:"Kinesis",135:"Softboiled",136:"Hi Jump Kick",137:"Glare",138:"Dream Eater",139:"Poison Gas",140:"Barrage",141:"Leech Life",142:"Lovely Kiss",143:"Sky Attack",144:"Transform",145:"Bubble",146:"Dizzy Punch",147:"Spore",148:"Flash",149:"Psywave",150:"Splash",151:"Acid Armor",152:"Crabhammer",153:"Explosion",154:"Fury Swipes",155:"Bonemerang",156:"Rest",157:"Rock Slide",158:"Hyper Fang",159:"Sharpen",160:"Conversion",161:"Tri Attack",162:"Super Fang",163:"Slash",164:"Substitute",165:"Struggle"};
   const moveName = (id) => MOVE_NAMES[id] || ("#" + id);
+  function moveIcon(name) {
+    const n = name.toLowerCase();
+    if (/thunder|shock|bolt/.test(n)) return "⚡";
+    if (/recover|rest|softboiled|heal/.test(n)) return "✚";
+    if (/psy|confus|hypno|dream|amnesia|mind|kinesis|barrier/.test(n)) return "👁";
+    if (/fire|ember|flame|burn/.test(n)) return "🔥";
+    if (/ice|blizzard|freeze|aurora/.test(n)) return "❄";
+    if (/water|surf|hydro|bubble|clamp|crab/.test(n)) return "💧";
+    if (/leaf|vine|seed|solar|petal|spore|powder|grow/.test(n)) return "🌿";
+    if (/agility|quick|swords|sharpen|focus|defense|harden|withdraw|screech|double team|minimize/.test(n)) return "✦";
+    return "▸";
+  }
   const $ = (id) => document.getElementById(id);
+  const setF = (side, field, txt) => document.querySelectorAll(".s" + side + "." + field).forEach((e) => (e.textContent = txt));
+  const setSprite = (side, dex) => document.querySelectorAll(".s" + side + ".sprite").forEach((e) => (e.src = "/sprites/" + dex + ".png"));
 
   let ws, pc, mySeat = 0, timerHandle = null, resultShown = false, lastProgress = Date.now();
-  let SP = {};            // internal index -> {dex,name,types,moves[]}
-  let byDex = {};         // dex -> index
-  const allDex = [];      // [1..151]
-  let lockedIdx = { 1: null, 2: null };
-  let myMoves = null;     // live move slots when it's my turn
+  let SP = {}, byDex = {}, allDex = [], lockedIdx = { 1:null, 2:null }, myMoves = null;
 
-  // ---- WebRTC: shared room stream ----
+  // pips decoration
+  [1,2].forEach((s) => { const p = $("pips" + s); for (let i=0;i<8;i++){ const e=document.createElement("i"); if(i<6)e.className="on"; p.appendChild(e);} });
+
   async function connectVideo() {
     pc = new RTCPeerConnection({ iceServers: [] });
-    pc.addTransceiver("video", { direction: "recvonly" });
-    pc.addTransceiver("audio", { direction: "recvonly" });
-    const remote = new MediaStream();
-    $("video").srcObject = remote;
-    pc.ontrack = (e) => remote.addTrack(e.track);
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    await new Promise((res) => {
-      if (pc.iceGatheringState === "complete") return res();
-      const c = () => { if (pc.iceGatheringState === "complete") { pc.removeEventListener("icegatheringstatechange", c); res(); } };
-      pc.addEventListener("icegatheringstatechange", c); setTimeout(res, 2500);
-    });
-    const r = await fetch("/offer", { method: "POST", headers: { "Content-Type": "application/json" },
+    pc.addTransceiver("video", { direction: "recvonly" }); pc.addTransceiver("audio", { direction: "recvonly" });
+    const remote = new MediaStream(); $("video").srcObject = remote; pc.ontrack = (e) => remote.addTrack(e.track);
+    const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+    await new Promise((res) => { if (pc.iceGatheringState === "complete") return res();
+      const c=()=>{ if(pc.iceGatheringState==="complete"){pc.removeEventListener("icegatheringstatechange",c);res();} };
+      pc.addEventListener("icegatheringstatechange", c); setTimeout(res, 2500); });
+    const r = await fetch("/offer", { method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type }) });
     if (r.ok) await pc.setRemoteDescription(await r.json());
   }
   $("unmute").onclick = () => { $("video").muted = false; $("unmute").style.display = "none"; };
 
-  // ---- WebSocket ----
   function openWs() {
     ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
     ws.onopen = () => ws.send(JSON.stringify({ type: "resume" }));
     ws.onmessage = (e) => handle(JSON.parse(e.data));
     ws.onclose = () => setTimeout(openWs, 1500);
   }
-
   function handle(m) {
     if (["slot_result","battle_state","your_turn","room_state"].includes(m.type)) lastProgress = Date.now();
     switch (m.type) {
       case "room_state":
-        mySeat = m.seat;
-        $("u1").textContent = m.you.username; $("u2").textContent = m.opp.username;
-        $("lvcap").textContent = m.level; $("lv1").textContent = m.level; $("lv2").textContent = m.level;
-        $("seed").textContent = "BATTLE_" + String(m.room_id).padStart(4, "0");
+        mySeat = m.seat; setF(1,"uname",m.you.username.toUpperCase()); setF(2,"uname",m.opp.username.toUpperCase());
+        $("lvcap").textContent=m.level; $("lv1").textContent=m.level; $("lv2").textContent=m.level;
+        $("seed").textContent = "BATTLE_" + String(m.room_id).padStart(4,"0");
         if (m.you.species) lockCard(1, m.you.species);
         if (m.opp.species) lockCard(2, m.opp.species);
-        $("vs").textContent = m.phase === "battle" ? "⚔" : "VS";
+        if (m.phase === "battle") setView("battle");
         break;
-      case "slot_result":
-        startReels(m.you_species, m.opp_species); break;
+      case "slot_result": startReels(m.you_species, m.opp_species); break;
       case "your_turn":
         myMoves = m.moves || [];
-        if (m.seat === mySeat) { enableMyMoves(true); startTimer(m.deadline_ms); $("turnInfo").textContent = "▸ YOUR MOVE — choose!"; }
-        else { $("turnInfo").textContent = "opponent is choosing…"; }
+        if (m.seat === mySeat) { renderMoves(myMoves, true); startTimer(m.deadline_ms); $("turnInfo").textContent = "▸ Choose your move!"; }
+        else { $("turnInfo").textContent = "Opponent is choosing…"; }
         break;
       case "battle_state": onBattle(m); break;
-      case "move_auto": if (m.seat === mySeat) $("turnInfo").textContent = "time up — random move!"; break;
+      case "move_auto": if (m.seat === mySeat) $("turnInfo").textContent = "Time up — random move!"; break;
       case "winner": resultShown = true; showResult(m.you_won); break;
       case "room_closed": if (!resultShown) bail(m.reason === "battle_ended" ? "MATCH ENDED" : "MATCH COULDN'T START"); break;
     }
   }
+  function setView(mode) { $("arena").className = "phase-" + mode; }
 
-  // ---- slot machine reels ----
-  function rowHtml(idx, hot) {
-    const s = SP[idx]; if (!s) return "";
-    return `<div class="row${hot ? " hot" : ""}"><img src="/sprites/${s.dex}.png"/><span class="no">${String(s.dex).padStart(3,"0")}</span><span>${s.name}</span></div>`;
-  }
-  function paintReel(side, centerIdx, spinning) {
-    const rows = $("rows" + side);
-    const pick = [];
-    for (let k = 0; k < 6; k++) pick.push(spinning ? rand() : (k === 1 ? centerIdx : rand()));
-    rows.innerHTML = pick.map((ix, k) => rowHtml(ix, k === 1)).join("");
-    $("rlbl" + side).textContent = spinning ? "RANDOMIZING…" : "LOCKED IN ✓";
-    $("spin" + side).textContent = spinning ? "SPINNING…" : "■ LOCKED";
-  }
-  function setProgress(side, frac) {
-    const p = $("prog" + side); p.innerHTML = "";
-    for (let i = 0; i < 10; i++) { const e = document.createElement("i"); if (i / 10 < frac) e.className = "on"; p.appendChild(e); }
-  }
-  function rand() { return allDex.length ? byDex[allDex[Math.floor(Math.random() * allDex.length)]] : 1; }
-
+  // ---- reels ----
+  function rrow(idx, hot) { const s = SP[idx]; if (!s) return "";
+    return `<div class="rrow${hot?" hot":""}"><img src="/sprites/${s.dex}.png"/><span class="no">${String(s.dex).padStart(3,"0")}</span><span>${s.name}</span></div>`; }
+  function paintReel(side, centerIdx, spinning) { const rows = $("rows"+side); const pick=[];
+    for (let k=0;k<6;k++) pick.push(spinning?rand():(k===1?centerIdx:rand()));
+    rows.innerHTML = pick.map((ix,k)=>rrow(ix,k===1)).join("");
+    $("rlbl"+side).textContent = spinning?"RANDOMIZING…":"LOCKED IN ✓"; $("spin"+side).textContent = spinning?"SPINNING…":"■ LOCKED"; }
+  function setProgress(side, frac){ const p=$("prog"+side); p.innerHTML=""; for(let i=0;i<10;i++){const e=document.createElement("i"); if(i/10<frac)e.className="on"; p.appendChild(e);} }
+  function rand(){ return allDex.length?byDex[allDex[Math.floor(Math.random()*allDex.length)]]:1; }
   function startReels(youIdx, oppIdx) {
-    $("startLine").textContent = "ROLLING FIGHTERS…";
-    let n = 0; const total = 26;
-    const iv = setInterval(() => {
-      n++;
-      paintReel(1, youIdx, true); paintReel(2, oppIdx, true);
-      setProgress(1, n / total); setProgress(2, n / total);
-      if (n >= total) {
-        clearInterval(iv);
-        paintReel(1, youIdx, false); paintReel(2, oppIdx, false);
-        setProgress(1, 1); setProgress(2, 1);
-        lockCard(1, youIdx); lockCard(2, oppIdx);
-        $("startLine").textContent = "● BATTLE STARTING…";
-      }
-    }, 85);
+    $("reelbox1").classList.remove("stopped"); $("reelbox2").classList.remove("stopped"); $("startbox").textContent="◖ ROLLING… ◗";
+    let n=0; const total=26;
+    const iv=setInterval(()=>{ n++; paintReel(1,youIdx,true); paintReel(2,oppIdx,true); setProgress(1,n/total); setProgress(2,n/total);
+      if(n>=total){ clearInterval(iv); paintReel(1,youIdx,false); paintReel(2,oppIdx,false); setProgress(1,1); setProgress(2,1);
+        $("reelbox1").classList.add("stopped"); $("reelbox2").classList.add("stopped");
+        lockCard(1,youIdx); lockCard(2,oppIdx); $("startbox").textContent="◖ BATTLE STARTING… ◗"; } }, 85);
   }
 
-  // ---- locked card ----
-  function lockCard(side, idx) {
-    lockedIdx[side] = idx;
-    const s = SP[idx]; if (!s) return;
-    $("sprite" + side).src = "/sprites/" + s.dex + ".png";
-    $("nm" + side).textContent = s.name;
-    $("ty" + side).textContent = s.types || "—";
-    $("card" + side).classList.add("locked");
-    $("lock" + side).innerHTML = "🔓 LOCKED IN";
-    renderMoves(side, s.moves, /*live=*/false);
+  function lockCard(side, idx) { lockedIdx[side]=idx; const s=SP[idx]; if(!s) return;
+    setSprite(side, s.dex); setF(side,"name",s.name); setF(side,"type",s.types||"—");
+    document.querySelectorAll(".lockcard").forEach(()=>{}); $("lock"+side).classList.add("locked"); $("locklbl"+side).textContent="🔓 LOCKED IN";
   }
 
-  function renderMoves(side, moveIds, live) {
-    const box = $("mv" + side); box.innerHTML = "";
-    (moveIds || []).forEach((id, i) => {
-      if (!id) return;
-      const b = document.createElement("button");
-      b.className = "mv"; b.dataset.slot = i; b.disabled = true;
-      b.innerHTML = `<span class="n">${i + 1}.</span>${moveName(id)}`;
-      if (side === 1 && live) {
-        b.classList.add("live"); b.disabled = false;
-        b.onclick = () => {
-          if (!ws || ws.readyState !== 1) return;
-          ws.send(JSON.stringify({ type: "commit_move", slot: i }));
-          enableMyMoves(false); stopTimer(); $("turnInfo").textContent = "locked in — resolving…";
-        };
-      }
-      box.appendChild(b);
-    });
-  }
-  function enableMyMoves(on) {
-    if (!lockedIdx[1]) return;
-    renderMoves(1, SP[lockedIdx[1]] ? SP[lockedIdx[1]].moves : [], on);
+  function renderMoves(moves, live) {
+    const box = $("movebar"); box.innerHTML = "";
+    const list = (moves && moves.length) ? moves : (lockedIdx[1] && SP[lockedIdx[1]] ? SP[lockedIdx[1]].moves.map((id,i)=>({slot:i,id,pp:""})) : []);
+    list.forEach((mv) => { if(!mv.id) return; const b=document.createElement("button"); b.className="mv"; b.dataset.slot=mv.slot;
+      b.innerHTML = `<span class="ic">${moveIcon(moveName(mv.id))}</span>${moveName(mv.id)}<small>PP ${mv.pp!==""?mv.pp:""}</small>`;
+      if (live) { b.classList.add("live"); b.onclick=()=>{ if(!ws||ws.readyState!==1)return; ws.send(JSON.stringify({type:"commit_move",slot:mv.slot}));
+        renderMoves(myMoves,false); stopTimer(); $("turnInfo").textContent="Locked in — resolving…"; }; }
+      else b.disabled = true;
+      box.appendChild(b); });
   }
 
-  // ---- battle ----
   function onBattle(m) {
-    $("screenWrap").classList.add("on"); $("vs").style.display = "none";
-    $("startLine").textContent = "";
-    $("turnInfo").dataset.turn = m.turn;
+    setView("battle"); $("turnNo").textContent = "TURN " + (m.turn || 0);
     hpBar(1, m.you); hpBar(2, m.opp);
     if (m.you.species && SP[m.you.species]) lockCard(1, m.you.species);
     if (m.opp.species && SP[m.opp.species]) lockCard(2, m.opp.species);
+    if (!myMoves) renderMoves(null, false);
   }
   function hpBar(side, mon) {
-    const pct = mon.max_hp ? Math.max(0, Math.round((mon.hp / mon.max_hp) * 100)) : 100;
-    const f = $("hp" + side); f.style.width = pct + "%";
-    f.className = "hpfill" + (pct <= 12 ? " crit" : pct <= 35 ? " low" : "");
-    $("hpn" + side).textContent = mon.max_hp ? mon.hp + "/" + mon.max_hp : "";
+    const pct = mon.max_hp ? Math.max(0, Math.round((mon.hp/mon.max_hp)*100)) : 100;
+    document.querySelectorAll(".s"+side+".hpfill").forEach((f)=>{ f.style.width=pct+"%"; f.className="hpfill s"+side+" hpfill "+(pct<=12?"crit":pct<=35?"low":""); });
+    setF(side, "hpnum", mon.max_hp ? mon.hp+"/"+mon.max_hp : "");
   }
-
-  // ---- timer ----
-  function startTimer(ms) {
-    stopTimer(); const end = Date.now() + (ms || 15000);
-    const upd = () => { const left = Math.max(0, (end - Date.now()) / 1000);
-      $("timer").textContent = left.toFixed(0) + "s"; $("timer").classList.toggle("urgent", left <= 5);
-      if (left <= 0) { stopTimer(); enableMyMoves(false); } };
-    upd(); timerHandle = setInterval(upd, 100);
-  }
-  function stopTimer() { if (timerHandle) clearInterval(timerHandle); timerHandle = null; $("timer").textContent = ""; $("timer").classList.remove("urgent"); }
-
-  // ---- result ----
-  function showResult(youWon) {
-    enableMyMoves(false); stopTimer();
-    $("resultText").textContent = youWon ? "YOU WIN!" : "YOU LOSE";
-    $("resultText").className = "result " + (youWon ? "win" : "lose");
-    $("result").classList.remove("hidden");
-  }
-  function bail(msg) {
-    resultShown = true; enableMyMoves(false); stopTimer();
-    $("resultText").textContent = msg; $("resultText").className = "result";
-    $("resultText").style.fontSize = "26px"; $("result").classList.remove("hidden");
-    setTimeout(() => location.replace("/lobby.html"), 2300);
-  }
+  function startTimer(ms){ stopTimer(); const end=Date.now()+(ms||15000);
+    const upd=()=>{ const left=Math.max(0,(end-Date.now())/1000); $("timer").textContent=left.toFixed(0)+"s"; $("timer").classList.toggle("urgent",left<=5); if(left<=0){stopTimer(); renderMoves(myMoves,false);} };
+    upd(); timerHandle=setInterval(upd,100); }
+  function stopTimer(){ if(timerHandle)clearInterval(timerHandle); timerHandle=null; $("timer").textContent=""; $("timer").classList.remove("urgent"); }
+  function showResult(youWon){ stopTimer(); $("resultText").textContent=youWon?"YOU WIN!":"YOU LOSE"; $("resultText").className="result px "+(youWon?"win":"lose"); $("result").classList.remove("hidden"); }
+  function bail(msg){ resultShown=true; stopTimer(); $("resultText").textContent=msg; $("resultText").className="result px"; $("resultText").style.fontSize="26px"; $("result").classList.remove("hidden"); setTimeout(()=>location.replace("/lobby.html"),2300); }
   $("home").onclick = () => location.replace("/lobby.html");
 
-  // ---- boot ----
   (async () => {
-    const r = await fetch("/api/me");
-    if (r.status === 401) return location.replace("/login.html");
-    const d = await r.json();
-    if (!d.room) return location.replace("/lobby.html");
-    try {
-      (await (await fetch("/api/species")).json()).forEach((s) => {
-        SP[s.index] = { dex: s.dex, name: s.name, types: s.types, moves: s.moves };
-        byDex[s.dex] = s.index; allDex.push(s.dex);
-      });
-    } catch (e) {}
-    // initial reels (placeholder spin look)
+    const r = await fetch("/api/me"); if (r.status === 401) return location.replace("/login.html");
+    const d = await r.json(); if (!d.room) return location.replace("/lobby.html");
+    try { (await (await fetch("/api/species")).json()).forEach((s)=>{ SP[s.index]={dex:s.dex,name:s.name,types:s.types,moves:s.moves}; byDex[s.dex]=s.index; allDex.push(s.dex); }); } catch(e){}
     paintReel(1, rand(), true); paintReel(2, rand(), true);
-    await connectVideo().catch(() => {});
-    openWs();
-    setInterval(() => { if (!resultShown && Date.now() - lastProgress > 35000) bail("MATCH STALLED — RETURNING HOME"); }, 5000);
+    await connectVideo().catch(()=>{}); openWs();
+    setInterval(()=>{ if(!resultShown && Date.now()-lastProgress>35000) bail("MATCH STALLED — RETURNING HOME"); }, 5000);
   })();
   </script>
 </body>

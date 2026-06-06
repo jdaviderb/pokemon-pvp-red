@@ -3,75 +3,80 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>RETRO·VISION — Lobby</title>
+  <title>RED STADIUM ENGINE — Lobby</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
   <style>
-    :root { --bg:#0a0a0f; --panel:#14141c; --accent:#46e07f; --txt:#e8e8f0; --dim:#8a8aa0; }
+    :root { --bg:#04070a; --grn:#5ad17a; --grn-dim:#2c6e44; --red:#e8403f; --wht:#e9efe6; --txt:#9fe0b4; --dim:#4f8a66; --line:#1c3a28; }
     * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; display:grid; place-items:center; color:var(--txt);
-      background: radial-gradient(1200px 600px at 50% -10%, #1a1a2a 0%, var(--bg) 60%);
-      font-family: ui-monospace, Menlo, monospace; }
-    .card { width:min(92vw,440px); background:var(--panel); border:1px solid #262633;
-      border-radius:16px; padding:30px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.5); }
-    h1 { margin:0 0 2px; font-size:21px; letter-spacing:1px; } h1 b { color:var(--accent); }
-    .who { color:var(--dim); font-size:13px; margin-bottom:24px; } .who b { color:var(--txt); }
-    #find { width:100%; padding:20px; font-size:17px; border-radius:12px; font-weight:800; cursor:pointer;
-      background:var(--accent); color:#06120a; border:1px solid var(--accent); letter-spacing:.5px;
-      transition:.15s; }
-    #find:hover { filter:brightness(1.08); }
-    #find.searching { background:#1c1c28; color:var(--accent); }
-    .status { margin-top:18px; min-height:20px; color:var(--accent); font-size:13px; }
-    .spin { display:inline-block; width:14px; height:14px; border:2px solid #2a2a38;
-      border-top-color:var(--accent); border-radius:50%; animation:s .8s linear infinite; vertical-align:-2px; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--txt);
+      font-family:"VT323", ui-monospace, monospace; font-size:22px;
+      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0 1px, transparent 1px 3px);
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:20px; }
+    .corner { position:absolute; padding:8px 14px; border:2px solid var(--line); border-radius:6px; background:#070d0a; font-size:18px; color:var(--dim); line-height:1.25; }
+    .corner b { color:var(--grn); font-size:20px; } .corner .led{color:var(--red);}
+    .tl{top:18px;left:18px;} .tr{top:18px;right:18px;text-align:right;} .br{bottom:18px;right:18px;}
+    .balls { display:flex; align-items:center; gap:24px; }
+    .pball { width:26px; height:26px; border-radius:50%; background:linear-gradient(#e8403f 0 47%, #111 47% 53%, #e9efe6 53% 100%); border:2px solid #0a0a0a; position:relative; }
+    .pball::after { content:""; position:absolute; inset:0; margin:auto; width:7px; height:7px; background:#e9efe6; border:2px solid #0a0a0a; border-radius:50%; }
+    .logo { font-family:"Press Start 2P", monospace; line-height:1.05; text-align:center; }
+    .logo .red { color:var(--red); font-size:46px; text-shadow:3px 3px 0 #5a0f0e; display:block; }
+    .logo .wht { color:var(--wht); font-size:38px; text-shadow:3px 3px 0 #555; display:block; margin:5px 0; }
+    .logo .eng { color:var(--red); font-size:24px; text-shadow:2px 2px 0 #5a0f0e; display:block; }
+    .sub { color:var(--grn); letter-spacing:3px; margin-top:2px; }
+    .who { color:var(--dim); margin-top:18px; } .who b { color:var(--wht); }
+    .panel { margin-top:14px; border:3px solid var(--grn-dim); border-radius:10px; background:#060f0a; padding:6px; min-width:min(86vw,460px); }
+    #find { width:100%; font-family:"Press Start 2P", monospace; font-size:20px; color:#06120a; background:var(--grn);
+      border:0; border-radius:7px; padding:20px; cursor:pointer; letter-spacing:2px; display:flex; align-items:center; justify-content:center; gap:16px; }
+    #find .pball{width:18px;height:18px;}
+    #find.searching { background:#0c1a12; color:var(--grn); }
+    .status { margin-top:16px; min-height:22px; color:var(--grn); text-align:center; }
+    .spin { display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--grn); border-radius:50%; animation:s .8s linear infinite; vertical-align:-2px; }
     @keyframes s { to { transform:rotate(360deg); } }
-    .links { margin-top:24px; font-size:12px; }
-    .links a, .links span { color:var(--dim); text-decoration:none; cursor:pointer; }
-    .links a:hover, .links span:hover { color:var(--txt); }
+    .links { margin-top:18px; font-size:18px; color:var(--dim); }
+    .links a, .links span { color:var(--dim); text-decoration:none; cursor:pointer; } .links a:hover,.links span:hover{color:var(--wht);}
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>RETRO·VISION <b>ARENA</b></h1>
-    <div class="who" id="who">…</div>
-    <button id="find">⚔  FIND MATCH</button>
-    <div class="status" id="status"></div>
-    <div class="links"><a href="/console.html">dev console</a> · <span id="logout">logout</span></div>
+  <div class="corner tl"><span class="led">▪</span> SEED<br><b>RANDOM</b></div>
+  <div class="corner tr"><span class="led">▪</span> MODE<br><b>1 VS 1</b><br>LEVEL CAP: 50</div>
+
+  <div class="balls"><span class="pball"></span>
+    <div class="logo"><span class="red">RED</span><span class="wht">STADIUM</span><span class="eng">ENGINE</span></div>
+    <span class="pball"></span>
   </div>
+  <div class="sub">◂─── RANDOM BATTLE ARENA ───▸</div>
+  <div class="who" id="who">…</div>
+
+  <div class="panel"><button id="find"><span class="pball"></span> FIND MATCH <span class="pball"></span></button></div>
+  <div class="status" id="status"></div>
+  <div class="links"><a href="/console.html">DEV CONSOLE</a> · <span id="logout">LOGOUT</span></div>
+
+  <div class="corner br">© 2025 RSE</div>
   <script>
     const $ = (id) => document.getElementById(id);
     let ws, searching = false;
-
     (async () => {
       const r = await fetch("/api/me");
       if (r.status === 401) return location.replace("/login.html");
       const d = await r.json();
       if (d.room && d.room.id != null) return location.replace("/room.html?id=" + d.room.id);
-      $("who").innerHTML = "logged in as <b>" + d.user.username + "</b> · " + d.user.wins + "W / " + d.user.losses + "L";
+      $("who").innerHTML = "TRAINER <b>" + d.user.username.toUpperCase() + "</b> · " + d.user.wins + "W / " + d.user.losses + "L";
       openWs();
     })();
-
     function openWs() {
       ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
       ws.onmessage = (e) => {
         const m = JSON.parse(e.data);
         if (m.type === "queued") { searching = true; setSearching(m.position); }
         else if (m.type === "lobby") { searching = false; setIdle(); }
-        else if (m.type === "matched") { $("status").innerHTML = "opponent found — entering arena…";
-          setTimeout(() => location.replace("/room.html?id=" + m.room_id), 400); }
+        else if (m.type === "matched") { $("status").innerHTML = "OPPONENT FOUND — ENTERING ARENA…"; setTimeout(() => location.replace("/room.html?id=" + m.room_id), 400); }
       };
       ws.onclose = () => { if (!searching) setIdle(); };
     }
-    function setSearching(pos) {
-      $("find").classList.add("searching"); $("find").textContent = "⏳ SEARCHING… (cancel)";
-      $("status").innerHTML = '<span class="spin"></span> waiting for an opponent' + (pos > 1 ? " · #" + pos : "");
-    }
-    function setIdle() {
-      $("find").classList.remove("searching"); $("find").textContent = "⚔  FIND MATCH"; $("status").textContent = "";
-    }
-    $("find").onclick = () => {
-      if (!ws || ws.readyState !== 1) return;
-      if (searching) { ws.send(JSON.stringify({ type: "cancel_queue" })); searching = false; setIdle(); }
-      else ws.send(JSON.stringify({ type: "find_match" }));
-    };
+    function setSearching(pos) { $("find").classList.add("searching"); $("find").innerHTML = "⏳ SEARCHING… (CANCEL)"; $("status").innerHTML = '<span class="spin"></span> WAITING FOR AN OPPONENT' + (pos > 1 ? " · #" + pos : ""); }
+    function setIdle() { $("find").classList.remove("searching"); $("find").innerHTML = '<span class="pball"></span> FIND MATCH <span class="pball"></span>'; $("status").textContent = ""; }
+    $("find").onclick = () => { if (!ws || ws.readyState !== 1) return; if (searching) { ws.send(JSON.stringify({ type: "cancel_queue" })); searching = false; setIdle(); } else ws.send(JSON.stringify({ type: "find_match" })); };
     $("logout").onclick = async () => { await fetch("/auth/logout", { method: "POST" }); location.replace("/login.html"); };
   </script>
 </body>
