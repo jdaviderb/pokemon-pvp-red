@@ -53,6 +53,8 @@
         const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ username, password }) });
         if (r.ok) { location.href = "/"; return; }
+        // Clicked Register but the name already exists -> just try logging them in.
+        if (path === "/auth/register" && r.status === 409) return go("/auth/login");
         msg((await r.text()) || ("HTTP " + r.status));
       } catch (e) { msg("network error"); }
     }

@@ -70,16 +70,41 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// GET /api/species -> [{dex, index, name}] (dex = position+1; index = internal Gen-1 byte).
-/// The slot machine keys sprites by national dex; the engine speaks internal index.
+/// GET /api/species -> [{dex, index, name, types, moves}] (dex = position+1; index = internal
+/// Gen-1 byte). The slot machine keys sprites by national dex; the engine speaks internal index.
+/// `types` is a display string (e.g. "ICE/FLYING"); `moves` are the 4 base move ids.
 async fn species_list_handler() -> Json<Vec<serde_json::Value>> {
     Json(
         crate::battle::SPECIES
             .iter()
             .enumerate()
-            .map(|(i, s)| serde_json::json!({"dex": i + 1, "index": s.species, "name": s.name}))
+            .map(|(i, s)| {
+                let moves: Vec<u8> = s.moves.iter().map(|(id, _pp)| *id).collect();
+                serde_json::json!({
+                    "dex": i + 1,
+                    "index": s.species,
+                    "name": s.name,
+                    "types": type_label(s.type1, s.type2),
+                    "moves": moves,
+                })
+            })
             .collect(),
     )
+}
+
+fn gen1_type_name(t: u8) -> &'static str {
+    match t {
+        0 => "NORMAL", 1 => "FIGHTING", 2 => "FLYING", 3 => "POISON", 4 => "GROUND", 5 => "ROCK",
+        7 => "BUG", 8 => "GHOST", 0x14 => "FIRE", 0x15 => "WATER", 0x16 => "GRASS",
+        0x17 => "ELECTRIC", 0x18 => "PSYCHIC", 0x19 => "ICE", 0x1A => "DRAGON", _ => "???",
+    }
+}
+fn type_label(t1: u8, t2: u8) -> String {
+    if t1 == t2 {
+        gen1_type_name(t1).to_string()
+    } else {
+        format!("{}/{}", gen1_type_name(t1), gen1_type_name(t2))
+    }
 }
 
 async fn offer_handler(
