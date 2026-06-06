@@ -37,5 +37,28 @@ anyhow     = "1"
 tracing            = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# --- DB (DB-agnostic: sqlite now, postgres later via DATABASE_URL only) ---
+# runtime-tokio-rustls shares rustls 0.23 + ring 0.17 with webrtc (NO OpenSSL).
+sea-orm = { version = "1.1", default-features = false, features = [
+    "sqlx-sqlite",
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+    "macros",
+    "with-chrono",
+] }
+sea-orm-migration = { version = "1.1", default-features = false, features = [
+    "sqlx-sqlite",
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+] }
+
+# --- auth / session ---
+argon2     = "0.5"   # Argon2id password hashing
+rand       = "0.8"   # OsRng salt (rand_core 0.6) + slot-machine RNG + CPU move + tokens
+axum-extra = { version = "0.10", features = ["cookie", "cookie-private"] }  # matches axum 0.8
+chrono     = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+async-trait = "0.1"
+time       = "0.3"   # Cookie max_age (already in tree via webrtc)
+
 [profile.release]
 opt-level = 3

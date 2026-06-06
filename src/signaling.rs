@@ -4,10 +4,12 @@
 use std::sync::Arc;
 
 use axum::body::Bytes;
-use axum::extract::State;
+use axum::extract::{FromRef, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use axum_extra::extract::cookie::Key;
+use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use tower_http::services::ServeDir;
 
@@ -19,6 +21,14 @@ use crate::pipeline::AppInner;
 pub struct AppState {
     pub api: Arc<API>,
     pub inner: Arc<AppInner>,
+    pub db: DatabaseConnection,
+    pub cookie_key: Key,
+}
+
+impl FromRef<AppState> for Key {
+    fn from_ref(s: &AppState) -> Self {
+        s.cookie_key.clone()
+    }
 }
 
 #[derive(Deserialize)]
@@ -47,8 +57,26 @@ pub fn router(state: AppState) -> Router {
         .route("/battle/setup", post(battle_setup_handler))
         .route("/battle/species", get(battle_species_handler))
         .route("/battle/enemy", post(battle_enemy_handler))
+        // --- auth + session ---
+        .route("/auth/register", post(crate::auth::register))
+        .route("/auth/login", post(crate::auth::login))
+        .route("/auth/logout", post(crate::auth::logout))
+        .route("/api/me", get(crate::auth::me))
+        .route("/api/species", get(species_list_handler))
         .fallback_service(static_service)
         .with_state(state)
+}
+
+/// GET /api/species -> [{dex, index, name}] (dex = position+1; index = internal Gen-1 byte).
+/// The slot machine keys sprites by national dex; the engine speaks internal index.
+async fn species_list_handler() -> Json<Vec<serde_json::Value>> {
+    Json(
+        crate::battle::SPECIES
+            .iter()
+            .enumerate()
+            .map(|(i, s)| serde_json::json!({"dex": i + 1, "index": s.species, "name": s.name}))
+            .collect(),
+    )
 }
 
 async fn offer_handler(

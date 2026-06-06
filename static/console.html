@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RETRO·VISION — Game Boy over WebRTC</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --w: min(90vw, 940px);   /* TV screen width; height is 4:3 */
+      --accent: #58e08a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 22px; padding: 28px 16px;
+      color: #d7d7e2;
+      font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      /* dark room with a warm glow behind the set */
+      background:
+        radial-gradient(120% 90% at 50% 18%, #1a1622 0%, #0c0b12 45%, #050509 100%),
+        #050509;
+    }
+
+    /* ---------------- the television ---------------- */
+    .tv { width: var(--w); display: flex; flex-direction: column; align-items: center; }
+
+    .cabinet {
+      width: 100%;
+      padding: 26px 26px 18px;
+      border-radius: 26px;
+      background:
+        linear-gradient(180deg, #3a3a42 0%, #26262d 9%, #1c1c22 70%, #141418 100%);
+      box-shadow:
+        inset 0 2px 0 rgba(255,255,255,.10),
+        inset 0 -8px 22px rgba(0,0,0,.6),
+        0 40px 70px -25px rgba(0,0,0,.85),
+        0 0 0 1px #000;
+      position: relative;
+    }
+    /* subtle plastic speckle */
+    .cabinet::before {
+      content: ""; position: absolute; inset: 0; border-radius: 26px; pointer-events: none;
+      background-image: radial-gradient(rgba(255,255,255,.025) 1px, transparent 1px);
+      background-size: 4px 4px; opacity: .5;
+    }
+
+    .screen-wrap {
+      border-radius: 18px;
+      padding: 14px;
+      background: linear-gradient(180deg, #0a0a0d, #050507);
+      box-shadow:
+        inset 0 0 0 2px #2c2c34,
+        inset 0 6px 16px rgba(0,0,0,.9),
+        inset 0 -2px 6px rgba(255,255,255,.04);
+    }
+
+    .screen {
+      position: relative;
+      width: 100%; aspect-ratio: 4 / 3;
+      border-radius: 16px / 22px;            /* slight CRT bulge */
+      overflow: hidden;
+      background: #04040a;
+      box-shadow:
+        inset 0 0 60px 12px rgba(0,0,0,.9),  /* corner darkening (tube vignette) */
+        inset 0 0 0 2px rgba(0,0,0,.8),
+        0 0 24px rgba(88,224,138,.10);        /* faint screen glow */
+    }
+
+    /* the actual game stream */
+    #video {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: fill;                       /* stretch 640x240 -> 4:3 (N64 display) */
+      background: transparent;                /* show standby behind when not playing */
+      transform: scale(1.015);                /* fake the tube curvature: bow past edges */
+      filter: saturate(1.22) contrast(1.07) brightness(1.05);
+      z-index: 2;
+    }
+
+    /* standby card (visible until a stream is playing) */
+    .standby {
+      position: absolute; inset: 0; z-index: 1;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; text-align: center; color: #4a5a52;
+      letter-spacing: 3px; font-size: 13px;
+      text-shadow: 0 0 8px rgba(88,224,138,.25);
+      transition: opacity .35s ease;
+    }
+    .standby b { color: var(--accent); font-size: 22px; letter-spacing: 6px; }
+    .tv.on .standby { opacity: 0; }
+
+    /* CRT effect layers (never block clicks) */
+    .fx { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+    .scanlines {
+      background: repeating-linear-gradient(
+        to bottom, rgba(0,0,0,.20) 0 1px, rgba(0,0,0,0) 1px 3px);
+      mix-blend-mode: multiply; opacity: .8;
+      animation: flicker 5.5s steps(60) infinite;
+    }
+    .mask {
+      background: repeating-linear-gradient(
+        to right,
+        rgba(255,0,0,.05) 0 1px, rgba(0,255,0,.05) 1px 2px, rgba(0,0,255,.05) 2px 3px);
+      mix-blend-mode: screen; opacity: .35;
+    }
+    .vignette {
+      background: radial-gradient(120% 120% at 50% 50%,
+        transparent 55%, rgba(0,0,0,.35) 85%, rgba(0,0,0,.7) 100%);
+    }
+    .glare {
+      background: radial-gradient(60% 40% at 26% 16%, rgba(255,255,255,.10), transparent 60%);
+      z-index: 4;
+    }
+    .roll { z-index: 4; opacity: .06; }
+    .roll::before {
+      content: ""; position: absolute; left: 0; right: 0; height: 22%;
+      background: linear-gradient(to bottom, transparent, rgba(255,255,255,.9), transparent);
+      animation: roll 7s linear infinite;
+    }
+    .tv.on .screen { animation: turnon .55s ease-out; }
+
+    @keyframes flicker { 0%,100%{opacity:.8} 48%{opacity:.74} 50%{opacity:.86} 52%{opacity:.78} }
+    @keyframes roll { 0%{top:-25%} 100%{top:125%} }
+    @keyframes turnon {
+      0%   { filter: brightness(6) saturate(0); transform: scaleY(.004); }
+      45%  { filter: brightness(2); transform: scaleY(1); }
+      100% { filter: none; }
+    }
+
+    /* ---------------- control panel ---------------- */
+    .panel {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 18px; margin-top: 16px; padding: 0 6px;
+    }
+    .brand {
+      font-weight: 800; letter-spacing: 2px; font-size: 15px; color: #c8c8d2;
+      text-shadow: 0 1px 0 rgba(0,0,0,.8);
+    }
+    .brand span { color: var(--accent); }
+    .controls { display: flex; align-items: center; gap: 16px; }
+
+    .power {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: linear-gradient(180deg, #2b2b33, #17171c);
+      color: #e8e8f0; border: 1px solid #000; border-radius: 999px;
+      padding: 10px 20px; font: inherit; font-weight: 700; letter-spacing: 1px; cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 4px 10px rgba(0,0,0,.5);
+      transition: transform .06s, box-shadow .2s, color .2s;
+    }
+    .power:hover { color: var(--accent); box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 0 16px rgba(88,224,138,.35); }
+    .power:active { transform: translateY(1px); }
+    .power:disabled { color: #6a6a78; cursor: default; box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+
+    .readout { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; color: #9a9aab; }
+    #status::before {
+      content: ""; width: 10px; height: 10px; border-radius: 50%;
+      display: inline-block; margin-right: 7px; vertical-align: -1px;
+      background: #c9913f; box-shadow: 0 0 8px #c9913f; transition: all .2s;
+    }
+    #status.ok::before { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+    #status.err::before { background: #f1879b; box-shadow: 0 0 10px #f1879b; }
+    #status.ok { color: var(--accent); }
+    #status.err { color: #f1879b; }
+
+    .knobs { display: flex; gap: 12px; }
+    .knobs i {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #4a4a54, #1a1a1f 70%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 2px 4px rgba(0,0,0,.6);
+      position: relative;
+    }
+    .knobs i::after {
+      content: ""; position: absolute; left: 50%; top: 3px; width: 2px; height: 7px;
+      background: #7d7d88; transform: translateX(-50%); border-radius: 2px;
+    }
+
+    /* little stand/feet */
+    .stand { width: 36%; height: 16px; margin-top: -2px;
+      background: linear-gradient(180deg, #15151a, #0a0a0e);
+      border-radius: 0 0 12px 12px;
+      box-shadow: 0 18px 30px -16px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.05); }
+
+    /* caption + controls hint */
+    .caption { font-size: 13px; color: #8a8aa0; text-align: center; }
+    .caption b { color: #cfcfe0; }
+    .hint { color: #7c7c90; font-size: 12px; max-width: var(--w); text-align: center; margin: 0; }
+    kbd {
+      background: #15151b; border: 1px solid #2c2c3a; border-bottom-width: 2px;
+      border-radius: 4px; padding: 1px 6px; color: #cfcfe6; font-size: 11px;
+    }
+
+    /* ---------------- agent battle console ---------------- */
+    .arena {
+      width: var(--w); max-width: 940px; margin-top: 4px;
+      background: linear-gradient(180deg, #14141b, #0e0e14);
+      border: 1px solid #23232e; border-radius: 12px; padding: 14px 16px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .arena-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .arena-title { font-weight: 800; letter-spacing: 1px; color: var(--accent); }
+    .arena button {
+      background: #1d1d26; color: #e8e8f0; border: 1px solid #2c2c3a; border-radius: 7px;
+      padding: 7px 12px; font: inherit; font-weight: 600; cursor: pointer; transition: .12s;
+    }
+    .arena button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .arena button:disabled { opacity: .4; cursor: default; }
+    #arenaMsg { font-size: 12px; color: #9a9aab; margin-left: auto; }
+    .arena select, .arena input {
+      background: #0b0b11; color: #e8e8f0; border: 1px solid #2c2c3a;
+      border-radius: 6px; padding: 5px 8px; font: inherit;
+    }
+    .arena-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0 10px; }
+    .mon { background: #0b0b11; border: 1px solid #20202b; border-radius: 9px; padding: 10px 12px; }
+    .mon-name { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+    .mon-name.enemy { color: #f1879b; }
+    .mon-name.you { color: #7fd4ff; }
+    .hpwrap { height: 12px; background: #060609; border-radius: 6px; overflow: hidden; border: 1px solid #20202b; }
+    .hpbar { height: 100%; width: 100%; background: var(--accent); transition: width .25s, background .25s; }
+    .hpbar.mid { background: #d9c04a; } .hpbar.low { background: #e06262; }
+    .mon-sub { font-size: 12px; color: #9a9aab; margin-top: 6px; }
+    .duel { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .side-h { font-size: 11px; font-weight: 700; margin: 0 0 6px; letter-spacing: .5px; }
+    .side-h.you { color: #7fd4ff; } .side-h.enemy { color: #f1879b; }
+    #botMode { color: var(--accent); }
+    .moves { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .moves .mv, .moves .bmv { text-align: left; }
+    .moves .mv b, .moves .bmv b { color: #e8e8f0; }
+    .moves .mv span { color: #8a8aa0; font-weight: 400; font-size: 11px; }
+    .bmv.active { border-color: #f1879b !important; color: #f1879b; box-shadow: 0 0 10px rgba(241,135,155,.4); }
+    #btnRun { color: #f1879b; margin-top: 8px; }
+    #btnAI { margin-top: 8px; color: #9a9aab; }
+    .arena-state {
+      margin-top: 10px; font-size: 12px; color: #8a8aa0;
+      font-variant-numeric: tabular-nums; border-top: 1px solid #20202b; padding-top: 8px;
+    }
+    .arena-state .k { color: var(--accent); }
+    .arena-note { font-size: 11px; color: #6c6c80; margin: 8px 0 0; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .scanlines, .roll::before, .tv.on .screen { animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="tv">
+    <div class="cabinet">
+      <div class="screen-wrap">
+        <div class="screen">
+          <video id="video" autoplay playsinline></video>
+          <div class="standby"><b>RETRO·VISION</b><span>NO SIGNAL — press POWER</span></div>
+          <div class="fx mask"></div>
+          <div class="fx scanlines"></div>
+          <div class="fx vignette"></div>
+          <div class="fx glare"></div>
+          <div class="fx roll"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="brand">RETRO·VISION <span>GB</span></div>
+        <div class="controls">
+          <button id="connect" class="power">⏻ <span>POWER</span></button>
+          <span class="readout"><span id="status">standby</span></span>
+        </div>
+        <div class="knobs"><i></i><i></i></div>
+      </div>
+    </div>
+    <div class="stand"></div>
+  </div>
+
+  <p class="caption"><b>Pokémon Red Color</b> · emulación 100% en el servidor, streaming por WebRTC</p>
+  <p class="hint">
+    <b>D-pad</b> <kbd>←↑↓→</kbd> · <b>A</b> <kbd>X</kbd> · <b>B</b> <kbd>Z</kbd> ·
+    <b>Start</b> <kbd>Enter</kbd> · <b>Select</b> <kbd>⇧</kbd>/<kbd>⌫</kbd>
+  </p>
+
+  <!-- AI battle console: load a battle and act as the agent (Pokémon Red) -->
+  <div class="arena" id="arena">
+    <div class="arena-bar">
+      <span class="arena-title">⚔ AGENT BATTLE CONSOLE</span>
+      <button id="btnLoad">Load Battle</button>
+      <button id="btnSave">Save State</button>
+      <button id="btnAdvance">Advance ▶A</button>
+      <span id="arenaMsg"></span>
+    </div>
+    <div class="arena-bar" style="margin-top:10px">
+      <span class="arena-title" style="font-size:12px">MATCHUP</span>
+      YOU <select id="selPlayer"></select>
+      <input id="selPlayerName" placeholder="name" maxlength="10" style="width:84px" />
+      vs <select id="selEnemy"></select>
+      <input id="selEnemyName" placeholder="name" maxlength="10" style="width:84px" />
+      Lv <input id="selLevel" type="number" min="1" max="100" value="50" style="width:48px" />
+      <button id="btnMatchup">Start Matchup</button>
+    </div>
+    <div class="arena-grid">
+      <div class="mon">
+        <div class="mon-name enemy" id="enemyName">ENEMY —</div>
+        <div class="hpwrap"><div class="hpbar" id="enemyHp"></div></div>
+        <div class="mon-sub" id="enemySub">—</div>
+      </div>
+      <div class="mon">
+        <div class="mon-name you" id="playerName">YOU —</div>
+        <div class="hpwrap"><div class="hpbar" id="playerHp"></div></div>
+        <div class="mon-sub" id="playerSub">—</div>
+      </div>
+    </div>
+    <div class="duel">
+      <div class="side">
+        <div class="side-h you">◀ YOU — your move</div>
+        <div class="moves" id="movesYou">
+          <button class="mv" data-slot="0" disabled>—</button>
+          <button class="mv" data-slot="1" disabled>—</button>
+          <button class="mv" data-slot="2" disabled>—</button>
+          <button class="mv" data-slot="3" disabled>—</button>
+        </div>
+        <button id="btnRun" disabled>Run</button>
+      </div>
+      <div class="side">
+        <div class="side-h enemy">BOT — you pick its move ▶ · <span id="botMode">AI</span></div>
+        <div class="moves" id="movesBot">
+          <button class="bmv" data-slot="0" disabled>—</button>
+          <button class="bmv" data-slot="1" disabled>—</button>
+          <button class="bmv" data-slot="2" disabled>—</button>
+          <button class="bmv" data-slot="3" disabled>—</button>
+        </div>
+        <button id="btnAI">↺ Let AI decide</button>
+      </div>
+    </div>
+    <div class="arena-state" id="arenaState">battle: <span class="k">—</span></div>
+    <p class="arena-note">
+      Arranca el server con <kbd>Pokemon Red.gb</kbd> para el savestate incluido
+      (<code>cargo run --release -- "Pokemon Red.gb"</code>), pulsa <b>POWER</b> arriba y luego
+      <b>Load Battle</b>. O juega hasta el menú FIGHT y pulsa <b>Save State</b> para capturar el tuyo.
+    </p>
+  </div>
+
+  <script>
+    // Physical-key (e.code) -> { player, wire button }. Game Boy has no analog stick:
+    // the D-pad uses the DIGITAL Up/Down/Left/Right names (server maps to ID_UP..ID_RIGHT),
+    // NOT the Stick* names. A/B/Start/Select are digital too.
+    const KEYMAP = {
+      // D-pad on the arrows (digital)
+      ArrowUp:    { p: 1, b: "Up" },
+      ArrowDown:  { p: 1, b: "Down" },
+      ArrowLeft:  { p: 1, b: "Left" },
+      ArrowRight: { p: 1, b: "Right" },
+      // face buttons + start/select
+      KeyX:       { p: 1, b: "A" },
+      KeyZ:       { p: 1, b: "B" },
+      Enter:      { p: 1, b: "Start" },
+      ShiftRight: { p: 1, b: "Select" },
+      Backspace:  { p: 1, b: "Select" },
+    };
+
+    const statusEl = document.getElementById("status");
+    const video = document.getElementById("video");
+    const connectBtn = document.getElementById("connect");
+    let pc, inputChannel;
+
+    function setStatus(text, cls) {
+      statusEl.textContent = text;
+      statusEl.className = cls || "";
+    }
+
+    connectBtn.onclick = connect;
+
+    async function connect() {
+      connectBtn.disabled = true;
+      setStatus("connecting…");
+      // Empty iceServers: localhost host candidates only -> instant, no network.
+      pc = new RTCPeerConnection({ iceServers: [] });
+      window.pc = pc; // debug/testing hook (getStats)
+
+      // We only receive media; recvonly transceivers give the server m-lines to answer.
+      pc.addTransceiver("video", { direction: "recvonly" });
+      pc.addTransceiver("audio", { direction: "recvonly" });
+
+      const remote = new MediaStream();
+      video.srcObject = remote;
+      pc.ontrack = (e) => remote.addTrack(e.track);
+
+      pc.oniceconnectionstatechange = () => {
+        const s = pc.iceConnectionState;
+        if (s === "connected" || s === "completed") setStatus("connected · playing", "ok");
+        else if (s === "failed" || s === "disconnected") setStatus("ice: " + s, "err");
+        else setStatus("ice: " + s);
+      };
+
+      // Browser creates the input channel; server reacts via on_data_channel.
+      inputChannel = pc.createDataChannel("input", { ordered: true });
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await waitIceGatheringComplete(pc); // non-trickle: POST a complete offer
+
+      try {
+        const resp = await fetch("/offer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type }),
+        });
+        if (!resp.ok) throw new Error("server " + resp.status + ": " + (await resp.text()));
+        const answer = await resp.json(); // { sdp, type:"answer" }
+        await pc.setRemoteDescription(answer);
+        video.focus();
+      } catch (err) {
+        setStatus("error: " + err.message, "err");
+        connectBtn.disabled = false;
+      }
+    }
+
+    function waitIceGatheringComplete(pc) {
+      if (pc.iceGatheringState === "complete") return Promise.resolve();
+      return new Promise((resolve) => {
+        const check = () => {
+          if (pc.iceGatheringState === "complete") {
+            pc.removeEventListener("icegatheringstatechange", check);
+            resolve();
+          }
+        };
+        pc.addEventListener("icegatheringstatechange", check);
+        // Safety timeout in case the "complete" event is missed.
+        setTimeout(resolve, 1500);
+      });
+    }
+
+    // Capture keys; de-dupe key-repeat with a Set; send {type, button} as JSON.
+    const pressed = new Set();
+    function sendInput(kind, button, player) {
+      if (inputChannel && inputChannel.readyState === "open") {
+        inputChannel.send(JSON.stringify({ type: kind, button, player }));
+      }
+    }
+    window.addEventListener("keydown", (e) => {
+      const m = KEYMAP[e.code];
+      if (!m) return;
+      e.preventDefault();
+      if (pressed.has(e.code)) return;
+      pressed.add(e.code);
+      sendInput("down", m.b, m.p);
+    });
+    window.addEventListener("keyup", (e) => {
+      const m = KEYMAP[e.code];
+      if (!m) return;
+      e.preventDefault();
+      pressed.delete(e.code);
+      sendInput("up", m.b, m.p);
+    });
+
+    // --- CRT "power on" flair (additive; does not touch the logic above) ---
+    const tv = document.querySelector(".tv");
+    video.addEventListener("playing", () => tv.classList.add("on"));
+    video.addEventListener("emptied", () => tv.classList.remove("on"));
+  </script>
+
+  <script>
+  // ===== AI battle console (Pokémon Red) — drives the same-origin /battle/* HTTP API =====
+  // Complete Gen-1 move table (ids 1..165).
+  const MOVE_NAMES = {
+    1:"Pound",2:"Karate Chop",3:"DoubleSlap",4:"Comet Punch",5:"Mega Punch",6:"Pay Day",
+    7:"Fire Punch",8:"Ice Punch",9:"ThunderPunch",10:"Scratch",11:"ViceGrip",12:"Guillotine",
+    13:"Razor Wind",14:"Swords Dance",15:"Cut",16:"Gust",17:"Wing Attack",18:"Whirlwind",
+    19:"Fly",20:"Bind",21:"Slam",22:"Vine Whip",23:"Stomp",24:"Double Kick",25:"Mega Kick",
+    26:"Jump Kick",27:"Rolling Kick",28:"Sand-Attack",29:"Headbutt",30:"Horn Attack",
+    31:"Fury Attack",32:"Horn Drill",33:"Tackle",34:"Body Slam",35:"Wrap",36:"Take Down",
+    37:"Thrash",38:"Double-Edge",39:"Tail Whip",40:"Poison Sting",41:"Twineedle",42:"Pin Missile",
+    43:"Leer",44:"Bite",45:"Growl",46:"Roar",47:"Sing",48:"Supersonic",49:"SonicBoom",
+    50:"Disable",51:"Acid",52:"Ember",53:"Flamethrower",54:"Mist",55:"Water Gun",56:"Hydro Pump",
+    57:"Surf",58:"Ice Beam",59:"Blizzard",60:"Psybeam",61:"BubbleBeam",62:"Aurora Beam",
+    63:"Hyper Beam",64:"Peck",65:"Drill Peck",66:"Submission",67:"Low Kick",68:"Counter",
+    69:"Seismic Toss",70:"Strength",71:"Absorb",72:"Mega Drain",73:"Leech Seed",74:"Growth",
+    75:"Razor Leaf",76:"SolarBeam",77:"PoisonPowder",78:"Stun Spore",79:"Sleep Powder",
+    80:"Petal Dance",81:"String Shot",82:"Dragon Rage",83:"Fire Spin",84:"ThunderShock",
+    85:"Thunderbolt",86:"Thunder Wave",87:"Thunder",88:"Rock Throw",89:"Earthquake",90:"Fissure",
+    91:"Dig",92:"Toxic",93:"Confusion",94:"Psychic",95:"Hypnosis",96:"Meditate",97:"Agility",
+    98:"Quick Attack",99:"Rage",100:"Teleport",101:"Night Shade",102:"Mimic",103:"Screech",
+    104:"Double Team",105:"Recover",106:"Harden",107:"Minimize",108:"SmokeScreen",109:"Confuse Ray",
+    110:"Withdraw",111:"Defense Curl",112:"Barrier",113:"Light Screen",114:"Haze",115:"Reflect",
+    116:"Focus Energy",117:"Bide",118:"Metronome",119:"Mirror Move",120:"Selfdestruct",
+    121:"Egg Bomb",122:"Lick",123:"Smog",124:"Sludge",125:"Bone Club",126:"Fire Blast",
+    127:"Waterfall",128:"Clamp",129:"Swift",130:"Skull Bash",131:"Spike Cannon",132:"Constrict",
+    133:"Amnesia",134:"Kinesis",135:"Softboiled",136:"Hi Jump Kick",137:"Glare",138:"Dream Eater",
+    139:"Poison Gas",140:"Barrage",141:"Leech Life",142:"Lovely Kiss",143:"Sky Attack",
+    144:"Transform",145:"Bubble",146:"Dizzy Punch",147:"Spore",148:"Flash",149:"Psywave",
+    150:"Splash",151:"Acid Armor",152:"Crabhammer",153:"Explosion",154:"Fury Swipes",
+    155:"Bonemerang",156:"Rest",157:"Rock Slide",158:"Hyper Fang",159:"Sharpen",160:"Conversion",
+    161:"Tri Attack",162:"Super Fang",163:"Slash",164:"Substitute",165:"Struggle",
+  };
+  const SPECIES = { 153:"Bulbasaur", 176:"Charmander", 177:"Squirtle" };
+  const moveName = (id) => (id === 0 ? "—" : (MOVE_NAMES[id] || "#" + id));
+  const speciesName = (id) => SPECIES[id] || "#" + id;
+
+  const $ = (id) => document.getElementById(id);
+  const arenaMsg = $("arenaMsg");
+  const msg = (t) => { arenaMsg.textContent = t; };
+  const api = async (path, opts) => { try { return await fetch(path, opts); } catch (e) { return null; } };
+
+  $("btnLoad").onclick = async () => {
+    msg("loading…");
+    const r = await api("/battle/load", { method: "POST" });
+    msg(!r ? "no server" : r.ok ? "battle loaded ✓"
+        : r.status === 404 ? "no states/battle.state — Save State first"
+        : "load failed (" + r.status + ") — run server with Pokemon Red.gb");
+  };
+  $("btnSave").onclick = async () => {
+    msg("saving…");
+    const r = await api("/battle/save", { method: "POST" });
+    msg(r && r.ok ? "saved → states/battle.state ✓" : "save failed");
+  };
+  $("btnAdvance").onclick = () => act({ type: "buttons", presses: ["A"] }, "advance ▶A");
+  $("btnRun").onclick = () => act({ type: "run" }, "run");
+  document.querySelectorAll("#movesYou .mv").forEach((b) => {
+    b.onclick = () => act({ type: "move", slot: +b.dataset.slot }, "move " + (+b.dataset.slot + 1));
+  });
+  // BOT side — YOU pick the opponent's move (forces it every turn until "Let AI decide").
+  let enemyForce = 255;
+  document.querySelectorAll("#movesBot .bmv").forEach((b) => {
+    b.onclick = async () => {
+      enemyForce = +b.dataset.slot;
+      $("botMode").textContent = "move " + (enemyForce + 1);
+      await api("/battle/enemy", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slot: enemyForce }),
+      });
+      msg("bot forced → move " + (enemyForce + 1));
+    };
+  });
+  $("btnAI").onclick = async () => {
+    enemyForce = 255;
+    $("botMode").textContent = "AI";
+    await api("/battle/enemy", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ slot: 255 }),
+    });
+    msg("bot → AI decides");
+  };
+  async function act(body, label) {
+    msg(label + "…");
+    const r = await api("/battle/action", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    msg(r && r.status === 202 ? label + " sent ✓" : "action failed");
+  }
+
+  const hpClass = (f) => (f > 0.5 ? "" : f > 0.2 ? "mid" : "low");
+  function setMoves(d) {
+    const ready = d && d.in_battle !== 0;
+    document.querySelectorAll("#movesYou .mv").forEach((b, i) => {
+      const id = d ? d.player.moves[i] : 0;
+      const pp = d ? d.player.pp[i] & 0x3f : 0;
+      b.innerHTML = id ? "<b>" + moveName(id) + "</b> <span>PP " + pp + "</span>" : "—";
+      b.disabled = !(ready && id);
+    });
+    document.querySelectorAll("#movesBot .bmv").forEach((b, i) => {
+      const id = d ? d.enemy.moves[i] : 0;
+      b.innerHTML = id ? "<b>" + moveName(id) + "</b>" : "—";
+      b.disabled = !(ready && id);
+      b.classList.toggle("active", i === enemyForce);
+    });
+    $("btnRun").disabled = !ready;
+  }
+  async function refresh() {
+    const r = await api("/battle/state");
+    if (!r || !r.ok) {
+      $("arenaState").innerHTML =
+        'battle: <span class="k">' + (r ? "idle — press Load Battle" : "server off") + "</span>";
+      setMoves(null);
+      return;
+    }
+    const d = await r.json();
+    const e = d.enemy, p = d.player;
+    $("enemyName").textContent = "ENEMY  " + speciesName(e.species) + (e.level ? " L" + e.level : "");
+    const ef = e.max_hp ? Math.max(0, Math.min(1, e.hp / e.max_hp)) : 0;
+    $("enemyHp").style.width = ef * 100 + "%";
+    $("enemyHp").className = "hpbar " + hpClass(ef);
+    $("enemySub").textContent = "HP " + e.hp + "/" + e.max_hp;
+    $("playerName").textContent = "YOU  " + speciesName(p.species) + (p.level ? " L" + p.level : "");
+    const pf = p.max_hp ? Math.max(0, Math.min(1, p.hp / p.max_hp)) : 0;
+    $("playerHp").style.width = pf * 100 + "%";
+    $("playerHp").className = "hpbar " + hpClass(pf);
+    $("playerSub").textContent = "HP " + p.hp + "/" + p.max_hp;
+    setMoves(d);
+    const inb = d.in_battle
+      ? "yes (" + (d.in_battle === 2 ? "trainer" : d.in_battle === 1 ? "wild" : d.in_battle) + ")"
+      : "no";
+    $("arenaState").innerHTML =
+      'in_battle: <span class="k">' + inb + '</span> · turn: <span class="k">' + d.turns_in_battle +
+      '</span> · menu: <span class="k">' + d.menu + '</span> · your move: <span class="k">' +
+      moveName(d.player_selected_move) + "</span>";
+  }
+  // Populate species dropdowns from the server table, then wire "Start Matchup".
+  async function loadSpecies() {
+    const r = await api("/battle/species");
+    if (!r || !r.ok) return;
+    const list = await r.json(); // [[index,"NAME"], ...]
+    const opts = list.map(([idx, name]) => '<option value="' + idx + '">' + name + "</option>").join("");
+    $("selPlayer").innerHTML = opts;
+    $("selEnemy").innerHTML = opts;
+    $("selPlayer").value = "74"; // Articuno
+    $("selEnemy").value = "75";  // Zapdos
+    list.forEach(([idx, name]) => { SPECIES[idx] = name.charAt(0) + name.slice(1).toLowerCase(); });
+  }
+  $("btnMatchup").onclick = async () => {
+    const player = +$("selPlayer").value;
+    const enemy = +$("selEnemy").value;
+    const level = Math.max(1, Math.min(100, +$("selLevel").value || 50));
+    const player_name = $("selPlayerName").value.trim();
+    const enemy_name = $("selEnemyName").value.trim();
+    msg("starting matchup…");
+    const r = await api("/battle/setup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ player, enemy, level, player_name, enemy_name }),
+    });
+    if (!r) msg("no server");
+    else if (r.ok) msg("matchup live ✓");
+    else msg("setup failed (" + r.status + "): " + (await r.text()));
+  };
+  loadSpecies();
+
+  setInterval(refresh, 600);
+  refresh();
+  </script>
+</body>
+</html>

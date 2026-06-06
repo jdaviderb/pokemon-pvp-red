@@ -7,16 +7,22 @@
 //! Args: [1] ROM path (.z64), [2] core dylib path. Both optional.
 
 mod audio;
+mod auth;
 mod battle;
+mod db;
+mod entities;
+mod migrations;
 mod n64;
 mod pipeline;
-mod species_data;
+mod rooms;
 mod signaling;
+mod species_data;
 mod video;
 mod webrtc; // our module; refer to the crate as `::webrtc`
 
 use std::net::SocketAddr;
 
+use axum_extra::extract::cookie::Key;
 use signaling::{router, AppState};
 
 // Default to the GBC color romhack so `cargo run` shows color out of the box. The original
@@ -45,7 +51,18 @@ async fn main() -> anyhow::Result<()> {
     // Build the shared WebRTC API once.
     let api = crate::webrtc::build_api()?;
 
-    let state = AppState { api, inner };
+    // DB: create-if-missing (sqlite) + run migrations; swap to Postgres via DATABASE_URL.
+    let database = db::connect_and_migrate().await?;
+    rooms::recover_abandoned(&database).await?;
+
+    // Session cookie key. Set COOKIE_SECRET (>=64 bytes) in prod for stable sessions across
+    // restarts; otherwise a fresh key is generated each boot (dev).
+    let cookie_key = match std::env::var("COOKIE_SECRET") {
+        Ok(s) if s.len() >= 64 => Key::from(s.as_bytes()),
+        _ => Key::generate(),
+    };
+
+    let state = AppState { api, inner, db: database, cookie_key };
     let app = router(state);
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     let listener = tokio::net::TcpListener::bind(addr).await?;

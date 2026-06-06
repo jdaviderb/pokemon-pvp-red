@@ -28,3 +28,7 @@ pokered_color/
 # Savestates (game-derived, ROM-specific; capture via /battle/save)
 states/
 pokemon-memory.md
+
+# sqlite dev database
+data.db
+data.db-*
