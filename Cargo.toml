@@ -1,0 +1,41 @@
+[package]
+name = "nes-web"
+version = "0.1.0"
+edition = "2021"
+# Pinned to the 1.92 toolchain (see rust-toolchain.toml) which webrtc 0.17.x requires.
+rust-version = "1.92"
+
+[dependencies]
+# --- NES emulation (pure Rust, no C deps) ---
+tetanes-core = "0.14.1"
+
+# --- async runtime (shared by axum + webrtc-rs) ---
+tokio = { version = "1", features = ["full"] }
+
+# --- HTTP / signaling server ---
+axum       = "0.8"
+tower-http = { version = "0.6", features = ["fs"] }
+
+# --- WebRTC (server side) ---
+webrtc = "0.17.1"
+
+# --- video encoding (VP8) -> binds SYSTEM libvpx via pkg-config ---
+# `ffi-generate` is MANDATORY: env-libvpx-sys ships pre-generated bindings only up to
+# libvpx 1.12/1.13, but this machine has 1.16.0. This feature runs bindgen at build time.
+vpx-encode = { version = "0.6.2", features = ["ffi-generate"] }
+
+# --- audio encoding (Opus) -> binds SYSTEM libopus via pkg-config ---
+opus = "0.3.1"
+
+# --- shared types / serialization / errors ---
+bytes      = "1"
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow     = "1"
+
+# --- logging ---
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+opt-level = 3

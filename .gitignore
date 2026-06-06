@@ -1,0 +1,9 @@
+# Rust build artifacts
+/target
+
+# macOS
+.DS_Store
+
+# Editor
+*.rs.bk
+*.swp

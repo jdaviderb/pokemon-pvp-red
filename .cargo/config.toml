@@ -1,0 +1,11 @@
+# Let plain `cargo build` / `cargo run` find the homebrew media libs so the
+# vpx-encode (libvpx) and opus (libopus) sys-crates link without exporting env by hand.
+[env]
+PKG_CONFIG_PATH = "/opt/homebrew/lib/pkgconfig"
+LIBRARY_PATH    = "/opt/homebrew/lib"
+
+# Prefer dependency versions whose MSRV is <= our package rust-version (1.86), so
+# transitive crates that bumped to rustc 1.88 (home, time, ...) fall back to a
+# compatible older release instead of breaking the build.
+[resolver]
+incompatible-rust-versions = "fallback"

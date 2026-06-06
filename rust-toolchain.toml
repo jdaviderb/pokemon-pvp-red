@@ -1,0 +1,5 @@
+# webrtc 0.17.x (webrtc-util) uses `is_multiple_of` (stable since rustc 1.87) and
+# several transitive deps (home, time) need 1.88+. Pin this project to the already
+# installed 1.92 toolchain; the global default (stable) is left untouched.
+[toolchain]
+channel = "1.92"

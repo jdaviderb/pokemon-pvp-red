@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NES over WebRTC — server-side emulation</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      background: #0b0b10; color: #e6e6ef;
+      font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: .5px; }
+    #video {
+      width: 512px; height: 480px; background: #000;
+      image-rendering: pixelated; border: 1px solid #23232e; border-radius: 6px;
+    }
+    .row { display: flex; gap: 10px; align-items: center; }
+    button {
+      background: #2d6cdf; color: #fff; border: 0; border-radius: 6px;
+      padding: 8px 18px; font: inherit; font-weight: 600; cursor: pointer;
+    }
+    button:disabled { background: #33384a; cursor: default; }
+    #status { padding: 3px 10px; border-radius: 999px; background: #1b1b25; }
+    #status.ok { background: #143d22; color: #7ee2a0; }
+    #status.err { background: #4a1620; color: #f1879b; }
+    .hint { color: #8a8aa0; font-size: 12px; max-width: 512px; text-align: center; }
+    kbd {
+      background: #1b1b25; border: 1px solid #2c2c3a; border-bottom-width: 2px;
+      border-radius: 4px; padding: 1px 6px; color: #cfcfe6;
+    }
+  </style>
+</head>
+<body>
+  <h1>NES over WebRTC · emulación en el servidor</h1>
+  <video id="video" autoplay playsinline></video>
+  <div class="row">
+    <button id="connect">Connect</button>
+    <span id="status">idle</span>
+  </div>
+  <p class="hint">
+    Controles: <kbd>←↑↓→</kbd> D-pad · <kbd>Z</kbd> B · <kbd>X</kbd> A ·
+    <kbd>Enter</kbd> Start · <kbd>Shift</kbd> Select.
+    <br />El audio/vídeo se generan en el servidor; este navegador solo recibe el stream.
+  </p>
+
+  <script>
+    // Physical-key -> NES button. Uses e.code so layout doesn't matter.
+    const KEYMAP = {
+      ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
+      KeyZ: "B", KeyX: "A", Enter: "Start", ShiftLeft: "Select", ShiftRight: "Select",
+    };
+
+    const statusEl = document.getElementById("status");
+    const video = document.getElementById("video");
+    const connectBtn = document.getElementById("connect");
+    let pc, inputChannel;
+
+    function setStatus(text, cls) {
+      statusEl.textContent = text;
+      statusEl.className = cls || "";
+    }
+
+    connectBtn.onclick = connect;
+
+    async function connect() {
+      connectBtn.disabled = true;
+      setStatus("connecting…");
+      // Empty iceServers: localhost host candidates only -> instant, no network.
+      pc = new RTCPeerConnection({ iceServers: [] });
+      window.pc = pc; // debug/testing hook (getStats)
+
+      // We only receive media; recvonly transceivers give the server m-lines to answer.
+      pc.addTransceiver("video", { direction: "recvonly" });
+      pc.addTransceiver("audio", { direction: "recvonly" });
+
+      const remote = new MediaStream();
+      video.srcObject = remote;
+      pc.ontrack = (e) => remote.addTrack(e.track);
+
+      pc.oniceconnectionstatechange = () => {
+        const s = pc.iceConnectionState;
+        if (s === "connected" || s === "completed") setStatus("connected · playing", "ok");
+        else if (s === "failed" || s === "disconnected") setStatus("ice: " + s, "err");
+        else setStatus("ice: " + s);
+      };
+
+      // Browser creates the input channel; server reacts via on_data_channel.
+      inputChannel = pc.createDataChannel("input", { ordered: true });
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await waitIceGatheringComplete(pc); // non-trickle: POST a complete offer
+
+      try {
+        const resp = await fetch("/offer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type }),
+        });
+        if (!resp.ok) throw new Error("server " + resp.status + ": " + (await resp.text()));
+        const answer = await resp.json(); // { sdp, type:"answer" }
+        await pc.setRemoteDescription(answer);
+        video.focus();
+      } catch (err) {
+        setStatus("error: " + err.message, "err");
+        connectBtn.disabled = false;
+      }
+    }
+
+    function waitIceGatheringComplete(pc) {
+      if (pc.iceGatheringState === "complete") return Promise.resolve();
+      return new Promise((resolve) => {
+        const check = () => {
+          if (pc.iceGatheringState === "complete") {
+            pc.removeEventListener("icegatheringstatechange", check);
+            resolve();
+          }
+        };
+        pc.addEventListener("icegatheringstatechange", check);
+        // Safety timeout in case the "complete" event is missed.
+        setTimeout(resolve, 1500);
+      });
+    }
+
+    // Capture keys; de-dupe key-repeat with a Set; send {type, button} as JSON.
+    const pressed = new Set();
+    function sendInput(kind, button) {
+      if (inputChannel && inputChannel.readyState === "open") {
+        inputChannel.send(JSON.stringify({ type: kind, button }));
+      }
+    }
+    window.addEventListener("keydown", (e) => {
+      const btn = KEYMAP[e.code];
+      if (!btn) return;
+      e.preventDefault();
+      if (pressed.has(e.code)) return;
+      pressed.add(e.code);
+      sendInput("down", btn);
+    });
+    window.addEventListener("keyup", (e) => {
+      const btn = KEYMAP[e.code];
+      if (!btn) return;
+      e.preventDefault();
+      pressed.delete(e.code);
+      sendInput("up", btn);
+    });
+  </script>
+</body>
+</html>
