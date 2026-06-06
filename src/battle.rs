@@ -3,7 +3,7 @@
 //! the in-battle menu. All addresses are CPU addresses in 0xC000..0xDFFF; see
 //! docs/pokemon-red-ram-map.md. **Every multi-byte value is BIG-ENDIAN (Gen-1 quirk).**
 
-use crate::n64::{ID_A, ID_DOWN, ID_LEFT, ID_RIGHT, ID_UP};
+use crate::n64::{ID_A, ID_B, ID_DOWN, ID_LEFT, ID_RIGHT, ID_UP};
 
 // ---------- WRAM access helpers (offset = addr - 0xC000) ----------
 #[inline]
@@ -192,10 +192,14 @@ fn tap(b: usize) -> Tap {
 pub fn action_to_taps(a: &AgentAction) -> Vec<Tap> {
     match a {
         AgentAction::Move { slot } => {
-            // A opens FIGHT (the move cursor resets to the top each turn), Down*slot, A confirms.
-            // (No Up-homing: the Gen-1 move list wraps, so a fixed number of Ups can shift the
-            // cursor and cause an off-by-one — the plain form below selects the right move.)
-            let mut v = vec![tap(ID_A)];
+            // Robust from ANY menu state (a stray cursor on ITEM/RUN, or stuck in a sub-menu like
+            // the empty bag showing "CANCEL", would otherwise loop):
+            //   B      -> back out of any open sub-menu to the top battle menu (no-op if already there)
+            //   Left,Up-> home the 2x2 menu cursor to FIGHT (the menu doesn't wrap, so this is safe)
+            //   A      -> open FIGHT (this resets the move-list cursor to slot 0)
+            //   Down*n -> to the requested move; A confirms.
+            // No Up-homing on the move list (it wraps; opening FIGHT already resets it to the top).
+            let mut v = vec![tap(ID_B), tap(ID_LEFT), tap(ID_UP), tap(ID_A)];
             for _ in 0..(*slot).min(3) {
                 v.push(tap(ID_DOWN));
             }
@@ -527,12 +531,11 @@ mod tests {
     }
     #[test]
     fn move_taps_navigate_down() {
-        // slot 2 => A, Down, Down, A
+        // slot 2 => B, Left, Up, A, Down, Down, A  (home to FIGHT, then 2 downs, confirm)
         let taps = action_to_taps(&AgentAction::Move { slot: 2 });
-        assert_eq!(taps.len(), 4);
-        assert_eq!(taps[0].button, ID_A);
-        assert_eq!(taps[1].button, ID_DOWN);
-        assert_eq!(taps[3].button, ID_A);
+        assert_eq!(taps.first().unwrap().button, ID_B); // backs out of any sub-menu first
+        assert_eq!(taps.last().unwrap().button, ID_A); // confirm
+        assert_eq!(taps.iter().filter(|t| t.button == ID_DOWN).count(), 2); // exactly `slot` downs
     }
     #[test]
     fn articuno_lv50_struct() {
