@@ -333,7 +333,13 @@ async fn run_room(game: Arc<GameState>, rid: RoomId) {
     let (p, e, lvl, pn, en) = {
         let rooms = game.rooms.lock().await;
         let r = rooms.get(&rid).unwrap();
-        (r.p1.species, r.p2.species, r.level, r.p1.username.to_uppercase(), r.p2.username.to_uppercase())
+        // Show each mon's SPECIES name in-game ("PIKACHU"), not the player's username.
+        let name_of = |idx: u8| {
+            crate::battle::species_by_index(idx)
+                .map(|s| s.name.to_string())
+                .unwrap_or_default()
+        };
+        (r.p1.species, r.p2.species, r.level, name_of(r.p1.species), name_of(r.p2.species))
     };
     let mut setup_ok = false;
     for attempt in 0..3u32 {

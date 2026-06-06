@@ -39,16 +39,18 @@
     .phase-battle .selview { display:none; }
     .phase-slot   .battleview { display:none; }
     .selview { display:flex; flex-direction:column; gap:10px; max-width:900px; margin:0 auto; width:100%; }
-    .srow { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .srow { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; }
     .ptag { font-size:20px; letter-spacing:2px; padding:2px 4px 8px; border-bottom:2px solid #000000; margin-bottom:6px; }
     .uname { color:#5a563f; margin-left:8px; font-size:16px; }
-    .reelbox { padding:12px 14px; display:grid; grid-template-columns:1fr 116px; gap:10px; align-items:center; }
+    .reelbox { padding:12px 14px; display:grid; grid-template-columns:minmax(0,1fr) 100px; gap:10px; align-items:center; }
+    .rows { min-width:0; overflow:hidden; }
+    .spincol { min-width:0; overflow:hidden; }
     .reel .lbl { color:#5a563f; font-size:16px; letter-spacing:2px; }
     .rows { margin-top:4px; display:flex; flex-direction:column; }
     .rrow { display:flex; align-items:center; gap:7px; padding:1px 6px; color:#5a563f; opacity:.7; font-size:16px; border-radius:3px; white-space:nowrap; }
     .rrow img { width:18px; height:18px; image-rendering:pixelated; filter:grayscale(1) contrast(1.1) brightness(.5); flex:none; }
     .rrow .no { color:#7a755a; width:52px; flex:none; }
-    .rrow > span:last-child { flex:1; overflow:hidden; text-overflow:clip; }
+    .rrow > span:last-child { flex:1; min-width:0; overflow:hidden; text-overflow:clip; }
     .rrow.hot { opacity:1; background:#000000; color:#ffffff; } .rrow.hot .no { color:#d8d8d0; }
     .spincol { text-align:center; }
     .spinner { width:76px; height:76px; margin:0 auto 6px; border-radius:50%;
@@ -60,13 +62,14 @@
     .progress i.on{background:#000000;}
     .spinlbl { color:#5a563f; font-size:15px; margin-top:4px; }
 
-    .lockrow { display:grid; grid-template-columns:1fr 150px 1fr; gap:10px; align-items:stretch; }
-    .lockcard { padding:12px 14px; display:grid; grid-template-columns:108px 1fr; gap:12px; align-content:center; }
+    .lockrow { display:grid; grid-template-columns:minmax(0,1fr) 116px minmax(0,1fr); gap:10px; align-items:stretch; }
+    .lockcard { padding:12px 14px; display:grid; grid-template-columns:84px minmax(0,1fr); gap:10px; align-content:center; min-width:0; }
+    .lockcard > div { min-width:0; overflow:hidden; }
     .bhpn { text-align:right; font-size:18px; margin-top:2px; }
     .lock { grid-column:1/-1; font-size:18px; letter-spacing:2px; color:#5a563f; }
     .locked .lock{ color:#000000; }
-    .sprite { width:108px; height:108px; image-rendering:pixelated; align-self:center; filter:grayscale(1) contrast(1.12) brightness(.5); }
-    .nm { font-size:19px; letter-spacing:0; }
+    .sprite { width:84px; height:84px; image-rendering:pixelated; align-self:center; filter:grayscale(1) contrast(1.12) brightness(.5); }
+    .nm { font-size:17px; letter-spacing:0; white-space:nowrap; overflow:hidden; text-overflow:clip; }
     .lv { color:#5a563f; font-size:18px; }
     .badge { display:inline-block; font-size:15px; padding:1px 10px; border:2px solid #000000; border-radius:5px; margin:4px 0; letter-spacing:1px; color:#000000; }
     .hpline { font-size:16px; display:flex; align-items:center; gap:8px; margin-top:4px; }
