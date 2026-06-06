@@ -77,13 +77,27 @@
     /* ---- BATTLE VIEW ---- */
     .battleview { display:grid; grid-template-rows:auto auto auto; gap:10px; }
     .brow { display:grid; grid-template-columns:230px 1fr 230px; gap:10px; align-items:start; }
-    .sidecard { padding:12px; text-align:center; }
+    .sidecard { padding:12px; text-align:center; transition:box-shadow .2s; }
     .sidecard .nm { font-size:24px; } .sidecard .sprite { width:130px; height:130px; }
+    .youbadge { color:var(--grn); font-size:15px; letter-spacing:1px; }
+    .sidecard.myturn { box-shadow:0 0 0 2px var(--grn), 0 0 26px rgba(90,209,122,.55); animation:turnpulse 1.1s ease-in-out infinite; }
+    .turnflag { display:none; color:var(--grn); font-size:16px; letter-spacing:2px; margin-top:6px; }
+    .sidecard.myturn .turnflag { display:block; animation:turnpulse 1.1s ease-in-out infinite; }
+    @keyframes turnpulse { 50% { opacity:.55; } }
     .pips { display:flex; gap:3px; margin-top:8px; justify-content:center; }
     .pips i { width:14px; height:14px; background:#0b1610; border:1px solid var(--line); }
     .p1 .pips i.on{background:var(--blue);} .p2 .pips i.on{background:var(--red);}
-    .screen { height:min(52vh,440px); background:#000; overflow:hidden; }
-    video { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; background:#9bbc0f; }
+    .screen { position:relative; height:min(52vh,440px); background:#0a140c; overflow:hidden; border-radius:14px;
+      box-shadow: inset 0 0 55px rgba(0,0,0,.8), 0 0 18px rgba(90,209,122,.16); }
+    video { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; background:#0a140c; display:block;
+      filter:saturate(1.05) contrast(1.04); }
+    /* CRT overlays: scanlines + vignette/curvature glow (over the video, click-through) */
+    .screen::before { content:""; position:absolute; inset:0; z-index:2; pointer-events:none;
+      background: repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.24) 2px 3px); }
+    .screen::after { content:""; position:absolute; inset:0; z-index:3; pointer-events:none;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,.62) 100%);
+      box-shadow: inset 0 0 70px rgba(0,0,0,.55); }
+    #unmute { z-index:4; }
     .movebar { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; padding:10px; }
     .mv { text-align:left; font:inherit; font-size:19px; color:#bfe6d0; background:#0a160f; border:2px solid var(--line); border-radius:7px; padding:9px 12px; cursor:default; }
     .mv .ic{margin-right:8px;} .mv small{display:block;color:var(--dim);font-size:15px;letter-spacing:1px;}
@@ -148,13 +162,14 @@
     <!-- ============ BATTLE ============ -->
     <div class="battleview">
       <div class="brow">
-        <div class="box p1box p1 sidecard">
-          <div class="ptag">◖ PLAYER 1 ◗</div>
+        <div class="box p1box p1 sidecard" id="p1card">
+          <div class="ptag">◖ PLAYER 1 ◗ <span class="youbadge">(YOU)</span></div>
           <div class="nm s1 name">—</div>
           <img class="sprite s1 sprite" src="/sprites/1.png" alt="" />
           <div class="lv">Lv.50</div><div class="badge s1 type">—</div>
           <div class="hpline" style="justify-content:center">HP: <span class="hptrack"><span class="hpfill s1 hpfill"></span></span><span class="s1 hpnum"></span></div>
           <div class="pips" id="pips1"></div>
+          <div class="turnflag">▸ YOUR TURN ◂</div>
         </div>
         <div class="box screen" id="screenWrap"><video id="video" autoplay playsinline muted></video><button id="unmute">🔊 SOUND</button></div>
         <div class="box p2box p2 sidecard">
@@ -231,13 +246,22 @@
         if (m.phase === "battle") setView("battle");
         break;
       case "slot_result": startReels(m.you_species, m.opp_species); break;
-      case "your_turn":
+      case "your_turn": {
         myMoves = m.moves || [];
-        if (m.seat === mySeat) { renderMoves(myMoves, true); startTimer(m.deadline_ms); $("turnInfo").textContent = "▸ Choose your move!"; }
-        else { $("turnInfo").textContent = "Opponent is choosing…"; }
+        const mine = (lockedIdx[1] && SP[lockedIdx[1]]) ? SP[lockedIdx[1]].name : "your Pokémon";
+        const opp = (lockedIdx[2] && SP[lockedIdx[2]]) ? SP[lockedIdx[2]].name : "the opponent";
+        if (m.seat === mySeat) {
+          renderMoves(myMoves, true); startTimer(m.deadline_ms);
+          $("turnInfo").textContent = "▸ YOUR TURN — choose " + mine + "'s move!";
+          $("p1card").classList.add("myturn");
+        } else {
+          $("turnInfo").textContent = "Opponent's " + opp + " is choosing…";
+          $("p1card").classList.remove("myturn");
+        }
         break;
+      }
       case "battle_state": onBattle(m); break;
-      case "move_auto": if (m.seat === mySeat) $("turnInfo").textContent = "Time up — random move!"; break;
+      case "move_auto": if (m.seat === mySeat) { $("turnInfo").textContent = "⏱ Time's up — random move chosen!"; $("p1card").classList.remove("myturn"); } break;
       case "winner": resultShown = true; showResult(m.you_won); break;
       case "room_closed": if (!resultShown) bail(m.reason === "battle_ended" ? "MATCH ENDED" : "MATCH COULDN'T START"); break;
     }
@@ -273,13 +297,14 @@
     list.forEach((mv) => { if(!mv.id) return; const b=document.createElement("button"); b.className="mv"; b.dataset.slot=mv.slot;
       b.innerHTML = `<span class="ic">${moveIcon(moveName(mv.id))}</span>${moveName(mv.id)}<small>PP ${mv.pp!==""?mv.pp:""}</small>`;
       if (live) { b.classList.add("live"); b.onclick=()=>{ if(!ws||ws.readyState!==1)return; ws.send(JSON.stringify({type:"commit_move",slot:mv.slot}));
-        renderMoves(myMoves,false); stopTimer(); $("turnInfo").textContent="Locked in — resolving…"; }; }
+        renderMoves(myMoves,false); stopTimer(); $("p1card").classList.remove("myturn"); $("turnInfo").textContent="Locked in — resolving…"; }; }
       else b.disabled = true;
       box.appendChild(b); });
   }
 
   function onBattle(m) {
     setView("battle"); $("turnNo").textContent = "TURN " + (m.turn || 0);
+    $("p1card").classList.remove("myturn");
     hpBar(1, m.you); hpBar(2, m.opp);
     if (m.you.species && SP[m.you.species]) lockCard(1, m.you.species);
     if (m.opp.species && SP[m.opp.species]) lockCard(2, m.opp.species);
