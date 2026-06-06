@@ -4,21 +4,23 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RED STADIUM ENGINE</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
   <style>
+    /* Real Game Boy font extracted from pret/pokered (local, offline, pixel-exact em=8). */
+    @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
     :root { --bg:#04070a; --grn:#5ad17a; --grn-dim:#2c6e44; --red:#e8403f; --wht:#e9efe6; --txt:#9fe0b4;
       --dim:#4f8a66; --line:#1c3a28; --blue:#5aa9ff; --bluedim:#23507e; --reddim:#7a2422;
       --parch:#e9e2c6; --ink:#33301f; --inkdim:#6b6448; }
     * { box-sizing:border-box; }
     body { margin:0; height:100vh; overflow:hidden; background:var(--bg); color:var(--txt);
-      font-family:"VT323", ui-monospace, monospace; font-size:21px; line-height:1.15; padding:9px;
+      font-family:"PokeRed", ui-monospace, "Courier New", monospace; font-size:16px; line-height:1.4; padding:9px;
+      -webkit-font-smoothing:none; font-smooth:never;
       background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.32) 0 1px, transparent 1px 3px);
       display:flex; flex-direction:column; gap:8px; }
     #arena { flex:1; min-height:0; }
-    .px { font-family:"Press Start 2P", monospace; }
-    .box { background:#d6d0b6; color:#171712; border:4px solid #171712; border-radius:12px; position:relative; }
-    .box::after { content:""; position:absolute; inset:5px; border:2px solid #171712; border-radius:7px; pointer-events:none; }
+    .px { font-family:"PokeRed", ui-monospace, monospace; }
+    .box { background:#d6d0b6; color:#171712; position:relative; border:14px solid transparent;
+      border-image:url("/gb-frame.png") 7 fill / 14px / 0 stretch; image-rendering:pixelated; }
+    .box::after { content:none; }
     .pball { display:inline-block; width:20px; height:20px; border-radius:50%; background:linear-gradient(#e8403f 0 47%,#111 47% 53%,#e9efe6 53% 100%); border:2px solid #0a0a0a; position:relative; vertical-align:middle; }
     .pball::after { content:""; position:absolute; inset:0; margin:auto; width:6px; height:6px; background:#e9efe6; border:2px solid #0a0a0a; border-radius:50%; }
 
@@ -75,8 +77,9 @@
 
     /* ---- BATTLE VIEW (classic Game Boy: cream boxes + ornate double border, monochrome) ---- */
     .battleview { display:flex; flex-direction:column; gap:10px; max-width:900px; margin:0 auto; width:100%; height:100%; }
-    .gb { background:#d6d0b6; color:#171712; border:4px solid #171712; border-radius:14px; position:relative; }
-    .gb::after { content:""; position:absolute; inset:5px; border:2px solid #171712; border-radius:9px; pointer-events:none; }
+    .gb { background:#d6d0b6; color:#171712; position:relative; border:14px solid transparent;
+      border-image:url("/gb-frame.png") 7 fill / 14px / 0 stretch; image-rendering:pixelated; }
+    .gb::after { content:none; }
     .screen-box { padding:7px; flex:1 1 auto; min-height:0; }
     .screen { position:relative; height:100%; background:#0a0a08; overflow:hidden; border-radius:8px; }
     video { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; background:#0a0a08; display:block; }

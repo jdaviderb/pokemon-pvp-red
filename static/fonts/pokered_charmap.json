@@ -1,0 +1,412 @@
+{
+  "source": "pret/pokered gfx/font/font.png + constants/charmap.asm",
+  "note": "font.png tile index 0 == charmap byte $80 == 'A'. byte = 0x80 + tile_index.",
+  "units_per_em": 8,
+  "grid": {
+    "cols": 16,
+    "rows": 8,
+    "tile_px": 8
+  },
+  "tiles": {
+    "0": {
+      "byte": "0x80",
+      "char": "A",
+      "codepoint": "U+0041"
+    },
+    "1": {
+      "byte": "0x81",
+      "char": "B",
+      "codepoint": "U+0042"
+    },
+    "2": {
+      "byte": "0x82",
+      "char": "C",
+      "codepoint": "U+0043"
+    },
+    "3": {
+      "byte": "0x83",
+      "char": "D",
+      "codepoint": "U+0044"
+    },
+    "4": {
+      "byte": "0x84",
+      "char": "E",
+      "codepoint": "U+0045"
+    },
+    "5": {
+      "byte": "0x85",
+      "char": "F",
+      "codepoint": "U+0046"
+    },
+    "6": {
+      "byte": "0x86",
+      "char": "G",
+      "codepoint": "U+0047"
+    },
+    "7": {
+      "byte": "0x87",
+      "char": "H",
+      "codepoint": "U+0048"
+    },
+    "8": {
+      "byte": "0x88",
+      "char": "I",
+      "codepoint": "U+0049"
+    },
+    "9": {
+      "byte": "0x89",
+      "char": "J",
+      "codepoint": "U+004A"
+    },
+    "10": {
+      "byte": "0x8A",
+      "char": "K",
+      "codepoint": "U+004B"
+    },
+    "11": {
+      "byte": "0x8B",
+      "char": "L",
+      "codepoint": "U+004C"
+    },
+    "12": {
+      "byte": "0x8C",
+      "char": "M",
+      "codepoint": "U+004D"
+    },
+    "13": {
+      "byte": "0x8D",
+      "char": "N",
+      "codepoint": "U+004E"
+    },
+    "14": {
+      "byte": "0x8E",
+      "char": "O",
+      "codepoint": "U+004F"
+    },
+    "15": {
+      "byte": "0x8F",
+      "char": "P",
+      "codepoint": "U+0050"
+    },
+    "16": {
+      "byte": "0x90",
+      "char": "Q",
+      "codepoint": "U+0051"
+    },
+    "17": {
+      "byte": "0x91",
+      "char": "R",
+      "codepoint": "U+0052"
+    },
+    "18": {
+      "byte": "0x92",
+      "char": "S",
+      "codepoint": "U+0053"
+    },
+    "19": {
+      "byte": "0x93",
+      "char": "T",
+      "codepoint": "U+0054"
+    },
+    "20": {
+      "byte": "0x94",
+      "char": "U",
+      "codepoint": "U+0055"
+    },
+    "21": {
+      "byte": "0x95",
+      "char": "V",
+      "codepoint": "U+0056"
+    },
+    "22": {
+      "byte": "0x96",
+      "char": "W",
+      "codepoint": "U+0057"
+    },
+    "23": {
+      "byte": "0x97",
+      "char": "X",
+      "codepoint": "U+0058"
+    },
+    "24": {
+      "byte": "0x98",
+      "char": "Y",
+      "codepoint": "U+0059"
+    },
+    "25": {
+      "byte": "0x99",
+      "char": "Z",
+      "codepoint": "U+005A"
+    },
+    "26": {
+      "byte": "0x9A",
+      "char": "(",
+      "codepoint": "U+0028"
+    },
+    "27": {
+      "byte": "0x9B",
+      "char": ")",
+      "codepoint": "U+0029"
+    },
+    "28": {
+      "byte": "0x9C",
+      "char": ":",
+      "codepoint": "U+003A"
+    },
+    "29": {
+      "byte": "0x9D",
+      "char": ";",
+      "codepoint": "U+003B"
+    },
+    "30": {
+      "byte": "0x9E",
+      "char": "[",
+      "codepoint": "U+005B"
+    },
+    "31": {
+      "byte": "0x9F",
+      "char": "]",
+      "codepoint": "U+005D"
+    },
+    "32": {
+      "byte": "0xA0",
+      "char": "a",
+      "codepoint": "U+0061"
+    },
+    "33": {
+      "byte": "0xA1",
+      "char": "b",
+      "codepoint": "U+0062"
+    },
+    "34": {
+      "byte": "0xA2",
+      "char": "c",
+      "codepoint": "U+0063"
+    },
+    "35": {
+      "byte": "0xA3",
+      "char": "d",
+      "codepoint": "U+0064"
+    },
+    "36": {
+      "byte": "0xA4",
+      "char": "e",
+      "codepoint": "U+0065"
+    },
+    "37": {
+      "byte": "0xA5",
+      "char": "f",
+      "codepoint": "U+0066"
+    },
+    "38": {
+      "byte": "0xA6",
+      "char": "g",
+      "codepoint": "U+0067"
+    },
+    "39": {
+      "byte": "0xA7",
+      "char": "h",
+      "codepoint": "U+0068"
+    },
+    "40": {
+      "byte": "0xA8",
+      "char": "i",
+      "codepoint": "U+0069"
+    },
+    "41": {
+      "byte": "0xA9",
+      "char": "j",
+      "codepoint": "U+006A"
+    },
+    "42": {
+      "byte": "0xAA",
+      "char": "k",
+      "codepoint": "U+006B"
+    },
+    "43": {
+      "byte": "0xAB",
+      "char": "l",
+      "codepoint": "U+006C"
+    },
+    "44": {
+      "byte": "0xAC",
+      "char": "m",
+      "codepoint": "U+006D"
+    },
+    "45": {
+      "byte": "0xAD",
+      "char": "n",
+      "codepoint": "U+006E"
+    },
+    "46": {
+      "byte": "0xAE",
+      "char": "o",
+      "codepoint": "U+006F"
+    },
+    "47": {
+      "byte": "0xAF",
+      "char": "p",
+      "codepoint": "U+0070"
+    },
+    "48": {
+      "byte": "0xB0",
+      "char": "q",
+      "codepoint": "U+0071"
+    },
+    "49": {
+      "byte": "0xB1",
+      "char": "r",
+      "codepoint": "U+0072"
+    },
+    "50": {
+      "byte": "0xB2",
+      "char": "s",
+      "codepoint": "U+0073"
+    },
+    "51": {
+      "byte": "0xB3",
+      "char": "t",
+      "codepoint": "U+0074"
+    },
+    "52": {
+      "byte": "0xB4",
+      "char": "u",
+      "codepoint": "U+0075"
+    },
+    "53": {
+      "byte": "0xB5",
+      "char": "v",
+      "codepoint": "U+0076"
+    },
+    "54": {
+      "byte": "0xB6",
+      "char": "w",
+      "codepoint": "U+0077"
+    },
+    "55": {
+      "byte": "0xB7",
+      "char": "x",
+      "codepoint": "U+0078"
+    },
+    "56": {
+      "byte": "0xB8",
+      "char": "y",
+      "codepoint": "U+0079"
+    },
+    "57": {
+      "byte": "0xB9",
+      "char": "z",
+      "codepoint": "U+007A"
+    },
+    "58": {
+      "byte": "0xBA",
+      "char": "é",
+      "codepoint": "U+00E9"
+    },
+    "96": {
+      "byte": "0xE0",
+      "char": "'",
+      "codepoint": "U+0027"
+    },
+    "99": {
+      "byte": "0xE3",
+      "char": "-",
+      "codepoint": "U+002D"
+    },
+    "102": {
+      "byte": "0xE6",
+      "char": "?",
+      "codepoint": "U+003F"
+    },
+    "103": {
+      "byte": "0xE7",
+      "char": "!",
+      "codepoint": "U+0021"
+    },
+    "104": {
+      "byte": "0xE8",
+      "char": ".",
+      "codepoint": "U+002E"
+    },
+    "111": {
+      "byte": "0xEF",
+      "char": "♂",
+      "codepoint": "U+2642"
+    },
+    "112": {
+      "byte": "0xF0",
+      "char": "¥",
+      "codepoint": "U+00A5"
+    },
+    "113": {
+      "byte": "0xF1",
+      "char": "×",
+      "codepoint": "U+00D7"
+    },
+    "115": {
+      "byte": "0xF3",
+      "char": "/",
+      "codepoint": "U+002F"
+    },
+    "116": {
+      "byte": "0xF4",
+      "char": ",",
+      "codepoint": "U+002C"
+    },
+    "117": {
+      "byte": "0xF5",
+      "char": "♀",
+      "codepoint": "U+2640"
+    },
+    "118": {
+      "byte": "0xF6",
+      "char": "0",
+      "codepoint": "U+0030"
+    },
+    "119": {
+      "byte": "0xF7",
+      "char": "1",
+      "codepoint": "U+0031"
+    },
+    "120": {
+      "byte": "0xF8",
+      "char": "2",
+      "codepoint": "U+0032"
+    },
+    "121": {
+      "byte": "0xF9",
+      "char": "3",
+      "codepoint": "U+0033"
+    },
+    "122": {
+      "byte": "0xFA",
+      "char": "4",
+      "codepoint": "U+0034"
+    },
+    "123": {
+      "byte": "0xFB",
+      "char": "5",
+      "codepoint": "U+0035"
+    },
+    "124": {
+      "byte": "0xFC",
+      "char": "6",
+      "codepoint": "U+0036"
+    },
+    "125": {
+      "byte": "0xFD",
+      "char": "7",
+      "codepoint": "U+0037"
+    },
+    "126": {
+      "byte": "0xFE",
+      "char": "8",
+      "codepoint": "U+0038"
+    },
+    "127": {
+      "byte": "0xFF",
+      "char": "9",
+      "codepoint": "U+0039"
+    }
+  }
+}

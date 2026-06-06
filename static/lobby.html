@@ -4,26 +4,26 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RED STADIUM ENGINE — Lobby</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
   <style>
+    @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
     :root { --bg:#04070a; --red:#e8403f; --parch:#d6d0b6; --ink:#171712; --inkdim:#5a563f; }
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; background:var(--bg); color:var(--parch);
-      font-family:"VT323", ui-monospace, monospace; font-size:22px;
+      font-family:"PokeRed", ui-monospace, "Courier New", monospace; font-size:16px; -webkit-font-smoothing:none; font-smooth:never;
       background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.32) 0 1px, transparent 1px 3px);
       display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:20px; }
     .balls { display:flex; align-items:center; gap:22px; }
     .pball { width:26px; height:26px; border-radius:50%; background:linear-gradient(var(--red) 0 47%,#111 47% 53%,#e9efe6 53% 100%); border:2px solid #0a0a0a; position:relative; }
     .pball::after { content:""; position:absolute; inset:0; margin:auto; width:7px; height:7px; background:#e9efe6; border:2px solid #0a0a0a; border-radius:50%; }
-    .logo { font-family:"Press Start 2P", monospace; color:var(--red); font-size:30px; letter-spacing:3px; text-shadow:2px 2px 0 #5a0f0e; }
+    .logo { font-family:"PokeRed", monospace; color:var(--red); font-size:32px; letter-spacing:2px; text-shadow:2px 2px 0 #5a0f0e; image-rendering:pixelated; }
     .sub { color:#9a9a86; letter-spacing:4px; font-size:15px; margin-top:2px; }
-    /* Game Boy cream box */
-    .gb { background:var(--parch); color:var(--ink); border:4px solid var(--ink); border-radius:12px; position:relative; }
-    .gb::after { content:""; position:absolute; inset:5px; border:2px solid var(--ink); border-radius:7px; pointer-events:none; }
+    /* Game Boy cream box (real pokered frame) */
+    .gb { background:var(--parch); color:var(--ink); position:relative; border:14px solid transparent;
+      border-image:url("/gb-frame.png") 7 fill / 14px / 0 stretch; image-rendering:pixelated; }
+    .gb::after { content:none; }
     .who { margin-top:16px; padding:10px 22px; font-size:20px; letter-spacing:1px; }
     .who b { font-weight:400; }
-    #find { width:min(86vw,460px); margin-top:14px; font-family:"Press Start 2P", monospace; font-size:18px;
+    #find { width:min(86vw,460px); margin-top:14px; font-family:"PokeRed", monospace; font-size:22px;
       color:var(--ink); background:var(--parch); padding:22px; cursor:pointer; letter-spacing:2px;
       display:flex; align-items:center; justify-content:center; gap:16px; }
     #find .pball{width:16px;height:16px;}
