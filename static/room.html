@@ -21,14 +21,16 @@
     .pball { display:inline-block; width:20px; height:20px; border-radius:50%; background:linear-gradient(#e8403f 0 47%,#111 47% 53%,#e9efe6 53% 100%); border:2px solid #0a0a0a; position:relative; vertical-align:middle; }
     .pball::after { content:""; position:absolute; inset:0; margin:auto; width:6px; height:6px; background:#e9efe6; border:2px solid #0a0a0a; border-radius:50%; }
 
-    /* header */
-    header { display:grid; grid-template-columns:180px 1fr 150px 96px; gap:10px; }
-    header .cell { padding:7px 12px; color:var(--dim); font-size:18px; line-height:1.25; }
-    header .cell b { color:var(--grn); font-size:20px; } header .cell .led{color:var(--red);}
-    header .title { text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-    header .title .row { display:flex; align-items:center; gap:14px; }
-    header h1 { margin:0; color:var(--red); font-size:24px; letter-spacing:2px; text-shadow:2px 2px 0 #5a0f0e; }
-    header .sub { color:var(--grn); font-size:16px; letter-spacing:2px; }
+    /* header (image-18 style: title + meta row on the dark page, not boxed) */
+    header.rse { max-width:900px; margin:0 auto; width:100%; text-align:center; }
+    .rse-title { display:flex; align-items:center; justify-content:center; gap:16px; }
+    .rse-title h1 { margin:0; color:var(--red); font-size:26px; letter-spacing:3px; text-shadow:2px 2px 0 #5a0f0e; }
+    .rse-sub { color:#9a9a86; letter-spacing:4px; font-size:14px; margin-top:3px; }
+    .rse-rule { border-top:1px solid #34342a; margin:9px 0; }
+    .rse-meta { display:grid; grid-template-columns:1fr 1fr 1fr; color:#7c7c68; font-size:15px; letter-spacing:1px; }
+    .rse-meta > div { border-left:1px solid #34342a; padding:2px 0; }
+    .rse-meta > div:first-child { border-left:0; }
+    .rse-meta b { display:block; color:#d6d0b6; font-size:18px; margin-top:2px; }
 
     /* ---- SELECTION VIEW (slot machine) ---- */
     .phase-battle .selview { display:none; }
@@ -75,45 +77,37 @@
     .vs { font-size:54px; color:var(--grn); text-shadow:0 0 16px rgba(90,209,122,.5); }
     .startbox { padding:12px 18px; font-size:16px; color:var(--grn); letter-spacing:1px; text-align:center; }
 
-    @keyframes turnpulse { 50% { opacity:.6; } }
-    /* ---- BATTLE VIEW (parchment / minimalist) ---- */
-    .battleview { display:grid; grid-template-columns:1fr 300px; gap:12px; align-items:start; }
-    .bz-left, .bz-right { display:flex; flex-direction:column; gap:12px; }
-    .screen { position:relative; height:min(46vh,400px); background:#0a140c; overflow:hidden; border-radius:12px;
-      border:3px solid #1d1b12; box-shadow: inset 0 0 50px rgba(0,0,0,.8), 0 0 14px rgba(0,0,0,.5); }
-    video { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; background:#0a140c; display:block; filter:saturate(1.05) contrast(1.04); }
-    .screen::before { content:""; position:absolute; inset:0; z-index:2; pointer-events:none; background:repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.22) 2px 3px); }
-    .screen::after { content:""; position:absolute; inset:0; z-index:3; pointer-events:none; background:radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,.55) 100%); }
-    #unmute { position:absolute; right:8px; bottom:8px; z-index:4; font:inherit; font-size:14px; background:#1d1b12; color:#e9e2c6; border:1px solid #000; border-radius:6px; padding:4px 9px; cursor:pointer; }
-    /* stat cards */
-    .statcard { background:var(--parch); color:var(--ink); border:3px solid var(--ink); border-radius:10px; padding:10px 12px; box-shadow:0 0 0 2px #000 inset, 3px 3px 0 rgba(0,0,0,.4); transition:box-shadow .2s; }
-    .statcard.p1 { border-color:#2c4a6e; } .statcard.p2 { border-color:#6e2c2c; }
-    .sc-head { display:flex; align-items:center; gap:8px; border-bottom:2px solid var(--ink); padding-bottom:6px; margin-bottom:8px; }
-    .statcard .sc-sprite { width:42px; height:42px; image-rendering:pixelated; filter:grayscale(1) contrast(1.1) brightness(.45); }
-    .sc-name { font-size:21px; letter-spacing:1px; flex:1; }
-    .sc-typeic { font-size:18px; }
-    .sc-line { display:flex; justify-content:space-between; align-items:center; font-size:17px; margin:5px 0; }
-    .sc-line .k { color:var(--inkdim); letter-spacing:1px; }
-    .badge { display:inline-block; font-size:14px; padding:2px 9px; border-radius:4px; color:#fff; letter-spacing:1px; background:#a8a070; }
-    .sc-hp .hptrack { width:150px; max-width:none; height:11px; background:#bdb491; border:2px solid var(--ink); border-radius:2px; }
-    .hpfill { height:100%; width:100%; background:#5a7a3a; } .hpfill.low{background:#c8a23a;} .hpfill.crit{background:#c0463f;}
-    .sc-hpn { text-align:right; font-size:18px; margin-top:3px; }
-    .statcard.myturn { box-shadow:0 0 0 2px #000 inset, 0 0 22px rgba(90,209,122,.85); animation:glowpulse 1.1s ease-in-out infinite; }
-    @keyframes glowpulse { 50% { box-shadow:0 0 0 2px #000 inset, 0 0 32px rgba(90,209,122,1); } }
-    /* moves 2x2 */
-    .moves2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-    .mv2 { display:flex; align-items:center; gap:12px; background:var(--parch); color:var(--ink); border:3px solid var(--ink); border-radius:8px; padding:8px 12px; font:inherit; text-align:left; cursor:default; box-shadow:3px 3px 0 rgba(0,0,0,.35); }
-    .mv2 .mic { width:34px; height:34px; flex:none; display:grid; place-items:center; background:var(--ink); color:var(--parch); border-radius:6px; font-size:18px; }
-    .mv2 b { font-size:19px; letter-spacing:1px; } .mv2 small { display:block; color:var(--inkdim); font-size:14px; }
-    .you .mv2.live { cursor:pointer; } .you .mv2.live:hover { outline:3px solid #2c4a6e; outline-offset:1px; }
-    .mv2:disabled, .mv2[disabled] { opacity:.5; }
-    /* banner + timer */
-    .banner { display:flex; align-items:center; gap:14px; background:#240c0c; color:#d98a86; border:3px solid #7a2422; border-radius:10px; padding:12px 16px; font-size:21px; letter-spacing:1px; }
-    .banner.active { background:#3a1010; color:#ff5a55; animation:turnpulse 1.1s ease-in-out infinite; }
-    .banner .bolt { width:34px; height:34px; flex:none; display:grid; place-items:center; background:#7a2422; color:#ffe; border-radius:6px; }
-    .timerbox { background:var(--parch); color:var(--ink); border:3px solid var(--ink); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:8px; box-shadow:3px 3px 0 rgba(0,0,0,.35); }
-    .timerbox .tg { display:flex; align-items:center; gap:10px; font-size:28px; } #timer.urgent { color:#c0463f; }
-    .tpips { display:flex; gap:3px; } .tpips i { flex:1; height:12px; background:#bdb491; border:1px solid var(--ink); } .tpips i.on { background:#c0463f; }
+    /* ---- BATTLE VIEW (classic Game Boy: cream boxes + ornate double border, monochrome) ---- */
+    .battleview { display:flex; flex-direction:column; gap:12px; max-width:900px; margin:0 auto; width:100%; }
+    .gb { background:#d6d0b6; color:#171712; border:4px solid #171712; border-radius:14px; position:relative; }
+    .gb::after { content:""; position:absolute; inset:5px; border:2px solid #171712; border-radius:9px; pointer-events:none; }
+    .screen-box { padding:7px; }
+    .screen { position:relative; height:min(46vh,420px); background:#0a0a08; overflow:hidden; border-radius:8px; }
+    video { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; background:#0a0a08; display:block; }
+    .screen::before { content:""; position:absolute; inset:0; z-index:2; pointer-events:none; background:repeating-linear-gradient(transparent 0 2px, rgba(0,0,0,.16) 2px 3px); }
+    #unmute { position:absolute; right:8px; bottom:8px; z-index:4; font:inherit; font-size:14px; background:#171712; color:#d6d0b6; border:0; border-radius:6px; padding:4px 9px; cursor:pointer; }
+    .bz-row { display:grid; grid-template-columns:1.7fr 1fr; gap:12px; }
+    /* move list (left) */
+    .movelist { padding:12px 18px; }
+    .mvrow { position:relative; display:flex; justify-content:space-between; align-items:center; padding:4px 6px 4px 30px; font-size:22px; letter-spacing:1px; cursor:default; border-radius:5px; }
+    .mvrow .cur { position:absolute; left:8px; opacity:0; } .mvrow .pp { color:#3e3e2e; }
+    .movelist.you .mvrow.live { cursor:pointer; }
+    .movelist.you .mvrow.live:hover { background:#171712; color:#d6d0b6; }
+    .movelist.you .mvrow.live:hover .cur { opacity:1; } .movelist.you .mvrow.live:hover .pp { color:#b8b298; }
+    .mvrow.dis { opacity:.4; }
+    /* stat box (right = your active mon) */
+    .statbox { padding:12px 18px; display:flex; flex-direction:column; gap:7px; }
+    .sb-name { display:flex; justify-content:space-between; align-items:baseline; font-size:22px; letter-spacing:1px; }
+    .sb-lv { font-size:18px; }
+    .sb-hp { display:flex; align-items:center; gap:8px; font-size:18px; }
+    .statbox .hptrack { flex:1; height:11px; background:#bdb491; border:2px solid #171712; border-radius:2px; max-width:none; }
+    .statbox .hpfill { height:100%; width:100%; background:#171712; } .statbox .hpfill.low{background:#5a5640;} .statbox .hpfill.crit{background:#7a2c2c;}
+    .sb-hpn { text-align:right; font-size:20px; }
+    .statbox .badge { display:inline-block; font-size:15px; padding:2px 12px; border:2px solid #171712; border-radius:5px; background:transparent; color:#171712; letter-spacing:1px; }
+    .gb.myturn { box-shadow:0 0 20px rgba(232,64,63,.6); }
+    /* message box (bottom) */
+    .msgbox { padding:14px 18px; font-size:24px; letter-spacing:1px; display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:56px; }
+    .msgbox .tmr { font-size:20px; color:#3e3e2e; } .msgbox .tmr.urgent { color:#7a2c2c; }
 
     .overlay { position:fixed; inset:0; background:rgba(3,6,8,.93); display:grid; place-items:center; z-index:50; }
     .overlay.hidden { display:none; }
@@ -122,14 +116,15 @@
   </style>
 </head>
 <body>
-  <header>
-    <div class="box cell"><span class="led">▪</span> SEED<br><b id="seed">BATTLE_0000</b></div>
-    <div class="box title">
-      <div class="row"><span class="pball"></span><h1 class="px">RED STADIUM ENGINE</h1><span class="pball"></span></div>
-      <div class="sub">◂─── RANDOM BATTLE ARENA ───▸</div>
+  <header class="rse">
+    <div class="rse-title"><span class="pball"></span><h1 class="px">RED STADIUM ENGINE</h1><span class="pball"></span></div>
+    <div class="rse-sub">— RANDOM BATTLE ARENA —</div>
+    <div class="rse-rule"></div>
+    <div class="rse-meta">
+      <div>SEED<b id="seed">BATTLE_0000</b></div>
+      <div>MODE<b>1 VS 1</b></div>
+      <div>TURN<b id="turnNo">0</b></div>
     </div>
-    <div class="box cell" style="text-align:right"><span class="led">▪</span> MODE<br><b>1 VS 1</b><br>LEVEL CAP: <span id="lvcap">50</span></div>
-    <div class="box cell" style="text-align:right"><span class="led">▪</span> TURN<br><b id="turnNo">0</b></div>
   </header>
 
   <main id="arena" class="phase-slot">
@@ -166,30 +161,19 @@
       </div>
     </div>
 
-    <!-- ============ BATTLE ============ -->
+    <!-- ============ BATTLE (classic Game Boy) ============ -->
     <div class="battleview">
-      <div class="bz-left">
-        <div class="screen" id="screenWrap"><video id="video" autoplay playsinline muted></video><button id="unmute">🔊 SOUND</button></div>
-        <div class="moves2 you" id="movebar"></div>
-        <div class="banner" id="banner"><span class="bolt">⚡</span><span id="turnInfo">Choose your move.</span></div>
-      </div>
-      <div class="bz-right">
-        <div class="statcard p1 you" id="p1card">
-          <div class="sc-head"><img class="sc-sprite s1 sprite" src="/sprites/1.png" alt="" /><span class="sc-name s1 name">—</span><span class="sc-typeic s1 typeic"></span></div>
-          <div class="sc-line"><span class="k">Lv.</span><span class="v">50</span></div>
-          <div class="sc-line"><span class="k">TYPE</span><span class="badge s1 type">—</span></div>
-          <div class="sc-hp sc-line"><span class="k">HP</span><span class="hptrack"><span class="hpfill s1 hpfill"></span></span></div>
-          <div class="sc-hpn s1 hpnum"></div>
+      <div class="gb screen-box"><div class="screen" id="screenWrap"><video id="video" autoplay playsinline muted></video><button id="unmute">🔊 SOUND</button></div></div>
+      <div class="bz-row">
+        <div class="gb movelist you" id="movebar"></div>
+        <div class="gb statbox" id="p1card">
+          <div class="sb-name"><span class="s1 name">—</span><span class="sb-lv">:L50</span></div>
+          <div class="sb-hp">HP: <span class="hptrack"><span class="hpfill s1 hpfill"></span></span></div>
+          <div class="sb-hpn s1 hpnum"></div>
+          <div class="sb-type"><span class="badge s1 type">—</span></div>
         </div>
-        <div class="statcard p2 opp" id="p2card">
-          <div class="sc-head"><img class="sc-sprite s2 sprite" src="/sprites/1.png" alt="" /><span class="sc-name s2 name">—</span><span class="sc-typeic s2 typeic"></span></div>
-          <div class="sc-line"><span class="k">Lv.</span><span class="v">50</span></div>
-          <div class="sc-line"><span class="k">TYPE</span><span class="badge s2 type">—</span></div>
-          <div class="sc-hp sc-line"><span class="k">HP</span><span class="hptrack"><span class="hpfill s2 hpfill"></span></span></div>
-          <div class="sc-hpn s2 hpnum"></div>
-        </div>
-        <div class="timerbox"><div class="tg">⏳ <span id="timer">—</span></div><div class="tpips" id="tpips"></div></div>
       </div>
+      <div class="gb msgbox"><span id="turnInfo">Choose your move.</span><span class="tmr" id="timer"></span></div>
     </div>
   </main>
 
@@ -213,14 +197,12 @@
   }
   const TYPE_COLOR = {NORMAL:"#a8a070",FIGHTING:"#c0573f",FLYING:"#7fa9d4",POISON:"#9d6fbf",GROUND:"#c9a86a",ROCK:"#a89060",BUG:"#9aab3a",GHOST:"#6a5a9a",FIRE:"#e08a4a",WATER:"#5a9fd4",GRASS:"#6fb04a",ELECTRIC:"#caa72e",PSYCHIC:"#d46fa0",ICE:"#6fc6d4",DRAGON:"#7a6fd4"};
   const TYPE_ICON  = {NORMAL:"●",FIGHTING:"✊",FLYING:"🪶",POISON:"☠",GROUND:"⛰",ROCK:"⛰",BUG:"🐛",GHOST:"👻",FIRE:"🔥",WATER:"💧",GRASS:"🌿",ELECTRIC:"⚡",PSYCHIC:"👁",ICE:"❄",DRAGON:"🐉"};
-  const firstType = (t) => (t || "").split("/")[0];
-  const bannerActive = (on) => $("banner").classList.toggle("active", on);
   const $ = (id) => document.getElementById(id);
   const setF = (side, field, txt) => document.querySelectorAll(".s" + side + "." + field).forEach((e) => (e.textContent = txt));
   const setSprite = (side, dex) => document.querySelectorAll(".s" + side + ".sprite").forEach((e) => (e.src = "/sprites/" + dex + ".png"));
 
   let ws, pc, mySeat = 0, timerHandle = null, resultShown = false, lastProgress = Date.now();
-  let SP = {}, byDex = {}, allDex = [], lockedIdx = { 1:null, 2:null }, myMoves = null, reelsStarted = false;
+  let SP = {}, byDex = {}, allDex = [], lockedIdx = { 1:null, 2:null }, myMoves = null, reelsStarted = false, ppMax = {};
 
   async function connectVideo() {
     pc = new RTCPeerConnection({ iceServers: [] });
@@ -247,7 +229,7 @@
     switch (m.type) {
       case "room_state":
         mySeat = m.seat; setF(1,"uname",m.you.username.toUpperCase()); setF(2,"uname",m.opp.username.toUpperCase());
-        $("lvcap").textContent=m.level; $("lv1").textContent=m.level; $("lv2").textContent=m.level;
+        $("lv1").textContent=m.level; $("lv2").textContent=m.level;
         $("seed").textContent = "BATTLE_" + String(m.room_id).padStart(4,"0");
         if (m.phase === "battle") {
           reelsStarted = true; // resuming into a live battle: reveal, don't re-roll
@@ -265,16 +247,16 @@
         const opp = (lockedIdx[2] && SP[lockedIdx[2]]) ? SP[lockedIdx[2]].name : "the opponent";
         if (m.seat === mySeat) {
           renderMoves(myMoves, true); startTimer(m.deadline_ms);
-          $("turnInfo").textContent = "≫ YOUR TURN — choose " + mine + "'s move! ≪";
-          $("p1card").classList.add("myturn"); bannerActive(true);
+          $("turnInfo").textContent = "YOUR TURN — choose " + mine + "'s move!";
+          $("p1card").classList.add("myturn");
         } else {
           $("turnInfo").textContent = "Opponent's " + opp + " is choosing…";
-          $("p1card").classList.remove("myturn"); bannerActive(false);
+          $("p1card").classList.remove("myturn");
         }
         break;
       }
       case "battle_state": onBattle(m); break;
-      case "move_auto": if (m.seat === mySeat) { $("turnInfo").textContent = "⏱ Time's up — random move chosen!"; $("p1card").classList.remove("myturn"); bannerActive(false); } break;
+      case "move_auto": if (m.seat === mySeat) { $("turnInfo").textContent = "Time's up — random move chosen!"; $("p1card").classList.remove("myturn"); } break;
       case "winner": resultShown = true; showResult(m.you_won); break;
       case "room_closed": if (!resultShown) bail(m.reason === "battle_ended" ? "MATCH ENDED" : "MATCH COULDN'T START"); break;
     }
@@ -308,25 +290,26 @@
 
   function lockCard(side, idx) { lockedIdx[side]=idx; const s=SP[idx]; if(!s) return;
     setSprite(side, s.dex); setF(side,"name",s.name); setF(side,"type",s.types||"—");
-    setF(side,"typeic", TYPE_ICON[firstType(s.types)] || "●");
-    document.querySelectorAll(".s"+side+".type").forEach((e)=>{ e.style.background = TYPE_COLOR[firstType(s.types)] || "#a8a070"; });
     $("lock"+side).classList.add("locked"); $("locklbl"+side).textContent="🔓 LOCKED IN";
   }
 
+  // move list (classic Gen-1 menu): NAME .... PP cur/max, with a ▶ cursor on hover
   function renderMoves(moves, live) {
     const box = $("movebar"); box.innerHTML = "";
     const list = (moves && moves.length) ? moves : (lockedIdx[1] && SP[lockedIdx[1]] ? SP[lockedIdx[1]].moves.map((id,i)=>({slot:i,id,pp:""})) : []);
-    list.forEach((mv) => { if(!mv.id) return; const nm=moveName(mv.id); const b=document.createElement("button"); b.className="mv2"; b.dataset.slot=mv.slot;
-      b.innerHTML = `<span class="mic">${moveIcon(nm)}</span><span><b>${nm}</b><small>PP ${mv.pp!==""?mv.pp:""}</small></span>`;
-      if (live) { b.classList.add("live"); b.onclick=()=>{ if(!ws||ws.readyState!==1)return; ws.send(JSON.stringify({type:"commit_move",slot:mv.slot}));
-        renderMoves(myMoves,false); stopTimer(); $("p1card").classList.remove("myturn"); bannerActive(false); $("turnInfo").textContent="Locked in — resolving…"; }; }
-      else b.disabled = true;
-      box.appendChild(b); });
+    list.forEach((mv) => { if(!mv.id) return;
+      if (live && mv.pp !== "") ppMax[mv.id] = Math.max(ppMax[mv.id]||0, mv.pp);
+      const nm=moveName(mv.id); const pptxt = (mv.pp!=="" ? mv.pp+"/"+(ppMax[mv.id]||mv.pp) : "—");
+      const row=document.createElement("div"); row.className="mvrow"+(live?" live":" dis"); row.dataset.slot=mv.slot;
+      row.innerHTML = `<span class="cur">▶</span><span>${nm}</span><span class="pp">PP ${pptxt}</span>`;
+      if (live) row.onclick=()=>{ if(!ws||ws.readyState!==1)return; ws.send(JSON.stringify({type:"commit_move",slot:mv.slot}));
+        renderMoves(myMoves,false); stopTimer(); $("p1card").classList.remove("myturn"); $("turnInfo").textContent="Locked in — resolving…"; };
+      box.appendChild(row); });
   }
 
   function onBattle(m) {
     setView("battle"); $("turnNo").textContent = (m.turn || 0);
-    $("p1card").classList.remove("myturn"); bannerActive(false);
+    $("p1card").classList.remove("myturn");
     hpBar(1, m.you); hpBar(2, m.opp);
     if (m.you.species && SP[m.you.species]) lockCard(1, m.you.species);
     if (m.opp.species && SP[m.opp.species]) lockCard(2, m.opp.species);
@@ -337,11 +320,10 @@
     document.querySelectorAll(".s"+side+".hpfill").forEach((f)=>{ f.style.width=pct+"%"; f.className="hpfill s"+side+" hpfill "+(pct<=12?"crit":pct<=35?"low":""); });
     setF(side, "hpnum", mon.max_hp ? mon.hp+"/"+mon.max_hp : "");
   }
-  function renderTpips(frac){ const p=$("tpips"); if(!p)return; const N=12, on=Math.max(0,Math.ceil(frac*N)); let h=""; for(let i=0;i<N;i++) h+=(i<on?'<i class="on"></i>':'<i></i>'); p.innerHTML=h; }
-  function startTimer(ms){ stopTimer(); const total=ms||15000; const end=Date.now()+total;
-    const upd=()=>{ const left=Math.max(0,(end-Date.now())/1000); $("timer").textContent=Math.ceil(left); $("timer").classList.toggle("urgent",left<=5); renderTpips(left/(total/1000)); if(left<=0){stopTimer(); renderMoves(myMoves,false);} };
+  function startTimer(ms){ stopTimer(); const end=Date.now()+(ms||15000);
+    const upd=()=>{ const left=Math.max(0,(end-Date.now())/1000); $("timer").textContent="⏳ "+Math.ceil(left)+"s"; $("timer").classList.toggle("urgent",left<=5); if(left<=0){stopTimer(); renderMoves(myMoves,false);} };
     upd(); timerHandle=setInterval(upd,100); }
-  function stopTimer(){ if(timerHandle)clearInterval(timerHandle); timerHandle=null; $("timer").textContent="—"; $("timer").classList.remove("urgent"); const p=$("tpips"); if(p)p.innerHTML=""; }
+  function stopTimer(){ if(timerHandle)clearInterval(timerHandle); timerHandle=null; $("timer").textContent=""; $("timer").classList.remove("urgent"); }
   function showResult(youWon){ stopTimer(); $("resultText").textContent=youWon?"YOU WIN!":"YOU LOSE"; $("resultText").className="result px "+(youWon?"win":"lose"); $("result").classList.remove("hidden"); }
   function bail(msg){ resultShown=true; stopTimer(); $("resultText").textContent=msg; $("resultText").className="result px"; $("resultText").style.fontSize="26px"; $("result").classList.remove("hidden"); setTimeout(()=>location.replace("/lobby.html"),2300); }
   $("home").onclick = () => location.replace("/lobby.html");
