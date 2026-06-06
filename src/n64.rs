@@ -162,25 +162,29 @@ static mut SYS_DIR: *const c_char = ptr::null();
 static mut SAVE_DIR: *const c_char = ptr::null();
 
 // ---------- forced core options (covers BOTH cores; a core only queries its own keys) ----------
-fn forced_option(key: &str) -> Option<&'static str> {
-    match key {
+// RDP stays "angrylion" (software, required for headless). The RSP plugin is the speed/accuracy
+// knob: env N64_RSP overrides it ("cxd4" = accurate LLE default; "hle" = much faster, may glitch
+// on demanding games like Pokémon Stadium).
+fn forced_option(key: &str) -> Option<String> {
+    let rsp = std::env::var("N64_RSP").unwrap_or_else(|_| "cxd4".into());
+    Some(match key {
         // ParaLLEl N64
-        "parallel-n64-gfxplugin" => Some("angrylion"),
-        "parallel-n64-rspplugin" => Some("cxd4"),
-        "parallel-n64-screensize" => Some("320x240"),
-        "parallel-n64-angrylion-vioverlay" => Some("Filtered"),
-        "parallel-n64-cpucore" => Some("dynamic_recompiler"),
+        "parallel-n64-gfxplugin" => "angrylion".into(),
+        "parallel-n64-rspplugin" => rsp,
+        "parallel-n64-screensize" => "320x240".into(),
+        "parallel-n64-angrylion-vioverlay" => "Filtered".into(),
+        "parallel-n64-cpucore" => "dynamic_recompiler".into(),
         // mupen64plus-next (fallback core)
-        "mupen64plus-rdp-plugin" => Some("angrylion"),
-        "mupen64plus-rsp-plugin" => Some("hle"),
-        "mupen64plus-angrylion-multithread" => Some("all threads"),
-        "mupen64plus-angrylion-sync" => Some("Low"),
-        "mupen64plus-EnableFBEmulation" => Some("True"),
-        "mupen64plus-cpucore" => Some("dynamic_recompiler"),
-        "mupen64plus-43screensize" => Some("320x240"),
-        "mupen64plus-aspect" => Some("4:3"),
-        _ => None,
-    }
+        "mupen64plus-rdp-plugin" => "angrylion".into(),
+        "mupen64plus-rsp-plugin" => rsp,
+        "mupen64plus-angrylion-multithread" => "all threads".into(),
+        "mupen64plus-angrylion-sync" => "Low".into(),
+        "mupen64plus-EnableFBEmulation" => "True".into(),
+        "mupen64plus-cpucore" => "dynamic_recompiler".into(),
+        "mupen64plus-43screensize" => "320x240".into(),
+        "mupen64plus-aspect" => "4:3".into(),
+        _ => return None,
+    })
 }
 
 // ---------- callbacks ----------

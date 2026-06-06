@@ -8,13 +8,14 @@ Guidance for Claude Code when working in this repository.
 over **WebRTC** (VP8 video + Opus audio), with **keyboard input** sent back over a WebRTC data
 channel. Open `http://localhost:3000`, click **Connect**, watch/play.
 
-The crate name is historical: it started as **NES** (tetanes-core) and now runs **N64** (Super
-Smash Bros. 64) via a **libretro** core. The NES/SNES lineage is documented in `DESIGN.md`
-(NES) and `DESIGN-N64.md` (current). Emulation is server-only by design — the browser only
-receives the stream.
+The crate name is historical: it started as **NES** (tetanes-core) and now runs **N64** via a
+**libretro** core. The NES/SNES lineage is documented in `DESIGN.md` (NES) and `DESIGN-N64.md`
+(current). Emulation is server-only by design — the browser only receives the stream.
 
-Default ROM/core: `Super Smash Bros. (U) [!].z64` + `cores/parallel_n64_libretro.dylib`.
-Override: `cargo run --release -- "<rom.z64>" "<core.dylib>"`.
+Default ROM/core: `Pokemon-Stadium.z64` + `cores/parallel_n64_libretro.dylib`.
+Override: `cargo run --release -- "<rom.z64>" "<core.dylib>"`. The RSP plugin is env-selectable:
+`N64_RSP=hle` (faster) vs the default `cxd4` (accurate LLE; needed for demanding games like
+Pokémon Stadium, which renders correctly at 60 fps with cxd4 + angrylion).
 
 ## Build & run
 

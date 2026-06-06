@@ -17,7 +17,7 @@ use std::net::SocketAddr;
 
 use signaling::{router, AppState};
 
-const DEFAULT_ROM: &str = "~/pokemon-pvp-red/Super Smash Bros. (U) [!].z64";
+const DEFAULT_ROM: &str = "~/pokemon-pvp-red/Pokemon-Stadium.z64";
 const DEFAULT_CORE: &str =
     "~/pokemon-pvp-red/cores/parallel_n64_libretro.dylib";
 

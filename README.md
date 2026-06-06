@@ -1,6 +1,6 @@
 # nes-web — server-side **N64** emulation over WebRTC
 
-Emulación **N64 en el servidor** (Super Smash Bros. 64), streaming **VP8 vídeo + Opus audio
+Emulación **N64 en el servidor** (por defecto **Pokémon Stadium**), streaming **VP8 vídeo + Opus audio
 estéreo** al navegador por **WebRTC**, con **teclado** de vuelta por un *data channel*. Abre
 `http://localhost:3000`, pulsa **Connect** y ves/juegas el juego corriendo en el servidor.
 
@@ -34,9 +34,10 @@ core entregue framebuffers de CPU por `video_refresh`.
 ## Build & run
 
 ```sh
-cargo run --release                       # SSB64 + parallel_n64 por defecto
+cargo run --release                       # Pokémon Stadium + parallel_n64 por defecto
 cargo run --release -- "/ruta/otro.z64"   # otra ROM
 cargo run --release -- "/ruta/otro.z64" cores/mupen64plus_next_libretro.dylib   # otro core
+N64_RSP=hle cargo run --release           # RSP HLE (más rápido; cxd4 LLE es el default, más preciso)
 ```
 Luego abre **http://localhost:3000** en **Chrome** y pulsa **Connect**.
 

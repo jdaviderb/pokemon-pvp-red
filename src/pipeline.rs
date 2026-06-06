@@ -101,7 +101,7 @@ fn run_loop(
     // Warm up until the core delivers a real framebuffer, then size the VP8 canvas to it
     // (VP8 can't resize mid-stream; later size changes are letterboxed onto this canvas).
     let frame_period = Duration::from_nanos((1_000_000_000.0 / emu.fps).max(1.0) as u64);
-    let (cw, ch) = {
+    let (mut cw, mut ch) = {
         let mut dims = (0u32, 0u32);
         for _ in 0..240 {
             emu.clock_frame();
@@ -112,7 +112,7 @@ fn run_loop(
         }
         ((dims.0 & !1).max(2), (dims.1 & !1).max(2)) // even dims for the encoder
     };
-    tracing::info!("VP8 canvas fixed at {cw}x{ch} (from first frame)");
+    tracing::info!("VP8 canvas {cw}x{ch} (initial; re-inits on resolution change)");
 
     let mut vpx = make_vp8_encoder(cw, ch).map_err(|e| anyhow::anyhow!("vpx init: {e:?}"))?;
     let mut i420 = vec![0u8; i420_len(cw as usize, ch as usize)];
@@ -167,6 +167,20 @@ fn run_loop(
 
         // 3. Advance one frame.
         emu.clock_frame();
+
+        // 3b. Resolution change? (N64 games switch lo-res 640x240 <-> hi-res 640x480, e.g. Pokémon
+        //     Stadium menus). VP8 needs fixed dims per encoder, so re-init to match — a fresh
+        //     encoder starts with a keyframe and the browser adapts (CSS stretches to the 4:3 box).
+        let (fw, fh) = emu.with_frame(|f| ((f.w & !1).max(2), (f.h & !1).max(2)));
+        if (fw, fh) != (cw, ch) {
+            if let Ok(e) = make_vp8_encoder(fw, fh) {
+                vpx = e;
+                i420 = vec![0u8; i420_len(fw as usize, fh as usize)];
+                cw = fw;
+                ch = fh;
+                tracing::info!("resolution change -> VP8 canvas now {cw}x{ch}");
+            }
+        }
 
         // 4. VIDEO: latest XRGB8888 -> I420 -> VP8 -> broadcast.
         emu.with_frame(|f| {
