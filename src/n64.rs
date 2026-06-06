@@ -174,6 +174,13 @@ fn forced_option(key: &str) -> Option<String> {
         "parallel-n64-screensize" => "320x240".into(),
         "parallel-n64-angrylion-vioverlay" => "Filtered".into(),
         "parallel-n64-cpucore" => "dynamic_recompiler".into(),
+        // Game Boy (gambatte): colorize a DMG game with the Game Boy Color's automatic palette —
+        // exactly what a real GBC did when you inserted "Pokemon Red.gb" (its official colors).
+        // This is RENDER-ONLY: the emulated machine/RAM is unchanged, so the .gb savestates and the
+        // battle reader/injection keep working — we get color WITHOUT switching to the .gbc.
+        "gambatte_gb_colorization" => "auto".into(),
+        "gambatte_gb_internal_palette" => "GBC - Dark Brown".into(), // used only if auto can't match
+        "gambatte_gbc_color_correction" => "disabled".into(),        // keep colors vivid, not LCD-dimmed
         // mupen64plus-next (fallback core)
         "mupen64plus-rdp-plugin" => "angrylion".into(),
         "mupen64plus-rsp-plugin" => rsp,

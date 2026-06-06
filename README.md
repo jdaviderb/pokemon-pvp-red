@@ -4,10 +4,11 @@ Emulación **en el servidor** vía cores **libretro**, streaming **VP8 vídeo + 
 navegador por **WebRTC**, con **teclado** de vuelta por un *data channel*. Abre
 `http://localhost:3000`, pulsa **POWER** y ves/juegas dentro de una **TV CRT** retro.
 
-Por defecto corre **Pokémon Red Color** (Game Boy Color, a color). La ROM original en gris
-(`Pokemon Red.gb`, Game Boy clásico) y juegos **N64** (Super Smash Bros. / Pokémon Stadium, con un
-`.z64` + core N64) corren en el mismo binario pasándolos por argv. La emulación pasa **100% en el
-servidor** — el navegador solo recibe el stream.
+Por defecto corre **Pokémon Red** (`Pokemon Red.gb`) **a color**: gambatte le aplica la
+**auto-colorización del Game Boy Color** (lo mismo que una GBC real hacía con un cartucho DMG) — es
+solo de render, así que sus savestates `.gb` siguen alimentando la battle-arena y el multiplayer.
+El romhack nativo `.gbc` y juegos **N64** corren en el mismo binario pasándolos por argv. La
+emulación pasa **100% en el servidor** — el navegador solo recibe el stream.
 
 > El crate se llama `nes-web` por historia: NES (tetanes-core) → N64 (libretro) → ahora también
 > Game Boy/GBC (libretro). El frontend libretro (`src/n64.rs`) carga **cualquier** core.
@@ -20,7 +21,7 @@ Encima de la battle-arena hay un **juego online para 2 jugadores**: registro/log
 jugadores ven **la misma** Game Boy en vivo por WebRTC; con **F5** sigues en tu room hasta acabar.
 
 ```sh
-cargo run --release -- "Pokemon Red.gb"      # OJO: el .gb (el savestate es de esa ROM)
+cargo run --release      # default = Pokemon Red.gb (a color vía GBC auto-colorization) + multiplayer
 ```
 Abre **http://localhost:3000**, **Register** (usuario ≥3, password **≥6**). Para jugar de verdad
 necesitas **2 sesiones**: una ventana normal + otra **en incógnito** (cada una su cookie); registra

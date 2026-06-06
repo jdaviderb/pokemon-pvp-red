@@ -15,12 +15,13 @@ Implementation plan + reconciled design: [`../DESIGN-MULTIPLAYER.md`](../DESIGN-
 
 ## 1. Run it
 
-Must use the **`Pokemon Red.gb`** ROM (the battle savestates are ROM-specific):
+Uses the **`Pokemon Red.gb`** ROM (the battle savestates are ROM-specific) — it's the **default**,
+and gambatte renders it in **color** via GBC auto-colorization, so no extra args are needed:
 
 ```sh
 cd ~/pokemon-pvp-red
-cargo run --release -- "Pokemon Red.gb"
-# verbose:  RUST_LOG=nes_web=info cargo run --release -- "Pokemon Red.gb"
+cargo run --release
+# verbose:  RUST_LOG=nes_web=info cargo run --release
 ```
 
 On boot it **auto-creates `data.db`** (SQLite) and runs migrations. Open **http://localhost:3000**.

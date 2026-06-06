@@ -26,10 +26,14 @@ auto-created on boot; `DATABASE_URL` → Postgres, no code change). See `src/{db
 Run it with `Pokemon Red.gb` (savestate-specific); register needs username ≥3 / password ≥6; play
 needs two sessions (normal + incognito). One emulator ⇒ one concurrent battle (extras queue).
 
-Default ROM/core: `Pokemon Red Color.gbc` + `cores/gambatte_libretro.dylib` (GBC, color).
-The .gbc is `Pokemon Red.gb` with `pokered_color/pokered_color_vanilla.ips` applied (see
-`scripts/apply_ips.py`; header 0x143=0xC0). Override via argv: `cargo run --release -- "<rom>" "<core.dylib>"`:
-- classic grayscale DMG: `cargo run --release -- "Pokemon Red.gb"` (header 0x143=0x00 → monochrome by design).
+Default ROM/core: `Pokemon Red.gb` + `cores/gambatte_libretro.dylib`. It renders in **color** via
+gambatte's **GBC auto-colorization** (`gambatte_gb_colorization=auto`, forced in `n64.rs`) — the same
+palette a real Game Boy Color applied to a DMG cart — which is RENDER-ONLY, so its `.gb` savestates
+still power the battle arena + multiplayer. Override via argv: `cargo run --release -- "<rom>" "<core.dylib>"`:
+- native color romhack: `cargo run --release -- "Pokemon Red Color.gbc"` (= `Pokemon Red.gb` + the
+  `pokered_color/pokered_color_vanilla.ips` patch, header 0x143=0xC0; see `scripts/apply_ips.py`).
+  NOTE: the battle savestates are ROM-specific to `Pokemon Red.gb`, so `/battle/*` + multiplayer
+  need the `.gb` (now also color), not the `.gbc`.
 - N64: `cargo run --release -- "<rom>.z64" cores/parallel_n64_libretro.dylib` (RSP env-selectable:
   `N64_RSP=hle` faster vs default `cxd4` accurate LLE).
 

@@ -26,9 +26,10 @@ use std::net::SocketAddr;
 use axum_extra::extract::cookie::Key;
 use signaling::{router, AppState};
 
-// Default to the GBC color romhack so `cargo run` shows color out of the box. The original
-// grayscale DMG ROM is "Pokemon Red.gb" (pass it as argv[1] to play the classic monochrome look).
-const DEFAULT_ROM: &str = "~/pokemon-pvp-red/Pokemon Red Color.gbc";
+// Default to "Pokemon Red.gb": gambatte's GBC auto-colorization (forced in n64.rs) renders it in
+// color out of the box, AND its savestates power the battle arena + 2-player multiplayer. Pass the
+// native romhack ".gbc" as argv[1] for its own colors, or any other ROM/core for GB/GBC/N64.
+const DEFAULT_ROM: &str = "~/pokemon-pvp-red/Pokemon Red.gb";
 const DEFAULT_CORE: &str =
     "~/pokemon-pvp-red/cores/gambatte_libretro.dylib";
 
