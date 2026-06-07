@@ -13,6 +13,7 @@ mod db;
 mod entities;
 mod migrations;
 mod n64;
+mod oauth;
 mod pipeline;
 mod rooms;
 mod signaling;
@@ -55,6 +56,11 @@ fn load_cookie_key() -> Key {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load THIS project's ./.env only (CLIENT_ID/SECRET/REDIRECT, DEV, COOKIE_SECRET, ...). Use
+    // from_path (no parent-dir walk) on purpose: dotenvy::dotenv() climbs to the first ancestor
+    // .env, which on this machine is ~/.env full of unrelated prod secrets. Real env vars win.
+    let _ = dotenvy::from_path(".env");
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -89,7 +95,16 @@ async fn main() -> anyhow::Result<()> {
     // DEV mode: set env `DEV=1` to mount the dev console + the unauthenticated /battle/* endpoints.
     // Off by default (production-safe).
     let dev = std::env::var("DEV").map(|v| v != "0" && !v.is_empty()).unwrap_or(false);
-    let state = AppState { api, inner, db: database, cookie_key, game, dev };
+
+    // OAuth providers (Google now; Twitter/Apple/... later) built from env.
+    let oauth = std::sync::Arc::new(oauth::registry_from_env());
+
+    // Mark cookies Secure (HTTPS-only) by default in production; off in DEV (localhost is plain HTTP).
+    // Override with COOKIE_SECURE=1/0. A public deploy MUST be behind TLS so this stays on.
+    let cookie_secure =
+        std::env::var("COOKIE_SECURE").map(|v| v != "0" && !v.is_empty()).unwrap_or(!dev);
+
+    let state = AppState { api, inner, db: database, cookie_key, game, dev, oauth, cookie_secure };
     let app = router(state);
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     let listener = tokio::net::TcpListener::bind(addr).await?;

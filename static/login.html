@@ -38,6 +38,13 @@
     .press .pball { width:18px; height:18px; } .press.blink { animation:bk 1s steps(2) infinite; }
     @keyframes bk { 50% { opacity:.45; } }
     .arrow { color:var(--ink); font-size:20px; margin-top:8px; }
+    /* social login buttons (Google now; more later) */
+    .provbtn { display:flex; align-items:center; justify-content:center; gap:12px; position:relative;
+      font-family:"PokeRed", monospace; font-size:21px; color:var(--ink); text-decoration:none;
+      padding:14px 18px; cursor:pointer; letter-spacing:1px; border:3px solid var(--ink); border-radius:6px; background:var(--field); }
+    .provbtn + .provbtn { margin-top:10px; }
+    .provbtn:hover { filter:brightness(.96); }
+    .provbtn .cur { color:var(--ink); }
     .form { display:none; } .form.on { display:block; }
     label { display:block; text-align:left; color:var(--inkdim); font-size:16px; letter-spacing:2px; margin:10px 0 4px; }
     input { width:100%; background:var(--field); border:3px solid var(--ink); border-radius:6px; color:var(--ink);
@@ -70,20 +77,24 @@
     </div>
 
     <div class="gb panel">
-      <div class="press blink" id="press"><span class="pball"></span> PRESS START <span class="pball"></span></div>
-      <div class="form" id="form">
-        <label>USERNAME</label>
-        <input id="u" autocomplete="username" maxlength="20" placeholder="ASH" />
-        <label>PASSWORD</label>
-        <input id="p" type="password" autocomplete="current-password" placeholder="••••••" />
-        <div class="menu">
-          <div class="mitem" id="login"><span class="cur">▶</span>LOGIN</div>
-          <div class="mitem" id="register"><span class="cur">▶</span>REGISTER</div>
+      <div id="providers"></div>
+      <div id="devauth" style="display:none">
+        <div class="press blink" id="press"><span class="pball"></span> PRESS START <span class="pball"></span></div>
+        <div class="form" id="form">
+          <label>USERNAME</label>
+          <input id="u" autocomplete="username" maxlength="20" placeholder="ASH" />
+          <label>PASSWORD</label>
+          <input id="p" type="password" autocomplete="current-password" placeholder="••••••" />
+          <div class="menu">
+            <div class="mitem" id="login"><span class="cur">▶</span>LOGIN</div>
+            <div class="mitem" id="register"><span class="cur">▶</span>REGISTER</div>
+          </div>
+          <div class="msg" id="msg"></div>
         </div>
-        <div class="msg" id="msg"></div>
       </div>
+      <div id="nologin" class="msg" style="display:none">- LOGIN NOT CONFIGURED -</div>
     </div>
-    <div class="arrow" id="arrow">▾</div>
+    <div class="arrow" id="arrow" style="display:none">▾</div>
   </div>
 
   <div class="foot"><span>PLAYERS ONLINE: <b id="online">--</b></span><span>PREPARE. COMPETE. BE LEGEND.</span><span></span></div>
@@ -108,9 +119,26 @@
     })();
     const msg = (t, ok) => { const m = $("msg"); m.textContent = t; m.style.color = ok ? "#2c6e44" : "#9a2c2c"; };
     (async () => { try { const r = await fetch("/api/me"); if (r.ok) location.replace("/"); } catch (e) {} })();
+    // Login options from the server: social providers always; username/password only in DEV mode.
+    let DEV = false;
+    const PROV_LABEL = { google: "SIGN IN WITH GOOGLE", twitter: "SIGN IN WITH X", apple: "SIGN IN WITH APPLE", github: "SIGN IN WITH GITHUB" };
+    (async () => {
+      let cfg = { providers: [], dev: false };
+      try { cfg = await (await fetch("/api/config")).json(); } catch (e) {}
+      DEV = !!cfg.dev;
+      const box = $("providers");
+      (cfg.providers || []).forEach((p) => {
+        const a = document.createElement("a");
+        a.className = "provbtn"; a.href = "/auth/oauth/" + p;
+        a.innerHTML = '<span class="cur">▶</span>' + (PROV_LABEL[p] || ("SIGN IN WITH " + p.toUpperCase()));
+        box.appendChild(a);
+      });
+      if (DEV) { $("devauth").style.display = ""; $("arrow").style.display = ""; }
+      if (!(cfg.providers || []).length && !DEV) $("nologin").style.display = "";
+    })();
     function start() { $("press").style.display = "none"; $("arrow").style.display = "none"; $("form").classList.add("on"); $("u").focus(); }
     $("press").onclick = start;
-    document.addEventListener("keydown", (e) => { if (!$("form").classList.contains("on") && (e.key === "Enter" || e.key === " ")) start(); });
+    document.addEventListener("keydown", (e) => { if (DEV && !$("form").classList.contains("on") && (e.key === "Enter" || e.key === " ")) start(); });
     async function go(path) {
       const username = $("u").value.trim(), password = $("p").value;
       if (username.length < 3) return msg("USERNAME NEEDS 3+ CHARACTERS");

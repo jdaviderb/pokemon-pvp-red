@@ -27,6 +27,10 @@ pub struct AppState {
     /// DEV mode (env `DEV`): when off, the unauthenticated /battle/* dev endpoints and the dev
     /// console are NOT mounted at all (security: no anonymous control of the shared emulator).
     pub dev: bool,
+    /// Configured OAuth providers (google, ...). Empty if none are set up.
+    pub oauth: Arc<crate::oauth::Registry>,
+    /// Mark session/oauth cookies Secure (HTTPS-only). On in prod, off in DEV (localhost HTTP).
+    pub cookie_secure: bool,
 }
 
 impl FromRef<AppState> for Key {
@@ -61,6 +65,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/me", get(crate::auth::me))
         .route("/api/species", get(species_list_handler))
         .route("/api/online", get(online_handler))
+        .route("/api/config", get(config_handler))
+        // --- social login (provider-agnostic: /auth/oauth/{provider}[/callback]) ---
+        .route("/auth/oauth/{provider}", get(crate::oauth::start))
+        .route("/auth/oauth/{provider}/callback", get(crate::oauth::callback))
         // --- clean (extensionless) page URLs — more professional than *.html ---
         .route_service("/login", ServeFile::new("static/login.html"))
         .route_service("/lobby", ServeFile::new("static/lobby.html"))
@@ -107,6 +115,14 @@ async fn species_list_handler() -> Json<Vec<serde_json::Value>> {
             })
             .collect(),
     )
+}
+
+/// GET /api/config -> {providers:["google",...], dev:bool}. Public; the login page uses it to show
+/// the right buttons (social providers always; the username/password form only in DEV mode).
+async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let mut providers: Vec<&str> = state.oauth.keys().map(|s| s.as_str()).collect();
+    providers.sort_unstable();
+    Json(serde_json::json!({ "providers": providers, "dev": state.dev }))
 }
 
 #[derive(Deserialize)]

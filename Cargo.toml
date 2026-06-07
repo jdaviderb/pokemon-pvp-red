@@ -61,5 +61,9 @@ async-trait = "0.1"
 time       = "0.3"   # Cookie max_age (already in tree via webrtc)
 futures-util = "0.3" # split() the axum WebSocket into sink+stream
 
+# --- Google OAuth: load .env, and talk to Google's token/userinfo endpoints over rustls (no OpenSSL) ---
+dotenvy = "0.15"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+
 [profile.release]
 opt-level = 3

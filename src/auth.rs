@@ -95,7 +95,7 @@ pub async fn login(
     ))
 }
 
-async fn start_session(
+pub(crate) async fn start_session(
     st: &AppState,
     jar: PrivateCookieJar,
     user_id: i32,
@@ -111,7 +111,7 @@ async fn start_session(
     let cookie = Cookie::build((SESSION_COOKIE, token))
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(false)
+        .secure(st.cookie_secure)
         .path("/")
         .max_age(time::Duration::hours(SESSION_TTL_HOURS))
         .build();

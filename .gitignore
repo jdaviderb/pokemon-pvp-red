@@ -35,3 +35,8 @@ data.db-*
 
 # stable session cookie key (dev)
 .cookie_key
+
+# local secrets: OAuth client id/secret/redirect, DATABASE_URL, COOKIE_SECRET, DEV, ...
+.env
+.env.*
+!.env.example
