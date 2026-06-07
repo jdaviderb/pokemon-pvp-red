@@ -29,7 +29,7 @@ use serde_json::{json, Value};
 use tokio::sync::{mpsc, Mutex, Notify};
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::signaling::AppState;
+use crate::signaling::{AppState, Role};
 
 /// Live arena state, fed by the WebSocket / WsHub event stream.
 #[derive(Default)]
@@ -200,14 +200,75 @@ fn server_info() -> ServerInfo {
 /// Per-session handler for the remote `/mcp` server. One instance per MCP session; it binds to a
 /// user on the first authenticated call (bearer token re-checked on EVERY call) and drives the game
 /// in-process as that user via the WsHub + rooms::handle_client_msg.
+/// Per-session binding, set once the bearer token is first resolved. In Coordinator mode `worker_tx`
+/// is the channel to the WORKER's WebSocket (where the battle actually runs); None in Solo (in-process).
+struct Bound {
+    uid: i32,
+    uname: String,
+    worker_tx: Option<mpsc::UnboundedSender<String>>,
+}
+
 #[derive(Clone)]
 pub struct HttpArena {
     st: AppState,
     names: Arc<HashMap<u64, String>>,
     state: Arc<Mutex<St>>,
     notify: Arc<Notify>,
-    bound: Arc<Mutex<Option<(i32, String)>>>,
+    bound: Arc<Mutex<Option<Bound>>>,
     tool_router: ToolRouter<HttpArena>,
+}
+
+/// Coordinator routing: open a token WebSocket to the WORKER running `room` and feed its battle
+/// events into `state` (and remember its sender so moves are routed there).
+async fn connect_worker(
+    st: &AppState,
+    room: &str,
+    token: &str,
+    state: Arc<Mutex<St>>,
+    notify: Arc<Notify>,
+    bound: Arc<Mutex<Option<Bound>>>,
+) {
+    if bound.lock().await.as_ref().map(|b| b.worker_tx.is_some()).unwrap_or(false) {
+        return; // already attached to a worker for this session
+    }
+    let port = match st.pool.as_ref().and_then(|p| p.worker_for(room)) {
+        Some(p) => p,
+        None => return,
+    };
+    let (wtx, mut wrx) = mpsc::unbounded_channel::<String>();
+    if let Some(b) = bound.lock().await.as_mut() {
+        b.worker_tx = Some(wtx);
+    }
+    let url = format!("ws://127.0.0.1:{port}/ws?token={token}");
+    tokio::spawn(async move {
+        match tokio_tungstenite::connect_async(&url).await {
+            Ok((ws, _)) => {
+                let (mut sink, mut stream) = ws.split();
+                let _ = sink.send(Message::Text("{\"type\":\"resume\"}".to_string().into())).await;
+                loop {
+                    tokio::select! {
+                        out = wrx.recv() => match out {
+                            Some(s) => { if sink.send(Message::Text(s.into())).await.is_err() { break; } }
+                            None => break,
+                        },
+                        inc = stream.next() => match inc {
+                            Some(Ok(Message::Text(t))) => {
+                                if let Ok(v) = serde_json::from_str::<Value>(t.as_str()) {
+                                    let mut g = state.lock().await;
+                                    apply_event(&mut g, &v);
+                                    drop(g);
+                                    notify.notify_waiters();
+                                }
+                            }
+                            Some(Ok(_)) => {}
+                            _ => break,
+                        }
+                    }
+                }
+            }
+            Err(e) => eprintln!("[mcp] worker :{port} ws connect failed: {e}"),
+        }
+    });
 }
 
 #[tool_router]
@@ -238,26 +299,39 @@ impl HttpArena {
         if user.is_guest && !self.st.dev {
             return Err(McpError::invalid_request("agents require a registered account", None));
         }
-        let pair = (user.id, user.username.clone());
+        let (uid, uname) = (user.id, user.username.clone());
         let mut bound = self.bound.lock().await;
-        if bound.is_none() {
-            let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
-            self.st.game.ws.add(user.id, tx).await;
-            let state = self.state.clone();
-            let notify = self.notify.clone();
-            tokio::spawn(async move {
-                while let Some(v) = rx.recv().await {
+        if let Some(b) = bound.as_ref() {
+            return Ok((b.uid, b.uname.clone()));
+        }
+        // Register an in-process WsHub sender for lobby/matchmaking events. In Coordinator mode the
+        // battle runs on a spawned WORKER, so when "matched" arrives we open a token WS to that worker
+        // and feed its battle events into the SAME state machine (moves get routed there too).
+        let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
+        self.st.game.ws.add(uid, tx).await;
+        let state = self.state.clone();
+        let notify = self.notify.clone();
+        let st = self.st.clone();
+        let token = tok.to_string();
+        let bound_arc = self.bound.clone();
+        tokio::spawn(async move {
+            while let Some(v) = rx.recv().await {
+                {
                     let mut g = state.lock().await;
                     apply_event(&mut g, &v);
-                    drop(g);
-                    notify.notify_waiters();
                 }
-            });
-            self.state.lock().await.connected = true;
-            crate::rooms::on_connect(&self.st.game, user.id, &user.username).await;
-            *bound = Some(pair.clone());
-        }
-        Ok(pair)
+                notify.notify_waiters();
+                if st.role == Role::Coordinator && v.get("type").and_then(|t| t.as_str()) == Some("matched") {
+                    if let Some(room) = v.get("room_id").and_then(|x| x.as_str()) {
+                        connect_worker(&st, room, &token, state.clone(), notify.clone(), bound_arc.clone()).await;
+                    }
+                }
+            }
+        });
+        self.state.lock().await.connected = true;
+        crate::rooms::on_connect(&self.st.game, uid, &uname).await;
+        *bound = Some(Bound { uid, uname: uname.clone(), worker_tx: None });
+        Ok((uid, uname))
     }
 
     #[tool(description = "Queue for a Pokémon PvP match and wait until matched. Returns your Pokémon and the opponent.")]
@@ -282,7 +356,7 @@ impl HttpArena {
     #[tool(description = "Block until it's your turn to move OR the battle ends. Returns the battle state + move options, or the final result.")]
     async fn wait_turn(&self, Extension(parts): Extension<Parts>) -> Result<CallToolResult, McpError> {
         self.bind(&parts).await?;
-        let ok = wait_cond(&self.state, &self.notify, |s| (s.my_turn && s.phase == "in_battle") || s.phase == "ended", 60).await;
+        let ok = wait_cond(&self.state, &self.notify, |s| (s.my_turn && s.phase == "in_battle") || s.phase == "ended", 50).await;
         if !ok {
             return Ok(text(format!("Timed out waiting for your turn.\n{}", render_state(&self.state, &self.names).await)));
         }
@@ -305,7 +379,15 @@ impl HttpArena {
             }
             s.my_turn = false;
         }
-        crate::rooms::handle_client_msg(&self.st.game, uid, &uname, json!({"type":"commit_move","slot":slot})).await;
+        let msg = json!({"type":"commit_move","slot":slot});
+        // Coordinator: send to the worker's WS (the battle runs there); Solo: in-process.
+        let worker_tx = self.bound.lock().await.as_ref().and_then(|b| b.worker_tx.clone());
+        match worker_tx {
+            Some(wtx) => {
+                let _ = wtx.send(msg.to_string());
+            }
+            None => crate::rooms::handle_client_msg(&self.st.game, uid, &uname, msg).await,
+        }
         Ok(text(format!("Move (slot {slot}) submitted. Call wait_turn for the next turn or the result.")))
     }
 
@@ -434,7 +516,7 @@ impl Arena {
 
     #[tool(description = "Block until it's your turn to move OR the battle ends. Returns the battle state + move options, or the final result.")]
     async fn wait_turn(&self) -> Result<CallToolResult, McpError> {
-        let ok = wait_cond(&self.state, &self.notify, |s| (s.my_turn && s.phase == "in_battle") || s.phase == "ended", 60).await;
+        let ok = wait_cond(&self.state, &self.notify, |s| (s.my_turn && s.phase == "in_battle") || s.phase == "ended", 50).await;
         if !ok {
             return Ok(text(format!("Timed out waiting for your turn.\n{}", render_state(&self.state, &self.names).await)));
         }

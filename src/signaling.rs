@@ -131,8 +131,9 @@ pub fn router(state: AppState) -> Router {
     }
 
     // Remote MCP server (streamable HTTP) at /mcp so an AI agent plays via a URL + bearer token.
-    // Only Solo/Worker run real battles; the Coordinator has a dummy GameState.
-    if state.role != Role::Coordinator {
+    // Mounted on Solo (in-process battle) and Coordinator (matchmake here, then route the session to
+    // the spawned worker). NOT on ephemeral Workers — agents always connect to the front door.
+    if state.role != Role::Worker {
         app = app.merge(crate::mcp::mcp_router(state.clone()));
     }
 

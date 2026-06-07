@@ -40,12 +40,15 @@ still power the battle arena + multiplayer. Override via argv: `cargo run --rele
 ## Build & run
 
 ```sh
-cargo run --release                          # SOLO: one emulator, one battle at a time (default)
-cargo run --release -- --coordinator         # SCALABLE: spawn an emulator worker per battle on demand
-MAX_WORKERS=8 cargo run --release -- --coordinator   # ...capped at 8 concurrent battles (else unbounded)
+cargo run --release                          # DEFAULT = COORDINATOR: spawns an emulator worker per battle (N concurrent rooms)
+MAX_WORKERS=8 cargo run --release            # ...capped at 8 concurrent battles (else unbounded)
+cargo run --release -- --solo                # SOLO: single process, one emulator, one battle at a time
 cargo build --release
 ./cores/fetch.sh               # (re)download the libretro N64 cores if cores/*.dylib are missing
 ```
+> The default is now the scalable coordinator (so multiple battles — incl. agent battles via MCP —
+> run at once). `--solo` is the old single-emulator mode. `--worker` is internal (spawned by the
+> coordinator). `--mcp` runs the stdio MCP server (see `docs/mcp.md`).
 Then open **http://localhost:3000** in **Chrome** and click **Connect**.
 
 **Scaling (`src/coordinator.rs`):** one emulator = one battle (libretro globals are per-process), so

@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
     let mut positional = Vec::new();
     let mut port: u16 = 3000;
     let mut workers: Option<usize> = None; // explicit cap; else MAX_WORKERS env; else unbounded
-    let (mut worker, mut coordinator) = (false, false);
+    let (mut worker, mut coordinator, mut solo) = (false, false, false);
     let mut i = 0;
     while i < raw.len() {
         match raw[i].as_str() {
@@ -98,9 +98,13 @@ async fn main() -> anyhow::Result<()> {
             "--workers" => { workers = raw.get(i + 1).and_then(|s| s.parse().ok()); i += 2; }
             "--worker" => { worker = true; i += 1; }
             "--coordinator" => { coordinator = true; i += 1; }
+            "--solo" => { solo = true; i += 1; }
             other => { positional.push(other.to_string()); i += 1; }
         }
     }
+    // Default to the SCALABLE coordinator (spawns a worker per battle, so N rooms run concurrently).
+    // `--solo` forces the single-process arena (one emulator, one battle); `--worker` is internal.
+    coordinator = coordinator || (!worker && !solo);
     let rom_path = positional.first().cloned().unwrap_or_else(|| DEFAULT_ROM.to_string());
     let core_path = positional.get(1).cloned().unwrap_or_else(|| DEFAULT_CORE.to_string());
 
