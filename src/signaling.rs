@@ -242,11 +242,32 @@ fn type_label(t1: u8, t2: u8) -> String {
     }
 }
 
+#[derive(Deserialize)]
+struct OfferRoomQ {
+    room: Option<String>,
+}
+
 async fn offer_handler(
     State(state): State<AppState>,
+    Query(q): Query<OfferRoomQ>,
     Json(offer): Json<OfferRequest>,
 ) -> Result<Json<AnswerResponse>, (StatusCode, String)> {
     let _ = &offer.kind; // expected "offer"
+    // Coordinator owns no emulator: proxy the SDP to the worker running this room (the answer carries
+    // the worker's ICE candidates, so media flows browser<->worker directly). Used by the TV wall to
+    // play every live battle same-origin from :3000.
+    if state.role == Role::Coordinator {
+        let room = q.room.ok_or((StatusCode::BAD_REQUEST, "room query required".to_string()))?;
+        let pool = state
+            .pool
+            .as_ref()
+            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "no pool".to_string()))?;
+        let sdp = pool
+            .proxy_offer(&room, &offer.sdp)
+            .await
+            .ok_or((StatusCode::BAD_GATEWAY, "worker offer failed".to_string()))?;
+        return Ok(Json(AnswerResponse { sdp, kind: "answer".to_owned() }));
+    }
     let answer_sdp = crate::webrtc::build_peer_and_answer(&state.api, &state.inner, offer.sdp)
         .await
         .map_err(|e| {

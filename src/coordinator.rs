@@ -156,6 +156,26 @@ impl WorkerPool {
         }
     }
 
+    /// Proxy a browser SDP offer to the worker running `public_id`; return its answer SDP. Media
+    /// then flows browser<->worker directly (worker ICE candidates). Used by the coordinator's
+    /// /offer?room= so the TV wall can play every battle from one same-origin page.
+    pub async fn proxy_offer(&self, public_id: &str, offer_sdp: &str) -> Option<String> {
+        let port = self.worker_for(public_id)?;
+        let url = format!("http://127.0.0.1:{port}/offer");
+        let resp = self
+            .http
+            .post(&url)
+            .json(&json!({ "sdp": offer_sdp, "type": "offer" }))
+            .send()
+            .await
+            .ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        let v: serde_json::Value = resp.json().await.ok()?;
+        v.get("sdp").and_then(|x| x.as_str()).map(|s| s.to_string())
+    }
+
     /// All battles currently live across the pool (for the TV / live list).
     pub fn live(&self) -> Vec<serde_json::Value> {
         self.workers
