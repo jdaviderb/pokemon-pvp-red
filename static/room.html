@@ -205,6 +205,8 @@
   const TYPE_COLOR = {NORMAL:"#a8a070",FIGHTING:"#c0573f",FLYING:"#7fa9d4",POISON:"#9d6fbf",GROUND:"#c9a86a",ROCK:"#a89060",BUG:"#9aab3a",GHOST:"#6a5a9a",FIRE:"#e08a4a",WATER:"#5a9fd4",GRASS:"#6fb04a",ELECTRIC:"#caa72e",PSYCHIC:"#d46fa0",ICE:"#6fc6d4",DRAGON:"#7a6fd4"};
   const TYPE_ICON  = {NORMAL:"●",FIGHTING:"✊",FLYING:"🪶",POISON:"☠",GROUND:"⛰",ROCK:"⛰",BUG:"🐛",GHOST:"👻",FIRE:"🔥",WATER:"💧",GRASS:"🌿",ELECTRIC:"⚡",PSYCHIC:"👁",ICE:"❄",DRAGON:"🐉"};
   const $ = (id) => document.getElementById(id);
+  // presence heartbeat so an in-battle player counts toward "PLAYERS ONLINE"
+  { const _c = "r" + Math.random().toString(36).slice(2); const hb = () => fetch("/api/online?id=" + _c).catch(() => {}); hb(); setInterval(hb, 5000); }
   const setF = (side, field, txt) => document.querySelectorAll(".s" + side + "." + field).forEach((e) => (e.textContent = txt));
   const setSprite = (side, dex) => document.querySelectorAll(".s" + side + ".sprite").forEach((e) => (e.src = "/sprites/" + dex + ".png"));
 

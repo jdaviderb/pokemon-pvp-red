@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use axum::body::Bytes;
-use axum::extract::{FromRef, State};
+use axum::extract::{FromRef, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -64,6 +64,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/logout", post(crate::auth::logout))
         .route("/api/me", get(crate::auth::me))
         .route("/api/species", get(species_list_handler))
+        .route("/api/online", get(online_handler))
         // --- realtime ---
         .route("/ws", get(crate::ws::ws_upgrade))
         .fallback_service(static_service)
@@ -90,6 +91,27 @@ async fn species_list_handler() -> Json<Vec<serde_json::Value>> {
             })
             .collect(),
     )
+}
+
+#[derive(Deserialize)]
+pub struct OnlineQuery {
+    #[serde(default)]
+    pub id: String,
+}
+
+/// GET /api/online?id=<client id> -> {online: N}. Records a heartbeat for `id` and counts clients
+/// seen in the last 12s — anyone with a page open (title/lobby/room) is "online".
+async fn online_handler(
+    State(state): State<AppState>,
+    Query(q): Query<OnlineQuery>,
+) -> Json<serde_json::Value> {
+    let now = std::time::Instant::now();
+    let mut m = state.game.online.lock().unwrap();
+    if !q.id.is_empty() {
+        m.insert(q.id, now);
+    }
+    m.retain(|_, t| now.duration_since(*t) < std::time::Duration::from_secs(12));
+    Json(serde_json::json!({ "online": m.len() }))
 }
 
 fn gen1_type_name(t: u8) -> &'static str {

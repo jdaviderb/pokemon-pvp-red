@@ -107,6 +107,9 @@ pub struct GameState {
     pub active_room: Mutex<Option<RoomId>>,
     pub emu_busy: AtomicBool,
     pub ws: WsHub,
+    /// Presence heartbeats (client id -> last seen) for the "PLAYERS ONLINE" counter. std Mutex so
+    /// the HTTP handler can touch it without awaiting.
+    pub online: std::sync::Mutex<HashMap<String, Instant>>,
 }
 
 impl GameState {
@@ -121,6 +124,7 @@ impl GameState {
             active_room: Mutex::new(None),
             emu_busy: AtomicBool::new(false),
             ws: WsHub::new(),
+            online: std::sync::Mutex::new(HashMap::new()),
         }
     }
 }

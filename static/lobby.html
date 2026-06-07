@@ -47,6 +47,8 @@
   <div class="links"><a href="/console.html">DEV CONSOLE</a> - <span id="logout">LOGOUT</span></div>
   <script>
     const $ = (id) => document.getElementById(id);
+    // presence heartbeat so this player counts toward "PLAYERS ONLINE"
+    { const _c = "l" + Math.random().toString(36).slice(2); const hb = () => fetch("/api/online?id=" + _c).catch(() => {}); hb(); setInterval(hb, 5000); }
     let ws, searching = false;
     (async () => {
       const r = await fetch("/api/me");
