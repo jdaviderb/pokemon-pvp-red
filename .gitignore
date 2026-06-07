@@ -41,3 +41,4 @@ data.db-*
 .env.*
 !.env.example
 cache/
+mcp-server/node_modules/

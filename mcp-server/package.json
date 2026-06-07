@@ -1,0 +1,12 @@
+{
+  "name": "nes-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "bin": { "nes-mcp": "index.js" },
+  "description": "MCP server: let an AI agent play Pokemon PvP on the Red PVP arena (over the token-auth WebSocket).",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  }
+}
