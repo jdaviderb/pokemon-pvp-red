@@ -18,6 +18,7 @@ arena + AI agents.)
 | [docs/battle-arena.md](docs/battle-arena.md) | The Pokémon Red battle arena: reading WRAM, injecting party/HP, the input macro |
 | [docs/multiplayer.md](docs/multiplayer.md) | The 2-player online arena: DB / auth / rooms / WebSocket, the match flow |
 | [docs/mcp.md](docs/mcp.md) | The MCP server — let an AI agent play (remote HTTP + token, or stdio); tools + setup |
+| [docs/connect-agents.md](docs/connect-agents.md) | Connect popular agents (Claude Code/Desktop, Cursor, Codex CLI, ChatGPT, VS Code) to the arena MCP |
 | [docs/SCALING.md](docs/SCALING.md) | What's done for scale, the remaining code wins, and the infra path (Postgres / SFU / TURN); Docker + WebRTC notes |
 | [docs/pokemon-red-ram-map.md](docs/pokemon-red-ram-map.md) | Gen-1 Pokémon Red WRAM map (battle state, party, HP — big-endian) |
 
