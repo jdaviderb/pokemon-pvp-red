@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RED STADIUM ENGINE - Lobby</title>
+  <script src="/gbfx.js"></script>
   <style>
     @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
     :root { --bg:#e9e7dd; --red:#e8403f; --parch:#ffffff; --ink:#000000; --inkdim:#666; }
@@ -82,7 +83,7 @@
         const m = JSON.parse(e.data);
         if (m.type === "queued") { searching = true; setSearching(m.position); }
         else if (m.type === "lobby") { searching = false; setIdle(); }
-        else if (m.type === "matched") { $("status").innerHTML = "OPPONENT FOUND - ENTERING ARENA..."; setTimeout(() => location.replace("/room?id=" + m.room_id), 400); }
+        else if (m.type === "matched") { $("status").innerHTML = "OPPONENT FOUND - ENTERING ARENA..."; setTimeout(() => gbGo("/room?id=" + m.room_id), 350); }
       };
       ws.onclose = () => { if (!searching) setIdle(); };
     }

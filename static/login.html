@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RED STADIUM ENGINE</title>
+  <script src="/gbfx.js"></script>
   <style>
     @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
     :root { --bg:#e9e7dd; --red:#e8403f; --parch:#ffffff; --field:#f0f0f0; --ink:#000000; --inkdim:#666; }
@@ -55,6 +56,15 @@
       color:var(--ink); background:var(--field); border:3px solid var(--ink); border-radius:6px; padding:12px 16px; cursor:pointer; text-align:left; letter-spacing:1px; }
     .gbtn:hover { filter:brightness(.96); }
     .gmsg { margin-top:10px; min-height:18px; font-size:16px; color:#9a2c2c; }
+    /* Game Boy name-entry (guest onboarding) */
+    .red-onboard { display:block; width:60px; height:auto; image-rendering:pixelated; margin:0 auto 8px; }
+    .nameslots { text-align:center; font-size:26px; letter-spacing:8px; margin:6px 0 14px; min-height:30px; color:var(--ink); }
+    .kbd { display:grid; grid-template-columns:repeat(9, 1fr); gap:5px; }
+    .kbd .key { font-family:"PokeRed", monospace; font-size:18px; padding:7px 0; text-align:center; cursor:pointer;
+      border:2px solid var(--ink); border-radius:4px; background:var(--field); user-select:none; }
+    .kbd .key:hover { background:var(--ink); color:#fff; }
+    .kbtns { display:flex; gap:8px; margin-top:12px; justify-content:center; }
+    .gbtn.sm { font-size:16px; padding:8px 16px; }
     .form { display:none; } .form.on { display:block; }
     label { display:block; text-align:left; color:var(--inkdim); font-size:16px; letter-spacing:2px; margin:10px 0 4px; }
     input { width:100%; background:var(--field); border:3px solid var(--ink); border-radius:6px; color:var(--ink);
@@ -125,10 +135,22 @@
         </div>
       </div>
       <div id="gName" style="display:none">
-        <div class="gtext">CHOOSE YOUR GUEST NAME:</div>
-        <input id="gNick" maxlength="20" autocomplete="off" />
-        <div class="gmenu"><button class="gbtn" id="gOk"><span class="cur">▶</span>OK - FIND MATCH</button></div>
+        <img class="red-onboard" src="/title/player.png" alt="" />
+        <div class="gtext" style="text-align:center">First, what is your name?</div>
+        <div class="nameslots" id="nameSlots"></div>
+        <div class="kbd" id="kbd"></div>
+        <div class="kbtns">
+          <button class="gbtn sm" id="kCase">lower</button>
+          <button class="gbtn sm" id="kDel">DEL</button>
+          <button class="gbtn sm" id="kEnd">END ▶</button>
+        </div>
         <div class="gmsg" id="gMsg"></div>
+      </div>
+      <div id="gDone" style="display:none">
+        <img class="red-onboard" src="/title/player.png" alt="" />
+        <div class="gtext" style="text-align:center">Right! So your name is <b id="doneName"></b>!</div>
+        <div class="gmenu"><button class="gbtn" id="gGo"><span class="cur">▶</span>LET'S GO - FIND MATCH</button></div>
+        <div class="gmsg" id="gMsg2"></div>
       </div>
     </div>
   </div>
@@ -168,7 +190,7 @@
     (async () => { try { CFG = await (await fetch("/api/config")).json(); } catch (e) {} })();
 
     const mkBtn = (label, onclick) => { const b = document.createElement("button"); b.className = "gbtn"; b.type = "button"; b.innerHTML = '<span class="cur">▶</span>' + label; b.onclick = onclick; return b; };
-    const showStep = (id) => ["gMethod", "gConfirm", "gName"].forEach((s) => ($(s).style.display = s === id ? "" : "none"));
+    const showStep = (id) => ["gMethod", "gConfirm", "gName", "gDone"].forEach((s) => ($(s).style.display = s === id ? "" : "none"));
     // PLAY -> modal: pick a method (Google / guest / username).
     function openPlay() {
       const menu = $("methodMenu"); menu.innerHTML = "";
@@ -185,21 +207,49 @@
     // click the dim backdrop to dismiss a modal
     ["playModal", "howtoModal"].forEach((m) => ($(m).onclick = (e) => { if (e.target.id === m) $(m).classList.add("hidden"); }));
 
-    // --- guest flow: confirm -> choose name -> create -> straight into matchmaking ---
-    const randNick = () => { const x = "0123456789ABCDEF"; let s = ""; for (let i = 0; i < 4; i++) s += x[Math.floor(Math.random() * 16)]; return "Guest-" + s; };
+    // --- guest onboarding: Pokemon-style name entry (letter grid) -> unique check -> find match ---
+    const UP = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".split("");
+    const LO = "abcdefghijklmnopqrstuvwxyz0123456789-_".split("");
+    let nameStr = "", upper = true;
+    const MAXN = 12;
+    function renderKbd() {
+      const keys = upper ? UP : LO; const kbd = $("kbd"); kbd.innerHTML = "";
+      keys.forEach((k) => { const b = document.createElement("div"); b.className = "key"; b.textContent = k; b.onclick = () => addChar(k); kbd.appendChild(b); });
+      $("kCase").textContent = upper ? "lower" : "UPPER";
+    }
+    function renderSlots() { let s = nameStr; while (s.length < 7) s += "_"; $("nameSlots").textContent = s; }
+    function addChar(c) { if (nameStr.length < MAXN) { nameStr += c; renderSlots(); $("gMsg").textContent = ""; } }
+    function startName() { nameStr = ""; upper = true; renderKbd(); renderSlots(); $("gMsg").textContent = ""; showStep("gName"); }
     $("gNo").onclick = () => showStep("gMethod");
-    $("gYes").onclick = () => { showStep("gName"); $("gNick").value = randNick(); $("gNick").focus(); $("gNick").select(); };
-    $("gOk").onclick = submitGuest;
-    $("gNick").addEventListener("keydown", (e) => { if (e.key === "Enter") submitGuest(); });
-    async function submitGuest() {
-      const nickname = $("gNick").value.trim();
+    $("gYes").onclick = startName;
+    $("kCase").onclick = () => { upper = !upper; renderKbd(); };
+    $("kDel").onclick = () => { nameStr = nameStr.slice(0, -1); renderSlots(); };
+    $("kEnd").onclick = endName;
+    async function endName() {
+      if (nameStr.length < 3) { $("gMsg").textContent = "NAME NEEDS 3+ CHARACTERS"; return; }
       $("gMsg").textContent = "...";
       try {
-        const r = await fetch("/auth/guest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ nickname }) });
-        if (r.ok) { location.href = "/lobby?find=1"; return; }
-        $("gMsg").textContent = (await r.text()).toUpperCase() || ("HTTP " + r.status);
-      } catch (e) { $("gMsg").textContent = "NETWORK ERROR"; }
+        const d = await (await fetch("/api/name-available?name=" + encodeURIComponent(nameStr))).json();
+        if (!d.available) { $("gMsg").textContent = "NAME TAKEN - TRY ANOTHER"; return; }
+        nameStr = d.name; // server-sanitized
+      } catch (e) { $("gMsg").textContent = "NETWORK ERROR"; return; }
+      $("doneName").textContent = nameStr; showStep("gDone");
     }
+    $("gGo").onclick = async () => {
+      $("gMsg2").textContent = "...";
+      try {
+        const r = await fetch("/auth/guest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ nickname: nameStr }) });
+        if (r.ok) { gbGo("/lobby?find=1"); return; }
+        $("gMsg2").textContent = (await r.text()).toUpperCase() || ("HTTP " + r.status);
+      } catch (e) { $("gMsg2").textContent = "NETWORK ERROR"; }
+    };
+    // Type your name directly (the grid is the GB visual; the keyboard is the shortcut).
+    document.addEventListener("keydown", (e) => {
+      if ($("gName").style.display === "none") return;
+      if (e.key === "Enter") { e.preventDefault(); endName(); return; }
+      if (e.key === "Backspace") { e.preventDefault(); nameStr = nameStr.slice(0, -1); renderSlots(); return; }
+      if (e.key.length === 1 && /[a-zA-Z0-9_-]/.test(e.key)) addChar(e.key);
+    });
     // username/password form, revealed from the PLAY modal when the flag/DEV enables it
     function openUsername() { $("playModal").classList.add("hidden"); $("devauth").style.display = ""; $("press").style.display = "none"; $("form").classList.add("on"); $("u").focus(); }
     // Enter/Space on the title opens PLAY (when nothing else is open).

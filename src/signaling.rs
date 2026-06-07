@@ -81,6 +81,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/me", get(crate::auth::me))
         .route("/api/species", get(species_list_handler))
         .route("/api/online", get(online_handler))
+        .route("/api/name-available", get(crate::auth::name_available))
         .route("/api/config", get(config_handler))
         .route("/api/room/{id}", get(room_info_handler))
         .route("/api/live", get(live_handler))

@@ -3,7 +3,7 @@
 
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use axum::extract::{FromRef, FromRequestParts, State};
+use axum::extract::{FromRef, FromRequestParts, Query, State};
 use axum::http::{request::Parts, StatusCode};
 use axum::Json;
 use axum_extra::extract::cookie::{Cookie, Key, PrivateCookieJar, SameSite};
@@ -167,6 +167,24 @@ pub async fn guest(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((jar, StatusCode::OK))
+}
+
+#[derive(serde::Deserialize)]
+pub struct NameQ {
+    #[serde(default)]
+    pub name: String,
+}
+
+/// GET /api/name-available?name=X -> {available, name} (sanitized). Used by the guest name-entry to
+/// validate the trainer name is unique before creating the account.
+pub async fn name_available(State(st): State<AppState>, Query(q): Query<NameQ>) -> Json<serde_json::Value> {
+    match sanitize_nick(&q.name) {
+        None => Json(serde_json::json!({ "available": false, "reason": "too short" })),
+        Some(name) => {
+            let free = username_free(&st, &name).await.unwrap_or(false);
+            Json(serde_json::json!({ "available": free, "name": name }))
+        }
+    }
 }
 
 /// Keep alphanumerics/-/_ (max 20); None if fewer than 3 usable chars remain (-> random name).
