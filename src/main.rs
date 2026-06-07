@@ -74,13 +74,13 @@ async fn main() -> anyhow::Result<()> {
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let mut positional = Vec::new();
     let mut port: u16 = 3000;
-    let mut workers: usize = 4;
+    let mut workers: Option<usize> = None; // explicit cap; else MAX_WORKERS env; else unbounded
     let (mut worker, mut coordinator) = (false, false);
     let mut i = 0;
     while i < raw.len() {
         match raw[i].as_str() {
             "--port" => { port = raw.get(i + 1).and_then(|s| s.parse().ok()).unwrap_or(3000); i += 2; }
-            "--workers" => { workers = raw.get(i + 1).and_then(|s| s.parse().ok()).unwrap_or(4); i += 2; }
+            "--workers" => { workers = raw.get(i + 1).and_then(|s| s.parse().ok()); i += 2; }
             "--worker" => { worker = true; i += 1; }
             "--coordinator" => { coordinator = true; i += 1; }
             other => { positional.push(other.to_string()); i += 1; }
@@ -100,18 +100,25 @@ async fn main() -> anyhow::Result<()> {
     let cookie_secure =
         std::env::var("COOKIE_SECURE").map(|v| v != "0" && !v.is_empty()).unwrap_or(!dev);
 
-    // --- Coordinator: no emulator; spawns a worker pool + matchmaking + redirect (scalable mode). ---
+    // --- Coordinator: no emulator; spawns ephemeral worker processes on demand (scalable mode). ---
     if coordinator {
-        let inner = pipeline::dummy();
-        let game = std::sync::Arc::new(rooms::GameState::new(inner.clone(), database.clone()));
-        let pool = std::sync::Arc::new(coordinator::WorkerPool::new());
-        let state = AppState {
-            api, inner, db: database.clone(), cookie_key, game,
-            role: Role::Coordinator, pool: Some(pool), dev, oauth, cookie_secure,
-        };
+        // Max concurrent workers: explicit --workers, else MAX_WORKERS env, else UNBOUNDED.
+        let max = workers
+            .or_else(|| std::env::var("MAX_WORKERS").ok().and_then(|s| s.parse().ok()))
+            .unwrap_or(usize::MAX);
         let db_url =
             std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://./data.db?mode=rwc".to_string());
-        return coordinator::run_coordinator(state, workers, rom_path, core_path, port, db_url).await;
+        let coord_origin = format!("http://localhost:{port}");
+        let inner = pipeline::dummy();
+        let game = std::sync::Arc::new(rooms::GameState::new(inner.clone(), database.clone()));
+        let pool = std::sync::Arc::new(coordinator::WorkerPool::new(
+            port, max, rom_path, core_path, db_url, coord_origin,
+        ));
+        let state = AppState {
+            api, inner, db: database, cookie_key, game,
+            role: Role::Coordinator, pool: Some(pool), dev, oauth, cookie_secure,
+        };
+        return coordinator::run_coordinator(state, port).await;
     }
 
     // --- Worker / Solo: real emulator on this process. ---

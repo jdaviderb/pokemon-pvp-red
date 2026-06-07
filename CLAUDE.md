@@ -41,18 +41,22 @@ still power the battle arena + multiplayer. Override via argv: `cargo run --rele
 
 ```sh
 cargo run --release                          # SOLO: one emulator, one battle at a time (default)
-cargo run --release -- --coordinator --workers 8   # SCALABLE: pool of 8 emulator workers = 8 concurrent battles
+cargo run --release -- --coordinator         # SCALABLE: spawn an emulator worker per battle on demand
+MAX_WORKERS=8 cargo run --release -- --coordinator   # ...capped at 8 concurrent battles (else unbounded)
 cargo build --release
 ./cores/fetch.sh               # (re)download the libretro N64 cores if cores/*.dylib are missing
 ```
 Then open **http://localhost:3000** in **Chrome** and click **Connect**.
 
 **Scaling (`src/coordinator.rs`):** one emulator = one battle (libretro globals are per-process), so
-concurrency = N worker PROCESSES. `--coordinator` runs no emulator; it owns auth/lobby/matchmaking +
-a pool of `--worker --port N` processes (each = this binary, own emulator, **shared DB** via
-`DATABASE_URL`), pairs players, and **redirects** each match to a free worker (`/room?id=` → 303 →
+concurrency = worker PROCESSES. `--coordinator` runs no emulator; it owns auth/lobby/matchmaking and
+**spawns an EPHEMERAL `--worker` process per battle ON DEMAND** (each = this binary, own emulator,
+**shared DB** via `DATABASE_URL`); when the battle ends a reaper **KILLS the worker** to free its
+CPU/RAM. It pairs players and **redirects** each match to its worker (`/room?id=` → 303 →
 `worker:port`; WebRTC + battle WS go browser↔worker directly; localhost shares cookies across ports
-so the session still authenticates). Use **Postgres** (`DATABASE_URL`) in real multi-process deploys —
+so the session still authenticates against the shared DB). Concurrency cap = `MAX_WORKERS` env or
+`--workers N`, **unbounded if neither is set**. Internal endpoints (`/internal/assign|status`) are
+secret-gated (`INTERNAL_SECRET`). Use **Postgres** (`DATABASE_URL`) for real multi-process deploys —
 sqlite write-contention across processes is fine for local dev only. Default (no flags) = `Solo`,
 fully backwards-compatible.
 Controls (Game Boy, P1): arrows = D-pad, `X`=A, `Z`=B, `Enter`=Start, `⇧Right`/`⌫`=Select.
