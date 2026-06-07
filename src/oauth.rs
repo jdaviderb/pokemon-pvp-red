@@ -237,6 +237,7 @@ async fn upsert_oauth_user(
         wins: Set(0),
         losses: Set(0),
         created_at: Set(Utc::now()),
+        name_chosen: Set(false), // must pick a trainer name via the name-entry on first login
         ..Default::default()
     }
     .insert(&txn)

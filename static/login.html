@@ -183,7 +183,16 @@
       });
     })();
     const msg = (t, ok) => { const m = $("msg"); m.textContent = t; m.style.color = ok ? "#2c6e44" : "#9a2c2c"; };
-    (async () => { try { const r = await fetch("/api/me"); if (r.ok) location.replace("/"); } catch (e) {} })();
+    (async () => {
+      try {
+        const r = await fetch("/api/me");
+        if (!r.ok) return; // not logged in -> show the title
+        const d = await r.json();
+        // Logged in but no trainer name yet (new Google user) -> force the name-entry.
+        if (d.user && d.user.name_chosen === false) { startName("setname", d.user.username); return; }
+        location.replace("/");
+      } catch (e) {}
+    })();
     // Login config from the server (which methods are available).
     let CFG = { providers: [], username_login: false, guest: false };
     const PROV_LABEL = { google: "LOGIN WITH GOOGLE", twitter: "LOGIN WITH X", apple: "LOGIN WITH APPLE", github: "LOGIN WITH GITHUB" };
@@ -205,13 +214,21 @@
     $("howtoBtn").onclick = () => $("howtoModal").classList.remove("hidden");
     $("howClose").onclick = () => $("howtoModal").classList.add("hidden");
     // click the dim backdrop to dismiss a modal
-    ["playModal", "howtoModal"].forEach((m) => ($(m).onclick = (e) => { if (e.target.id === m) $(m).classList.add("hidden"); }));
+    ["playModal", "howtoModal"].forEach((m) => ($(m).onclick = (e) => {
+      if (e.target.id !== m) return;
+      if (m === "playModal" && entryMode === "setname") return; // a Google user MUST pick a name
+      $(m).classList.add("hidden");
+    }));
 
-    // --- guest onboarding: Pokemon-style name entry (letter grid) -> unique check -> find match ---
+    // --- name entry (letter grid): guests (auto-random) AND new Google users (pick a name) share
+    //     this. The trainer name is validated UNIQUE via /api/name-available with on-screen errors. ---
     const UP = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".split("");
     const LO = "abcdefghijklmnopqrstuvwxyz0123456789-_".split("");
-    let nameStr = "", upper = true;
+    const NAMEPOOL = ["ASH", "RED", "BLUE", "GARY", "LEAF", "ROCKET", "PIKA", "NIDO", "ONIX", "EEVEE", "MEW", "ZAP"];
+    let nameStr = "", upper = true, entryMode = "guest";
     const MAXN = 12;
+    const randName = () => NAMEPOOL[Math.floor(Math.random() * NAMEPOOL.length)] + (Math.floor(Math.random() * 900) + 100);
+    const toGrid = (s) => (s || "").toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, MAXN);
     function renderKbd() {
       const keys = upper ? UP : LO; const kbd = $("kbd"); kbd.innerHTML = "";
       keys.forEach((k) => { const b = document.createElement("div"); b.className = "key"; b.textContent = k; b.onclick = () => addChar(k); kbd.appendChild(b); });
@@ -219,27 +236,41 @@
     }
     function renderSlots() { let s = nameStr; while (s.length < 7) s += "_"; $("nameSlots").textContent = s; }
     function addChar(c) { if (nameStr.length < MAXN) { nameStr += c; renderSlots(); $("gMsg").textContent = ""; } }
-    function startName() { nameStr = ""; upper = true; renderKbd(); renderSlots(); $("gMsg").textContent = ""; showStep("gName"); }
+    // mode: "guest" (prefill a random name) or "setname" (Google user picks; prefill their suggestion)
+    function startName(mode, prefill) {
+      entryMode = mode || "guest"; upper = true;
+      nameStr = entryMode === "guest" ? randName() : toGrid(prefill);
+      renderKbd(); renderSlots(); $("gMsg").textContent = "";
+      showStep("gName"); $("playModal").classList.remove("hidden");
+    }
     $("gNo").onclick = () => showStep("gMethod");
-    $("gYes").onclick = startName;
+    $("gYes").onclick = () => startName("guest");
     $("kCase").onclick = () => { upper = !upper; renderKbd(); };
-    $("kDel").onclick = () => { nameStr = nameStr.slice(0, -1); renderSlots(); };
+    $("kDel").onclick = () => { nameStr = nameStr.slice(0, -1); renderSlots(); $("gMsg").textContent = ""; };
     $("kEnd").onclick = endName;
     async function endName() {
       if (nameStr.length < 3) { $("gMsg").textContent = "NAME NEEDS 3+ CHARACTERS"; return; }
-      $("gMsg").textContent = "...";
+      $("gMsg").textContent = "checking...";
       try {
         const d = await (await fetch("/api/name-available?name=" + encodeURIComponent(nameStr))).json();
-        if (!d.available) { $("gMsg").textContent = "NAME TAKEN - TRY ANOTHER"; return; }
+        if (!d.available) { $("gMsg").textContent = "THAT NAME IS TAKEN - TRY ANOTHER"; return; }
         nameStr = d.name; // server-sanitized
       } catch (e) { $("gMsg").textContent = "NETWORK ERROR"; return; }
-      $("doneName").textContent = nameStr; showStep("gDone");
+      $("doneName").textContent = nameStr;
+      $("gGo").innerHTML = '<span class="cur">▶</span>' + (entryMode === "guest" ? "LET'S GO - FIND MATCH" : "CONTINUE");
+      showStep("gDone");
     }
     $("gGo").onclick = async () => {
       $("gMsg2").textContent = "...";
+      const setname = entryMode === "setname";
       try {
-        const r = await fetch("/auth/guest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ nickname: nameStr }) });
-        if (r.ok) { gbGo("/lobby?find=1"); return; }
+        const r = await fetch(setname ? "/auth/set-name" : "/auth/guest", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify(setname ? { name: nameStr } : { nickname: nameStr }),
+        });
+        if (r.ok) { gbGo(setname ? "/" : "/lobby?find=1"); return; }
+        // Lost a race for the name -> back to the grid with a clear error.
+        if (r.status === 409) { showStep("gName"); $("gMsg").textContent = "THAT NAME IS TAKEN - TRY ANOTHER"; return; }
         $("gMsg2").textContent = (await r.text()).toUpperCase() || ("HTTP " + r.status);
       } catch (e) { $("gMsg2").textContent = "NETWORK ERROR"; }
     };

@@ -14,6 +14,10 @@ pub struct Model {
     /// Disposable guest account (random nickname, progress irrelevant); false for real accounts.
     #[sea_orm(default_value = false)]
     pub is_guest: bool,
+    /// Whether the user has picked their trainer name. New OAuth users are created with `false` and
+    /// must choose one via the name-entry screen before playing.
+    #[sea_orm(default_value = true)]
+    pub name_chosen: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

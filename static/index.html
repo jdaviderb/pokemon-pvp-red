@@ -17,6 +17,8 @@
         const r = await fetch("/api/me");
         if (r.status === 401) { location.replace("/login"); return; }
         const d = await r.json();
+        // New OAuth user without a trainer name yet -> the name-entry lives on /login.
+        if (d.user && d.user.name_chosen === false) { location.replace("/login"); return; }
         if (d.room && d.room.id != null) { location.replace("/room?id=" + d.room.id); return; }
         location.replace("/lobby");
       } catch (e) { location.replace("/login"); }

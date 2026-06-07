@@ -290,8 +290,38 @@ pub struct MeRoom {
 pub async fn me(State(st): State<AppState>, AuthUser(u): AuthUser) -> Json<serde_json::Value> {
     let room = crate::rooms::current_room_for(&st, u.id).await;
     Json(serde_json::json!({
-        "user": {"id": u.id, "username": u.username, "wins": u.wins, "losses": u.losses, "is_guest": u.is_guest},
+        "user": {"id": u.id, "username": u.username, "wins": u.wins, "losses": u.losses, "is_guest": u.is_guest, "name_chosen": u.name_chosen},
         "room": room,
         "dev": st.dev,
     }))
+}
+
+#[derive(serde::Deserialize)]
+pub struct SetNameReq {
+    #[serde(default)]
+    pub name: String,
+}
+
+/// POST /auth/set-name {name} (authenticated): set the user's unique trainer name + mark it chosen.
+/// Used by the name-entry screen for accounts created without a name (Google first login).
+pub async fn set_name(
+    State(st): State<AppState>,
+    AuthUser(u): AuthUser,
+    Json(req): Json<SetNameReq>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let name = sanitize_nick(&req.name)
+        .ok_or((StatusCode::BAD_REQUEST, "name needs 3+ characters".to_string()))?;
+    let current = u.username.clone();
+    if name != current
+        && !username_free(&st, &name)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    {
+        return Err((StatusCode::CONFLICT, "name taken".into()));
+    }
+    let mut am: users::ActiveModel = u.into();
+    am.username = Set(name);
+    am.name_chosen = Set(true);
+    am.update(&st.db).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(StatusCode::OK)
 }
