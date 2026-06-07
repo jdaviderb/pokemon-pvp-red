@@ -24,6 +24,9 @@ pub struct AppState {
     pub db: DatabaseConnection,
     pub cookie_key: Key,
     pub game: Arc<crate::rooms::GameState>,
+    /// DEV mode (env `DEV`): when off, the unauthenticated /battle/* dev endpoints and the dev
+    /// console are NOT mounted at all (security: no anonymous control of the shared emulator).
+    pub dev: bool,
 }
 
 impl FromRef<AppState> for Key {
@@ -49,16 +52,8 @@ pub struct AnswerResponse {
 pub fn router(state: AppState) -> Router {
     // Serve ./static, index.html as the directory index for "/".
     let static_service = ServeDir::new("static").append_index_html_on_directories(true);
-    Router::new()
+    let mut app = Router::new()
         .route("/offer", post(offer_handler))
-        .route("/battle/state", get(battle_state_handler))
-        .route("/battle/action", post(battle_action_handler))
-        .route("/battle/save", post(battle_save_handler))
-        .route("/battle/load", post(battle_load_handler))
-        .route("/battle/setup", post(battle_setup_handler))
-        .route("/battle/species", get(battle_species_handler))
-        .route("/battle/enemy", post(battle_enemy_handler))
-        .route("/battle/player", post(battle_player_handler))
         // --- auth + session ---
         .route("/auth/register", post(crate::auth::register))
         .route("/auth/login", post(crate::auth::login))
@@ -70,11 +65,26 @@ pub fn router(state: AppState) -> Router {
         .route_service("/login", ServeFile::new("static/login.html"))
         .route_service("/lobby", ServeFile::new("static/lobby.html"))
         .route_service("/room", ServeFile::new("static/room.html"))
-        .route_service("/console", ServeFile::new("static/console.html"))
         // --- realtime ---
-        .route("/ws", get(crate::ws::ws_upgrade))
-        .fallback_service(static_service)
-        .with_state(state)
+        .route("/ws", get(crate::ws::ws_upgrade));
+
+    // DEV-only: the dev console + the unauthenticated emulator-control endpoints. Off by default so
+    // they don't exist in production (no anonymous /battle/* control of the shared emulator).
+    if state.dev {
+        tracing::warn!("DEV mode ON — /console + /battle/* are mounted (unauthenticated)");
+        app = app
+            .route("/battle/state", get(battle_state_handler))
+            .route("/battle/action", post(battle_action_handler))
+            .route("/battle/save", post(battle_save_handler))
+            .route("/battle/load", post(battle_load_handler))
+            .route("/battle/setup", post(battle_setup_handler))
+            .route("/battle/species", get(battle_species_handler))
+            .route("/battle/enemy", post(battle_enemy_handler))
+            .route("/battle/player", post(battle_player_handler))
+            .route_service("/console", ServeFile::new("dev/console.html"));
+    }
+
+    app.fallback_service(static_service).with_state(state)
 }
 
 /// GET /api/species -> [{dex, index, name, types, moves}] (dex = position+1; index = internal

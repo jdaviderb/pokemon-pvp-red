@@ -175,5 +175,6 @@ pub async fn me(State(st): State<AppState>, AuthUser(u): AuthUser) -> Json<serde
     Json(serde_json::json!({
         "user": {"id": u.id, "username": u.username, "wins": u.wins, "losses": u.losses},
         "room": room,
+        "dev": st.dev,
     }))
 }

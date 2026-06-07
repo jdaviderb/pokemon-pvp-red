@@ -56,7 +56,7 @@
   <div class="gb who" id="who">...</div>
   <button class="gb" id="find"><span class="cur">▶</span>FIND MATCH</button>
   <div class="status" id="status"></div>
-  <div class="links"><a href="/console">DEV CONSOLE</a> - <span id="logout">LOGOUT</span></div>
+  <div class="links"><span id="devlink" style="display:none"><a href="/console">DEV CONSOLE</a> - </span><span id="logout">LOGOUT</span></div>
   <script>
     const $ = (id) => document.getElementById(id);
     // presence heartbeat so this player counts toward "PLAYERS ONLINE"
@@ -70,6 +70,7 @@
       if (r.status === 401) return location.replace("/login");
       const d = await r.json();
       if (d.room && d.room.id != null) return location.replace("/room?id=" + d.room.id);
+      if (d.dev) $("devlink").style.display = "";  // show the dev console link only in DEV mode
       $("who").innerHTML = "TRAINER <b>" + d.user.username.toUpperCase() + "</b> - " + d.user.wins + "W / " + d.user.losses + "L";
       openWs();
     })();

@@ -94,7 +94,7 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
 | `src/main.rs` | entry: ROM + core paths, start pipeline, connect DB, spawn matchmaker, serve axum |
 | `logshim.c` + `build.rs` | C-variadic log fn for `GET_LOG_INTERFACE` (mupen-next needs it) |
 | `scripts/apply_ips.py` | IPS patcher (makes `Pokemon Red Color.gbc`) |
-| `static/{login,lobby,room}.html` | multiplayer UI; `console.html` = single-player dev console (was `index.html`); `index.html` = `/api/me` router |
+| `static/{login,lobby,room}.html` | multiplayer UI; `index.html` = `/api/me` router. `dev/console.html` = single-player dev console, served at `/console` **only when env `DEV=1`** (so are the unauthenticated `/battle/*` endpoints) |
 | `static/sprites/` | 151 Gen-1 front sprites by National Dex number (slot machine) |
 | `cores/` | libretro core dylibs (`fetch.sh`; gitignored). `states/` = savestates, `data.db` = sqlite (gitignored) |
 | `docs/` | `ARCHITECTURE.md`, `multiplayer.md`, `battle-arena.md`, `pokemon-red-ram-map.md` |

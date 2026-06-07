@@ -86,7 +86,10 @@ async fn main() -> anyhow::Result<()> {
     let game = std::sync::Arc::new(rooms::GameState::new(inner.clone(), database.clone()));
     rooms::spawn_matchmaker(game.clone());
 
-    let state = AppState { api, inner, db: database, cookie_key, game };
+    // DEV mode: set env `DEV=1` to mount the dev console + the unauthenticated /battle/* endpoints.
+    // Off by default (production-safe).
+    let dev = std::env::var("DEV").map(|v| v != "0" && !v.is_empty()).unwrap_or(false);
+    let state = AppState { api, inner, db: database, cookie_key, game, dev };
     let app = router(state);
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     let listener = tokio::net::TcpListener::bind(addr).await?;
