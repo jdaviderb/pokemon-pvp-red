@@ -264,7 +264,7 @@ where
 /// GET /api/me -> {user, room?} for first-paint routing (login? lobby? room?).
 #[derive(serde::Serialize)]
 pub struct MeRoom {
-    pub id: i32,
+    pub id: String,
     pub phase: String,
     pub seat: u8,
 }

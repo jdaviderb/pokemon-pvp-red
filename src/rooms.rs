@@ -72,12 +72,28 @@ pub struct PlayerSeat {
 
 pub struct Room {
     pub id: RoomId,
+    /// Public, unguessable room id (UUID) used in URLs / share links / the spectator API. The
+    /// internal `id` stays an integer; this is the only id ever shown to clients.
+    pub public_id: String,
     pub phase: RoomPhase,
     pub p1: PlayerSeat,
     pub p2: PlayerSeat,
     pub level: u8,
     pub last_alive: Seat,
     pub turn_deadline: Option<Instant>,
+}
+
+/// Random UUID v4 string (no extra crate; OsRng + the version/variant bits).
+pub fn gen_uuid() -> String {
+    use rand::RngCore;
+    let mut b = [0u8; 16];
+    rand::rngs::OsRng.fill_bytes(&mut b);
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    format!(
+        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]
+    )
 }
 impl Room {
     fn seat_mut(&mut self, s: Seat) -> &mut PlayerSeat {
@@ -260,8 +276,10 @@ async fn create_room(game: &Arc<GameState>, a: UserId, b: UserId) {
         ur.insert(a, rid);
         ur.insert(b, rid);
     }
+    let public_id = gen_uuid();
     let room = Room {
         id: rid,
+        public_id: public_id.clone(),
         phase: RoomPhase::Matched,
         p1: PlayerSeat { user_id: a, username: ua.clone(), species: 0, move_tx: None },
         p2: PlayerSeat { user_id: b, username: ub.clone(), species: 0, move_tx: None },
@@ -271,8 +289,8 @@ async fn create_room(game: &Arc<GameState>, a: UserId, b: UserId) {
     };
     game.rooms.lock().await.insert(rid, room);
     game.pending.lock().await.push_back(rid);
-    game.ws.send_to(a, json!({"type":"matched","room_id":rid,"seat":1,"opponent":ub})).await;
-    game.ws.send_to(b, json!({"type":"matched","room_id":rid,"seat":2,"opponent":ua})).await;
+    game.ws.send_to(a, json!({"type":"matched","room_id":public_id,"seat":1,"opponent":ub})).await;
+    game.ws.send_to(b, json!({"type":"matched","room_id":public_id,"seat":2,"opponent":ua})).await;
     tracing::info!("room {rid}: matched {a} vs {b}");
 }
 
@@ -853,10 +871,25 @@ pub async fn current_room_for(st: &AppState, uid: UserId) -> Option<MeRoom> {
     let rooms = st.game.rooms.lock().await;
     let r = rooms.get(&rid)?;
     Some(MeRoom {
-        id: rid,
+        id: r.public_id.clone(),
         phase: r.phase.as_str().to_string(),
         seat: r.seat_of(uid).map(seat_num).unwrap_or(0),
     })
+}
+
+/// Public spectator info for a room by its UUID: who's fighting + whether it's the live battle.
+/// None if no such room exists (ended / bad link).
+pub async fn spectate_info(st: &AppState, public_id: &str) -> Option<serde_json::Value> {
+    let active = *st.game.active_room.lock().await;
+    let rooms = st.game.rooms.lock().await;
+    let r = rooms.values().find(|r| r.public_id == public_id)?;
+    Some(json!({
+        "found": true,
+        "live": active == Some(r.id),
+        "phase": r.phase.as_str(),
+        "p1": r.p1.username,
+        "p2": r.p2.username,
+    }))
 }
 
 /// Restart cleanup: any room still live in the DB had its in-process emulator state lost. Mark it

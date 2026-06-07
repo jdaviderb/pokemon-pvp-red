@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use axum::body::Bytes;
-use axum::extract::{FromRef, Query, State};
+use axum::extract::{FromRef, Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -67,6 +67,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/species", get(species_list_handler))
         .route("/api/online", get(online_handler))
         .route("/api/config", get(config_handler))
+        .route("/api/room/{id}", get(room_info_handler))
         // --- social login (provider-agnostic: /auth/oauth/{provider}[/callback]) ---
         .route("/auth/oauth/{provider}", get(crate::oauth::start))
         .route("/auth/oauth/{provider}/callback", get(crate::oauth::callback))
@@ -128,6 +129,15 @@ async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value
         "username_login": crate::auth::username_login_on(&state).await,
         "guest": crate::flags::enabled(&state.db, crate::flags::GUEST_MODE).await,
     }))
+}
+
+/// GET /api/room/{id} -> spectator info for a room UUID ({found, live, phase, p1, p2}). Public so a
+/// not-logged-in viewer can watch. {found:false} for an unknown / ended room.
+async fn room_info_handler(State(state): State<AppState>, Path(id): Path<String>) -> Json<serde_json::Value> {
+    match crate::rooms::spectate_info(&state, &id).await {
+        Some(v) => Json(v),
+        None => Json(serde_json::json!({ "found": false })),
+    }
 }
 
 #[derive(Deserialize)]

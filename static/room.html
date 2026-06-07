@@ -114,6 +114,11 @@
     .msgbox { padding:12px 18px; font-size:18px; letter-spacing:0; display:flex; align-items:center; justify-content:space-between; gap:12px; flex:0 0 auto; }
     .msgbox .tmr { font-size:20px; color:#3e3e2e; } .msgbox .tmr.urgent { color:#333; }
 
+    /* spectator (view-only) mode: just the live video + a banner */
+    #spectBanner { display:none; text-align:center; padding:7px 12px; margin:0 auto 4px; max-width:900px; width:100%;
+      font-size:18px; letter-spacing:1px; color:var(--ink); background:#fff; border:3px solid var(--ink); border-radius:6px; }
+    .spectating header.rse, .spectating .selview { display:none !important; }
+    .spectating .battleview > *:not(.screen-box) { display:none !important; }
     .overlay { position:fixed; inset:0; background:rgba(20,20,16,.97); display:grid; place-items:center; z-index:50; }
     .overlay.hidden { display:none; }
     .result-box { background:#fff; color:#000; position:relative; border:14px solid transparent;
@@ -131,6 +136,7 @@
       <div>TURN<b id="turnNo">0</b></div>
     </div>
   </header>
+  <div id="spectBanner">SPECTATING</div>
 
   <main id="arena" class="phase-slot">
     <!-- ============ SELECTION (slot machine) ============ -->
@@ -342,14 +348,32 @@
     $("resultText").textContent=msg; $("resultText").className="result"; $("resultText").style.fontSize="22px"; $("result").classList.remove("hidden"); setTimeout(()=>location.replace("/lobby"),2300); }
   $("home").onclick = () => location.replace("/lobby");
 
+  const roomParam = new URLSearchParams(location.search).get("id");
   (async () => {
-    const r = await fetch("/api/me"); if (r.status === 401) return location.replace("/login");
-    const d = await r.json(); if (!d.room) return location.replace("/lobby");
+    let me = null;
+    try { const r = await fetch("/api/me"); if (r.ok) me = await r.json(); } catch (e) {}
+    // Player only if logged in AND this URL is their own room; everyone else just watches.
+    if (me && me.room && String(me.room.id) === String(roomParam)) return bootPlayer();
+    return bootSpectator(roomParam);
+  })();
+  async function bootPlayer() {
     try { (await (await fetch("/api/species")).json()).forEach((s)=>{ SP[s.index]={dex:s.dex,name:s.name,types:s.types,moves:s.moves}; byDex[s.dex]=s.index; allDex.push(s.dex); }); } catch(e){}
     paintReel(1, rand(), true); paintReel(2, rand(), true);
     await connectVideo().catch(()=>{}); openWs();
     watchdog = setInterval(()=>{ if(!resultShown && Date.now()-lastProgress>35000) bail("MATCH STALLED - RETURNING HOME"); }, 5000);
-  })();
+  }
+  // View-only: connect the live video, hide the player UI, show who's fighting. No WS, no controls.
+  async function bootSpectator(pid) {
+    document.body.classList.add("spectating");
+    $("arena").className = "phase-battle";
+    let info = { found: false };
+    try { if (pid) info = await (await fetch("/api/room/" + encodeURIComponent(pid))).json(); } catch (e) {}
+    $("spectBanner").style.display = "block";
+    $("spectBanner").textContent = info.found
+      ? ("SPECTATING - " + (info.p1 || "P1").toUpperCase() + " VS " + (info.p2 || "P2").toUpperCase() + (info.live ? "  [LIVE]" : "  [ENDED]"))
+      : "SPECTATING - LIVE ARENA";
+    await connectVideo().catch(() => {});
+  }
   </script>
 </body>
 </html>
