@@ -163,16 +163,16 @@
     </div>
   </div>
 
-  <div class="foot"><span>PLAYERS ONLINE: <b id="online">--</b></span><span></span><span></span></div>
+  <div class="foot"><span>PLAYERS: <b id="players">-</b> &nbsp;·&nbsp; ANON: <b id="anon">-</b></span><span></span><span></span></div>
 
   <script>
     const $ = (id) => document.getElementById(id);
-    // Live "players online": heartbeat + count (anyone with a page open counts).
-    const _cid = "t" + Math.random().toString(36).slice(2);
+    // Live presence: the server keys by account (logged-in) or a browser cookie (anon), so refreshes
+    // and extra tabs don't inflate it. Show the breakdown: players (accounts) + anon (browsers).
     async function pollOnline() {
-      try { const r = await fetch("/api/online?id=" + _cid); if (r.ok) $("online").textContent = (await r.json()).online; } catch (e) {}
+      try { const r = await fetch("/api/online"); if (r.ok) { const d = await r.json(); $("players").textContent = d.players; $("anon").textContent = d.anon; } } catch (e) {}
     }
-    pollOnline(); setInterval(pollOnline, 4000);
+    pollOnline(); setInterval(pollOnline, 10000);
     // Intro parade: two staggered mons cross continuously, each swapping to a new random Gen-1
     // sprite at the start of every pass (the changing-Pokemon title animation).
     (() => {

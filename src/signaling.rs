@@ -10,7 +10,7 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use axum_extra::extract::cookie::Key;
+use axum_extra::extract::cookie::{Cookie, CookieJar, Key, PrivateCookieJar, SameSite};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use serde::{Deserialize, Serialize};
 use tower_http::services::{ServeDir, ServeFile};
@@ -288,25 +288,46 @@ async fn collection_handler(
     Json(serde_json::json!({ "threshold": threshold, "mons": mons }))
 }
 
-#[derive(Deserialize)]
-pub struct OnlineQuery {
-    #[serde(default)]
-    pub id: String,
-}
+const ONLINE_WINDOW_SECS: u64 = 30;
+const CID_COOKIE: &str = "nes_cid";
 
-/// GET /api/online?id=<client id> -> {online: N}. Records a heartbeat for `id` and counts clients
-/// seen in the last 12s — anyone with a page open (title/lobby/room) is "online".
+/// GET /api/online -> {online: N}. A presence heartbeat keyed by a STABLE identity so refreshes,
+/// extra tabs, and login->lobby->room navigation don't double-count: a logged-in user counts ONCE
+/// (any tabs/devices) via their session, and an anonymous visitor counts once per browser via a
+/// long-lived `nes_cid` cookie. Counts distinct identities seen in the last ONLINE_WINDOW_SECS.
 async fn online_handler(
     State(state): State<AppState>,
-    Query(q): Query<OnlineQuery>,
-) -> Json<serde_json::Value> {
+    jar: PrivateCookieJar,
+    cookies: CookieJar,
+) -> impl IntoResponse {
+    let (key, cookies) = match crate::auth::user_from_jar(&state, &jar).await {
+        Some(u) => (format!("u:{}", u.id), cookies),
+        None => match cookies.get(CID_COOKIE) {
+            Some(c) => (format!("c:{}", c.value()), cookies),
+            None => {
+                let cid = crate::rooms::gen_uuid();
+                let cookie = Cookie::build((CID_COOKIE, cid.clone()))
+                    .http_only(true)
+                    .same_site(SameSite::Lax)
+                    .secure(state.cookie_secure)
+                    .path("/")
+                    .max_age(time::Duration::days(365))
+                    .build();
+                (format!("c:{cid}"), cookies.add(cookie))
+            }
+        },
+    };
     let now = std::time::Instant::now();
-    let mut m = state.game.online.lock().unwrap();
-    if !q.id.is_empty() {
-        m.insert(q.id, now);
-    }
-    m.retain(|_, t| now.duration_since(*t) < std::time::Duration::from_secs(12));
-    Json(serde_json::json!({ "online": m.len() }))
+    let (total, players, anon) = {
+        let mut m = state.game.online.lock().unwrap();
+        m.insert(key, now);
+        m.retain(|_, t| now.duration_since(*t) < std::time::Duration::from_secs(ONLINE_WINDOW_SECS));
+        // Breakdown: "u:" = a distinct logged-in account (two accounts on one IP still count as two,
+        // since we key by account not IP); "c:" = a distinct anonymous browser.
+        let players = m.keys().filter(|k| k.starts_with("u:")).count();
+        (m.len(), players, m.len() - players)
+    };
+    (cookies, Json(serde_json::json!({ "online": total, "players": players, "anon": anon })))
 }
 
 fn gen1_type_name(t: u8) -> &'static str {

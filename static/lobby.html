@@ -60,8 +60,8 @@
   <div class="links"><a href="/ranking">RANKING</a> - <a href="/collection">MY POKEMON</a> - <a href="/tv">LIVE TV</a> - <span id="mcplink" style="display:none"><a href="/agent">AGENT (MCP)</a> - </span><span id="devlink" style="display:none"><a href="/console">DEV CONSOLE</a> - </span><span id="logout">LOGOUT</span></div>
   <script>
     const $ = (id) => document.getElementById(id);
-    // presence heartbeat so this player counts toward "PLAYERS ONLINE"
-    { const _c = "l" + Math.random().toString(36).slice(2); const hb = () => fetch("/api/online?id=" + _c).catch(() => {}); hb(); setInterval(hb, 5000); }
+    // presence heartbeat (server keys by account/cookie, so tabs/refreshes don't double-count)
+    { const hb = () => fetch("/api/online").catch(() => {}); hb(); setInterval(hb, 10000); }
     // intro parade: each pass swaps to a random Gen-1 mon
     { const pick = () => "/sprites/" + (Math.floor(Math.random() * 151) + 1) + ".png";
       ["paradeMon", "paradeMon2"].forEach((id) => { const m = $(id); if (!m) return; m.src = pick(); m.addEventListener("animationiteration", () => (m.src = pick())); }); }
