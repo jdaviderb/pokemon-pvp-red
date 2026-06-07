@@ -15,5 +15,5 @@ docker buildx build --platform linux/amd64 -t "$IMAGE" --load .
 
 echo
 echo "==> Built $IMAGE (linux/amd64). Run it with:"
-echo "    docker run --rm -p ${PORT}:3000 $IMAGE"
-echo "    then open http://localhost:${PORT}"
+echo "    docker run --rm --network host -e DEV=1 $IMAGE   # --network host so WebRTC video works"
+echo "    then open http://localhost:3000"

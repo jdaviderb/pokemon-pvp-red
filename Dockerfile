@@ -35,5 +35,6 @@ COPY ["Pokemon Red.gb", "/app/Pokemon Red.gb"]
 # 0.0.0.0 so Docker can publish the port; DEV unset => prod (no /battle/* or /console).
 ENV BIND_ADDR=0.0.0.0 \
     RUST_LOG=pokemon_red_pvp=info,webrtc=warn
+# Run with `--network host` so WebRTC media reaches the browser (see docs/SCALING.md).
 EXPOSE 3000
 CMD ["/app/pokemon-red-pvp", "Pokemon Red.gb", "cores/gambatte_libretro.so"]

@@ -54,6 +54,12 @@ processes you add machines for.
 - **SFU for spectators** — the per-battle broadcast fan-out is fine for moderate audiences; thousands
   of viewers on one battle need an SFU (e.g. relay the VP8/Opus to a media server) instead of one
   PeerConnection per viewer on the worker.
+- **Docker + WebRTC** — run the container with **`docker run --network host`** (not `-p`). WebRTC
+  advertises the server's ICE candidates, and under Docker's bridge network those are the container's
+  internal `127.0.0.1`/`172.x` addresses, unreachable from the host browser → the UI loads but no
+  video. Host networking makes the candidates reachable (verified on OrbStack: TV video flows). The
+  stricter alternative is `set_nat_1to1_ips(<public IP>)` in the WebRTC SettingEngine + publishing a
+  fixed UDP port range. (HTTP/agents work either way; only the WebRTC media needs this.)
 - **TURN + TLS** — the server binds `127.0.0.1`. A public deployment needs a TLS reverse proxy (the
   `/mcp` bearer token and WebRTC signaling must be HTTPS) and a TURN server for players behind
   symmetric NAT (`STUN_URLS` already accepts TURN entries). Also set the streamable-HTTP MCP
