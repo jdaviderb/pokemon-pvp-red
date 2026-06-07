@@ -11,9 +11,12 @@ use crate::entities::feature_flags;
 pub const LOGIN_USERNAME: &str = "login_username";
 /// Allow "play as guest" — a disposable account with a random nickname. Default OFF.
 pub const GUEST_MODE: &str = "guest_mode";
+/// Show the "MODE 1 VS 1 / LEVEL CAP" corner box on the title screen. Default OFF.
+pub const TITLE_MODE_BOX: &str = "title_mode_box";
 
 /// All known flags and their default-on-first-boot value.
-const DEFAULTS: &[(&str, bool)] = &[(LOGIN_USERNAME, false), (GUEST_MODE, false)];
+const DEFAULTS: &[(&str, bool)] =
+    &[(LOGIN_USERNAME, false), (GUEST_MODE, false), (TITLE_MODE_BOX, false)];
 
 /// Insert any missing known flag with its default so it exists in the table to be toggled.
 pub async fn seed_defaults(db: &DatabaseConnection) -> anyhow::Result<()> {

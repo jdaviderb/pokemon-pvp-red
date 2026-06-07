@@ -188,6 +188,7 @@ async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value
         "providers": providers,
         "username_login": crate::auth::username_login_on(&state).await,
         "guest": crate::flags::enabled(&state.db, crate::flags::GUEST_MODE).await,
+        "mode_box": crate::flags::enabled(&state.db, crate::flags::TITLE_MODE_BOX).await,
         // On a worker this points back at the coordinator so "RETURN HOME" leaves the worker port.
         "coordinator_origin": std::env::var("COORDINATOR_ORIGIN").unwrap_or_default(),
     }))

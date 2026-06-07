@@ -87,7 +87,7 @@
 </head>
 <body>
   <div class="parade"><img id="paradeMon" src="/sprites/94.png" alt="" /><img id="paradeMon2" class="b" src="/sprites/6.png" alt="" /></div>
-  <div class="gb corner tr">MODE<b>1 VS 1</b>LEVEL CAP: 50</div>
+  <div class="gb corner tr" id="modeBox" style="display:none">MODE<b>1 VS 1</b>LEVEL CAP: 50</div>
 
   <div class="stage">
     <img class="logo-img" src="/title/pokemon_logo.png" alt="POKEMON" />
@@ -100,6 +100,7 @@
       <div id="menu0">
         <button class="provbtn" id="playBtn"><span class="cur">▶</span>PLAY</button>
         <button class="provbtn" id="tvBtn"><span class="cur">▶</span>WATCH (TV)</button>
+        <button class="provbtn" id="rankBtn"><span class="cur">▶</span>RANKING</button>
         <button class="provbtn" id="howtoBtn"><span class="cur">▶</span>HOW TO PLAY</button>
       </div>
       <div id="devauth" style="display:none">
@@ -162,7 +163,7 @@
     </div>
   </div>
 
-  <div class="foot"><span>PLAYERS ONLINE: <b id="online">--</b></span><span>PREPARE. COMPETE. BE LEGEND.</span><span></span></div>
+  <div class="foot"><span>PLAYERS ONLINE: <b id="online">--</b></span><span></span><span></span></div>
 
   <script>
     const $ = (id) => document.getElementById(id);
@@ -196,7 +197,7 @@
     // Login config from the server (which methods are available).
     let CFG = { providers: [], username_login: false, guest: false };
     const PROV_LABEL = { google: "LOGIN WITH GOOGLE", twitter: "LOGIN WITH X", apple: "LOGIN WITH APPLE", github: "LOGIN WITH GITHUB" };
-    (async () => { try { CFG = await (await fetch("/api/config")).json(); } catch (e) {} })();
+    (async () => { try { CFG = await (await fetch("/api/config")).json(); if (CFG.mode_box) $("modeBox").style.display = ""; } catch (e) {} })();
 
     const mkBtn = (label, onclick) => { const b = document.createElement("button"); b.className = "gbtn"; b.type = "button"; b.innerHTML = '<span class="cur">▶</span>' + label; b.onclick = onclick; return b; };
     const showStep = (id) => ["gMethod", "gConfirm", "gName", "gDone"].forEach((s) => ($(s).style.display = s === id ? "" : "none"));
@@ -210,7 +211,8 @@
       showStep("gMethod"); $("playModal").classList.remove("hidden");
     }
     $("playBtn").onclick = openPlay;
-    $("tvBtn").onclick = () => (location.href = "/tv");
+    $("tvBtn").onclick = () => gbGo("/tv");
+    $("rankBtn").onclick = () => gbGo("/ranking");
     $("howtoBtn").onclick = () => $("howtoModal").classList.remove("hidden");
     $("howClose").onclick = () => $("howtoModal").classList.add("hidden");
     // click the dim backdrop to dismiss a modal
