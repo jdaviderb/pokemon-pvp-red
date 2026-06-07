@@ -339,12 +339,12 @@
   function showResult(youWon){ resultShown=true; stopTimer(); if(watchdog)clearInterval(watchdog);
     $("resultText").textContent=youWon?"YOU WIN!":"YOU LOSE"; $("resultText").className="result"; $("resultText").style.fontSize="44px"; $("result").classList.remove("hidden"); }
   function bail(msg){ resultShown=true; stopTimer(); if(watchdog)clearInterval(watchdog);
-    $("resultText").textContent=msg; $("resultText").className="result"; $("resultText").style.fontSize="22px"; $("result").classList.remove("hidden"); setTimeout(()=>location.replace("/lobby.html"),2300); }
-  $("home").onclick = () => location.replace("/lobby.html");
+    $("resultText").textContent=msg; $("resultText").className="result"; $("resultText").style.fontSize="22px"; $("result").classList.remove("hidden"); setTimeout(()=>location.replace("/lobby"),2300); }
+  $("home").onclick = () => location.replace("/lobby");
 
   (async () => {
-    const r = await fetch("/api/me"); if (r.status === 401) return location.replace("/login.html");
-    const d = await r.json(); if (!d.room) return location.replace("/lobby.html");
+    const r = await fetch("/api/me"); if (r.status === 401) return location.replace("/login");
+    const d = await r.json(); if (!d.room) return location.replace("/lobby");
     try { (await (await fetch("/api/species")).json()).forEach((s)=>{ SP[s.index]={dex:s.dex,name:s.name,types:s.types,moves:s.moves}; byDex[s.dex]=s.index; allDex.push(s.dex); }); } catch(e){}
     paintReel(1, rand(), true); paintReel(2, rand(), true);
     await connectVideo().catch(()=>{}); openWs();

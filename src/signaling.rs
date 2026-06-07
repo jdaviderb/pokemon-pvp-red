@@ -11,7 +11,7 @@ use axum::{Json, Router};
 use axum_extra::extract::cookie::Key;
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 
 use ::webrtc::api::API;
 
@@ -66,6 +66,11 @@ pub fn router(state: AppState) -> Router {
         .route("/api/me", get(crate::auth::me))
         .route("/api/species", get(species_list_handler))
         .route("/api/online", get(online_handler))
+        // --- clean (extensionless) page URLs — more professional than *.html ---
+        .route_service("/login", ServeFile::new("static/login.html"))
+        .route_service("/lobby", ServeFile::new("static/lobby.html"))
+        .route_service("/room", ServeFile::new("static/room.html"))
+        .route_service("/console", ServeFile::new("static/console.html"))
         // --- realtime ---
         .route("/ws", get(crate::ws::ws_upgrade))
         .fallback_service(static_service)
