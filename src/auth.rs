@@ -14,7 +14,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use crate::entities::{sessions, users};
 use crate::signaling::AppState;
 
-const SESSION_COOKIE: &str = "nes_session";
+const SESSION_COOKIE: &str = "pvp_session";
 const SESSION_TTL_HOURS: i64 = 12;
 
 pub fn hash_password(plain: &str) -> anyhow::Result<String> {

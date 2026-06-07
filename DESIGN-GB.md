@@ -1,11 +1,10 @@
-# DESIGN-GB — generalize the libretro frontend to run Game Boy / Game Boy Color
+# DESIGN-GB — the libretro frontend running Game Boy / Game Boy Color
 
 **Date:** 2026-06-06 · **Platform:** macOS arm64 · **Toolchain:** Rust 1.92 (pinned, see `rust-toolchain.toml`)
 
-This document is the concrete, copy-pasteable plan to make the existing N64 libretro frontend
-(`src/n64.rs` + `src/video.rs` + `src/pipeline.rs`) also run GB/GBC, defaulting to **Pokémon Red**.
-Everything here reuses code that was *verified headless* by the two probes
-(`research/gb-gambatte.md`, `research/gb-sameboy.md`).
+This document is the concrete, copy-pasteable plan for the libretro frontend
+(`src/libretro.rs` + `src/video.rs` + `src/pipeline.rs`) running GB/GBC, defaulting to **Pokémon Red**.
+(Other kept docs are listed in DOCS.md.)
 
 ---
 
@@ -28,10 +27,10 @@ SameBoy's only integration cost is video-free, *but* its native APU rate is **2 
 for each 48 kHz output sample it reads exactly two adjacent input samples. At a 43.7:1 *decimation*
 ratio that throws away ~42 of every 43.7 samples with no anti-alias averaging (audible aliasing), and
 it allocates a fresh `Vec<i16>` of ~35 k samples every video frame. gambatte's 32 768 Hz is an
-*upsample* to 48 kHz (~1.46:1), which is exactly the regime the existing resampler was written for and
-already handles for the N64 cores. The video cost of gambatte (one RGB565 branch + honoring pitch) is
-small, fully written below, and verified by the probe. **gambatte is the simplest correct integration
-overall.** SameBoy stays in `cores/` as a drop-in fallback if we later add a proper polyphase decimator.
+*upsample* to 48 kHz (~1.46:1), which is exactly the regime the existing resampler was written for. The
+video cost of gambatte (one RGB565 branch + honoring pitch) is small, fully written below, and verified
+by the probe. **gambatte is the simplest correct integration overall.** SameBoy stays in `cores/` as a
+drop-in fallback if we later add a proper polyphase decimator.
 
 **Confidence: HIGH.** Both probes ran both ROMs headless through this exact frontend; the GBC `.gbc`
 rendered genuine chromatic pixels (gold/blue/red/orange title screen), the `.gb` stayed pure 4-shade
@@ -51,14 +50,13 @@ gray, input changed the framebuffer checksum, and the converter code below is th
   already `mem::forget`s the ROM buffer when `!need_fullpath`, keeping it alive — unchanged).
 - No symbol/ABI changes: gambatte exports the same `retro_*` symbols the frontend already resolves.
 
-The frontend struct is currently named `N64`. **You do not need to rename it** to ship — it loads any
-libretro core. (Optional cosmetic rename to `Core` is noted in §9 but not required.)
+The frontend struct is named `Emu`; it loads any libretro core.
 
 ---
 
 ## 2. PIXEL FORMAT handling (RGB565 in addition to XRGB8888)
 
-The frontend already records the SET_PIXEL_FORMAT value into `FRAME.fmt` (`src/n64.rs` line 199-203)
+The frontend already records the SET_PIXEL_FORMAT value into `FRAME.fmt` (`src/libretro.rs` line 199-203)
 and already *accepts* RGB565 (returns `true` for fmt 0/1/2). The `Frame` struct already carries
 `pub fmt: u32`. **What's missing:** the pipeline calls `xrgb_to_i420` unconditionally, which assumes
 4-byte XRGB. We add an RGB565 decoder and branch on `f.fmt`.
@@ -72,10 +70,10 @@ gambatte facts the converter MUST honor (verified):
 ### 2a. `src/video.rs` — full updated converter (drop-in)
 
 Add `rgb565_to_i420` next to the existing `xrgb_to_i420`, plus a thin `frame_to_i420` dispatcher that
-branches on `fmt`. Keep `xrgb_to_i420` as-is (the N64 path still uses it via the dispatcher).
+branches on `fmt`. Keep `xrgb_to_i420` as-is (XRGB8888 cores still use it via the dispatcher).
 
 ```rust
-// ---- pixel format ids (mirror of src/n64.rs) ----
+// ---- pixel format ids (mirror of src/libretro.rs) ----
 pub const PIXFMT_XRGB8888: u32 = 1;
 pub const PIXFMT_RGB565: u32 = 2;
 
@@ -89,7 +87,7 @@ pub fn frame_to_i420(
     match fmt {
         PIXFMT_RGB565 => rgb565_to_i420(src, sw, sh, pitch, dst, dw, dh),
         // XRGB8888 (1) and anything else (e.g. 0RGB1555 — no core here requests it) fall back
-        // to the 4-byte BGRX path, which is what the N64/angrylion cores and SameBoy emit.
+        // to the 4-byte BGRX path (what SameBoy emits).
         _ => xrgb_to_i420(src, sw, sh, pitch, dst, dw, dh),
     }
 }
@@ -170,7 +168,7 @@ Step 4 video block (currently lines 186-190) — pass `f.fmt`:
         });
 ```
 
-That's the entire video change. The N64 path is unaffected (its `f.fmt == 1` → falls through to
+That's the entire video change. XRGB8888 cores are unaffected (their `f.fmt == 1` → falls through to
 `xrgb_to_i420`).
 
 ---
@@ -205,19 +203,18 @@ GB has **no analog stick**. Use the **digital** wire names `"Up"/"Down"/"Left"/"
 `map_button` already maps these to `Btn(ID_UP..ID_RIGHT)`, lines 508-511) — **not** the `Stick*` names
 (those fold into the analog control stick, which gambatte ignores). `A`, `B`, `Start`, `Select` are
 already handled by `map_button`. `map_button` already returns `Some(Btn(ID_SELECT))` for `"Select"`
-(line in the table) — **verify it's present; if not, add `"Select" => Btn(ID_SELECT),`** (the N64 map
-may have omitted Select since N64 has no Select button).
+(line in the table) — **verify it's present; if not, add `"Select" => Btn(ID_SELECT),`**.
 
-### 4a. `src/n64.rs` — ensure `Select` is mapped
+### 4a. `src/libretro.rs` — ensure `Select` is mapped
 
-The current `map_button` (lines 496-514) does **not** list `"Select"`. Add it:
+If the current `map_button` (lines 496-514) does **not** list `"Select"`, add it:
 ```rust
         "Start" => Btn(ID_START),
-        "Select" => Btn(ID_SELECT),   // <-- ADD (N64 had no Select; GB does)
+        "Select" => Btn(ID_SELECT),
 ```
 (`ID_SELECT = 2` is already declared, line 68.)
 
-### 4b. `static/index.html` — new KEYMAP block (replace the N64 one, lines 235-253)
+### 4b. `static/index.html` — new KEYMAP block (lines 235-253)
 
 ```javascript
     // Physical-key (e.code) -> { player, wire button }. Game Boy has no analog:
@@ -260,12 +257,11 @@ server's `map_button` does the rest.
 `forced_option` returns `None` for every gambatte key, so the core uses its own defaults — and both ROMs
 render correctly. **No DMG/GBC option, no color-correction option needed for color to appear.**
 
-`forced_option` in `src/n64.rs` can be left exactly as-is: gambatte simply never queries the N64/mupen
-keys, and every key it *does* query falls to the `_ => return None` arm. Nothing to change for a correct
-GB stream.
+`forced_option` in `src/libretro.rs` can be left exactly as-is: every key gambatte queries falls to the
+`_ => return None` arm. Nothing to change for a correct GB stream.
 
 **Optional polish (all default-off, NOT needed):** if you ever want to tune the GBC look, add a gambatte
-arm to `forced_option` (it is harmless for N64 since those cores never query these keys):
+arm to `forced_option`:
 ```rust
     // optional GBC look tuning (NOT required for correct color):
     "gambatte_gbc_color_correction" => "disabled".into(), // brighter web stream (default warms/darkens for real-LCD gamma)
@@ -375,27 +371,26 @@ let mut opus = OpusStreamer::new(emu.sample_rate)  // emu.sample_rate = av.timin
 
 `OpusStreamer` resamples arbitrary `in_rate → 48 000` with a fractional read position carried across
 calls. 32 768 → 48 000 is a gentle ~1.46:1 upsample (`step = 32768/48000 ≈ 0.683` input frames per output
-frame), squarely in the regime the resampler was written for (the N64 cores feed it 44.1 k/48 k-ish
-rates). The `cb_audio_batch` callback already `extend_from_slice`s the interleaved i16 into `AUDIO`, and
-`audio_drain()` hands it to `push_i16_stereo`. **No audio code changes.** (`cb_audio_sample`, the per-
-sample fallback, also works but gambatte uses the batch path.)
+frame), squarely in the regime the resampler was written for. The `cb_audio_batch` callback already
+`extend_from_slice`s the interleaved i16 into `AUDIO`, and `audio_drain()` hands it to `push_i16_stereo`.
+**No audio code changes.** (`cb_audio_sample`, the per-sample fallback, also works but gambatte uses the
+batch path.)
 
 ---
 
 ## 8. Branding (`static/index.html`)
 
-Game-neutral-ish, leaning Pokémon Red. Replace the caption (line 225):
+Pokémon Red branding. Replace the caption (line 225):
 ```html
   <p class="caption"><b>Pokémon Red</b> · 100% server-side emulation, streamed over WebRTC</p>
 ```
 
-Optional further de-N64-ing (cosmetic, not required to function):
+Optional cosmetic polish (not required to function):
 - `<title>` (line 6): `RETRO·VISION — Game Boy over WebRTC`
-- Brand glyph (line 214) `RETRO·VISION <span>64</span>` → `RETRO·VISION <span>GB</span>`
+- Brand glyph (line 214): `RETRO·VISION <span>GB</span>`
 - Standby card (line 205) is generic ("NO SIGNAL — press POWER") — leave it.
-- `#video` CSS comment (line 75) says "stretch 640x240 -> 4:3 (N64 display)"; the rule still works for
-  160×144 (object-fit: fill stretches GB's 10:9 to the 4:3 box like a Super Game Boy). Optionally update
-  the comment. No CSS *rule* change needed.
+- `#video` CSS uses `object-fit: fill` to stretch GB's 10:9 to the 4:3 `.screen` box (like a Super Game
+  Boy). No CSS *rule* change needed.
 
 ---
 
@@ -420,7 +415,7 @@ are unchanged. (`vpx-encode` keeps `ffi-generate`; nothing GB-specific.)
 1. `src/video.rs` — add `PIXFMT_*` consts, `rgb565_to_i420`, and `frame_to_i420` dispatcher (§2a). Keep
    `xrgb_to_i420`.
 2. `src/pipeline.rs` — import `frame_to_i420` instead of `xrgb_to_i420`; pass `f.fmt` in the step-4 call (§2b).
-3. `src/n64.rs` — add `"Select" => Btn(ID_SELECT),` to `map_button` (§4a). (Optional gambatte arm in
+3. `src/libretro.rs` — add `"Select" => Btn(ID_SELECT),` to `map_button` (§4a). (Optional gambatte arm in
    `forced_option`, §5 — skip.)
 4. `src/main.rs` — `DEFAULT_ROM` = `Pokemon Red.gb`, `DEFAULT_CORE` = gambatte dylib (§6a).
 5. `static/index.html` — new `KEYMAP`, new hint, new caption (§4b/4c, §8).
@@ -433,9 +428,6 @@ are unchanged. (`vpx-encode` keeps `ffi-generate`; nothing GB-specific.)
   the code in §2a does exactly this (`row = j*pitch`, inner loop `0..cw` with `cw <= 160`). If anyone
   "optimizes" to `j*sw*2` the image will skew/garble.
 - **Endianness of RGB565.** Little-endian u16 (`lo | hi<<8`). The decode in §2a is correct; don't swap.
-- **Renaming.** The struct/module is still `N64`/`n64.rs`. It works unchanged as a generic libretro
-  loader, so shipping under that name is fine. A rename to `Core`/`core.rs` is purely cosmetic and would
-  touch `pipeline.rs`/`main.rs` imports — defer it to avoid churn/risk.
 - **Audio rate is read from the core, but only at load.** Fine for gambatte (fixed 32 768 Hz). If you
   ever swap to SameBoy (2.097 MHz) you MUST replace the 2-tap linear resampler with a decimating/averaging
   one or audio will alias — this is the reason gambatte was chosen.

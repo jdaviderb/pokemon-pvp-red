@@ -299,7 +299,7 @@ async fn collection_handler(
 }
 
 pub(crate) const ONLINE_WINDOW_SECS: u64 = 16;
-const CID_COOKIE: &str = "nes_cid";
+const CID_COOKIE: &str = "pvp_cid";
 
 /// GET /api/online -> {online: N}. A presence heartbeat keyed by a STABLE identity so refreshes,
 /// extra tabs, and login->lobby->room navigation don't double-count: a logged-in user counts ONCE

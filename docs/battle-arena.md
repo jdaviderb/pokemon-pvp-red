@@ -13,7 +13,7 @@ from WRAM and chooses actions, which are executed by driving the in-battle menu 
 
 The libretro core (`gambatte`) exposes the Game Boy's **work RAM** as
 `RETRO_MEMORY_SYSTEM_RAM` (id 2) = **8 KiB**, CPU `0xC000..0xE000`. A CPU address `A` maps to
-`SYSTEM_RAM[A - 0xC000]`. `src/n64.rs` exposes it via `with_system_ram` / `with_system_ram_mut`.
+`SYSTEM_RAM[A - 0xC000]`. `src/libretro.rs` exposes it via `with_system_ram` / `with_system_ram_mut`.
 
 - **All Gen-1 multi-byte values (HP, max HP, Attack/Defense/Speed/Special, exp) are BIG-ENDIAN**
   (high byte at the lower address): `u16::from_be_bytes([ram[o], ram[o+1]])`. This is the #1
@@ -38,8 +38,8 @@ runs of the same core build).
 | `states/legendary_intro.state` | the **battle intro**, pre-send-out (`D057=2, D014=0, CFE5=0`) | `POST /battle/setup` |
 
 `states/` is **gitignored** (game-derived, ROM-specific). To capture your own: play to the FIGHT
-menu in the browser, then `POST /battle/save`. To recreate the intro state, re-run
-`research/legendary-probe`.
+menu in the browser, then `POST /battle/save`. The intro state is recaptured the same way, at the
+pre-send-out battle intro.
 
 ---
 
@@ -175,6 +175,5 @@ add-on inside the emu thread.
 - Cosmetic: enemy `level`/`max_hp` may read slightly off (engine recomputes at send-out) — sprites,
   moves, and mechanics are correct.
 
-Design provenance: `DESIGN-BATTLE.md`, `DESIGN-LEGENDARY.md`, and the verified probe notes in
-`research/battle-*.md` / `research/legendary-*.md`.
+Design provenance: `DESIGN-BATTLE.md` (see DOCS.md).
 ```

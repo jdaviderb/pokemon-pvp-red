@@ -1,4 +1,4 @@
-# Scaling nes-web
+# Scaling Pokémon Red PVP
 
 The arena is built to scale **horizontally by worker process**: one libretro emulator = one process =
 one battle (libretro globals are per-process), so concurrency is just the worker count. The default

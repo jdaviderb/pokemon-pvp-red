@@ -83,7 +83,7 @@ pub async fn build_peer_and_answer(
             ..Default::default()
         },
         "video".to_owned(),
-        "n64".to_owned(),
+        "game".to_owned(),
     ));
     let video_sender = pc
         .add_track(Arc::clone(&video_track) as Arc<dyn TrackLocal + Send + Sync>)
@@ -104,7 +104,7 @@ pub async fn build_peer_and_answer(
             ..Default::default()
         },
         "audio".to_owned(),
-        "n64".to_owned(),
+        "game".to_owned(),
     ));
     let audio_sender = pc
         .add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal + Send + Sync>)

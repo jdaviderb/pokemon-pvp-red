@@ -21,7 +21,7 @@ and gambatte renders it in **color** via GBC auto-colorization, so no extra args
 ```sh
 cd ~/pokemon-pvp-red
 cargo run --release
-# verbose:  RUST_LOG=nes_web=info cargo run --release
+# verbose:  RUST_LOG=pokemon_red_pvp=info cargo run --release
 ```
 
 On boot it **auto-creates `data.db`** (SQLite) and runs migrations. Open **http://localhost:3000**.
@@ -149,7 +149,7 @@ static/sprites/     1..151.png — Gen-1 front sprites by National Dex number
 
 - **"nothing happens" on register/login** → password must be **≥6** characters (username ≥3).
 - **Both players see the title screen / "Match couldn't start"** → setup didn't take; you're sent
-  back to the Lobby automatically — just **Find Match** again. (`RUST_LOG=nes_web=info` logs
+  back to the Lobby automatically — just **Find Match** again. (`RUST_LOG=pokemon_red_pvp=info` logs
   `setup attempt N failed` / `battle never reached the FIGHT menu`.)
 - **Matched but waiting** → another match owns the emulator (v1 = one battle at a time); you start
   when it frees.

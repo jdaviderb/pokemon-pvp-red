@@ -1,10 +1,10 @@
 # DESIGN — 2-Player Online Pokémon Arena (v1, buildable)
 
-Single, reconciled, copy-pasteable plan that merges the three probe designs
-(`research/mp-db-auth.md`, `research/mp-sprites.md`, `research/mp-architecture.md`) into one
-build. It reuses the existing single-emulator engine (`pipeline.rs` + `battle.rs`) **verbatim**,
-adds auth + DB + a room/game layer + a per-client WebSocket, and does **not** break `/offer`,
-`/battle/*`, or the single-player CRT console.
+Single, reconciled, copy-pasteable plan that merges the three probe designs (the DB-auth, sprites,
+and architecture probes) into one build. It reuses the existing single-emulator engine
+(`pipeline.rs` + `battle.rs`) **verbatim**, adds auth + DB + a room/game layer + a per-client
+WebSocket, and does **not** break `/offer`, `/battle/*`, or the single-player CRT console.
+(For the doc index, see `DOCS.md`.)
 
 Flow: register/login → Lobby "Find Match" → matched into a **room** → slot machine rolls a random
 species per player → 15s/move turn-based battle (CPU random fallback on timeout) → winner banner →
@@ -147,7 +147,7 @@ pub async fn connect_and_migrate() -> Result<DatabaseConnection, DbErr> {
 
 Switch to Postgres with **zero code change**:
 ```bash
-export DATABASE_URL='postgres://user:pass@host:5432/nes_web?sslmode=require'
+export DATABASE_URL='postgres://user:pass@host:5432/pokemon_red_pvp?sslmode=require'
 ```
 
 ### 1.3 Migrations (`src/migrations/`)
@@ -307,7 +307,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use crate::entities::{users, sessions};
 use crate::signaling::AppState;
 
-const SESSION_COOKIE: &str = "nes_session";
+const SESSION_COOKIE: &str = "pvp_session";
 const SESSION_TTL_HOURS: i64 = 12;
 
 pub fn hash_password(plain: &str) -> anyhow::Result<String> {
@@ -506,7 +506,7 @@ pub struct GameState {
 
 ### 3.3 WebSocket event protocol (`src/ws.rs`)
 
-One WS per logged-in client, auth'd from the `nes_session` cookie on the upgrade GET. WebRTC stays
+One WS per logged-in client, auth'd from the `pvp_session` cookie on the upgrade GET. WebRTC stays
 separate (media only).
 
 **Server→Client `ServerMsg`** (`#[serde(tag="type", rename_all="snake_case")]`):

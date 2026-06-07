@@ -1,184 +1,51 @@
-# nes-web — server-side emulation over WebRTC
+# Pokémon Red PVP
 
-Emulación **en el servidor** vía cores **libretro**, streaming **VP8 vídeo + Opus audio** al
-navegador por **WebRTC**, con **teclado** de vuelta por un *data channel*. Abre
-`http://localhost:3000`, pulsa **POWER** y ves/juegas dentro de una **TV CRT** retro.
+**Pokémon Red, emulated entirely server-side and streamed to your browser over WebRTC — with a live
+PvP arena where humans *and* AI agents battle.**
 
-Por defecto corre **Pokémon Red** (`Pokemon Red.gb`) **a color**: gambatte le aplica la
-**auto-colorización del Game Boy Color** (lo mismo que una GBC real hacía con un cartucho DMG) — es
-solo de render, así que sus savestates `.gb` siguen alimentando la battle-arena y el multiplayer.
-El romhack nativo `.gbc` y juegos **N64** corren en el mismo binario pasándolos por argv. La
-emulación pasa **100% en el servidor** — el navegador solo recibe el stream.
+A [gambatte](https://github.com/libretro/gambatte-libretro) libretro core runs Pokémon Red headless
+on the server (rendered in color via GBC auto-colorization); the browser receives live **VP8 video +
+stereo Opus audio** and sends input over a WebRTC data channel. On top of the stream sits the arena:
+matchmaking, 2-player battles, a ranking board, a Pokémon collection, a live "TV wall" of every
+battle, and an **MCP server** so an AI agent can find a match and play.
 
-> El crate se llama `nes-web` por historia: NES (tetanes-core) → N64 (libretro) → ahora también
-> Game Boy/GBC (libretro). El frontend libretro (`src/n64.rs`) carga **cualquier** core.
+> Crate: `pokemon-red-pvp`. The libretro frontend (`src/libretro.rs`) is core-agnostic — the project
+> grew out of a console-streaming experiment and that capability is still here — but the game is
+> Pokémon Red PVP.
 
-## 🕹️ Multijugador online (2 jugadores)
-
-Encima de la battle-arena hay un **juego online para 2 jugadores**: registro/login → **Find Match**
-→ te empareja en una **room** → una **tragaperras** te asigna un Pokémon aleatorio a cada uno →
-**batalla por turnos** (15 s/movimiento, si no eliges juega el CPU) → ganador → al lobby. Ambos
-jugadores ven **la misma** Game Boy en vivo por WebRTC; con **F5** sigues en tu room hasta acabar.
+## Quick start
 
 ```sh
-cargo run --release      # default = Pokemon Red.gb (a color vía GBC auto-colorization) + multiplayer
-```
-Abre **http://localhost:3000**, **Register** (usuario ≥3, password **≥6**). Para jugar de verdad
-necesitas **2 sesiones**: una ventana normal + otra **en incógnito** (cada una su cookie); registra
-un usuario en cada una y pulsa **Find Match** en ambas.
-
-**DB swappable** (SeaORM): SQLite por defecto (`data.db` se autocrea + migra al arrancar);
-`export DATABASE_URL=postgres://…` cambia a Postgres **sin tocar código**. Guía completa →
-[`docs/multiplayer.md`](docs/multiplayer.md). La consola de un jugador sigue en `/console.html`.
-
-```
-Navegador  ──POST /offer (SDP)──►  axum :3000
-   <video> ◄═══ VP8 + Opus RTP ═══  ┌──────────────────────────────────────────────┐
-   teclado ═══ DataChannel ════════►│ hilo emulador @core-fps (libretro core)       │
-                                     │   retro_run() → framebuffer + i16 stereo      │
-                                     │   (XRGB8888 ó RGB565) → I420 → VP8 (libvpx) ─┐ │
-                                     │   i16 → 48k → Opus (libopus) ───────────────┤ │
-                                     └──────────────────────────────────────────────┘ broadcast → per-peer tracks
+cargo run --release          # default = coordinator (a worker/emulator per battle → N concurrent rooms)
+# open http://localhost:3000  →  PLAY AS GUEST  →  FIND MATCH
 ```
 
-Los cores corren **headless** y por **software** (Game Boy es software puro; en N64 se fuerza el
-RDP **angrylion** rechazando `SET_HW_RENDER`) → entregan framebuffers de CPU por `video_refresh`,
-sin ventana ni GPU.
+`cargo run --release -- --solo` runs the single-process arena (one emulator, one battle at a time).
+Needs homebrew `libvpx` + `libopus`; the gambatte core lives in `cores/` (see `cores/fetch.sh`).
 
-## Requisitos (macOS arm64)
-
-- Toolchain **Rust 1.92** (fijado en `rust-toolchain.toml`; webrtc 0.17 lo exige).
-- `libvpx` y `libopus` de homebrew en `/opt/homebrew` (`.cargo/config.toml` los expone).
-- `clang` (para `build.rs` → `logshim.c`).
-- **Cores libretro** (arm64) en `cores/`. Si no están:
-  ```sh
-  ./cores/fetch.sh   # gambatte + sameboy (GB/GBC) + parallel_n64 + mupen64plus_next (N64)
-  ```
-
-## Build & run
+## Docker (production, linux/amd64)
 
 ```sh
-cargo run --release                 # Pokémon Red Color (.gbc, a color) por defecto
-# Pokémon Red original en gris (Game Boy clásico):
-cargo run --release -- "~/pokemon-pvp-red/Pokemon Red.gb"
-# otra ROM / otro core (arg1 = ROM, arg2 = core dylib):
-cargo run --release -- "/ruta/juego.gbc" cores/sameboy_libretro.dylib
-# N64 (mismo binario):
-cargo run --release -- "/ruta/juego.z64" cores/parallel_n64_libretro.dylib
-```
-Luego abre **http://localhost:3000** en **Chrome** y pulsa **POWER**.
-
-> El `.gbc` se genera aplicando un parche IPS a `Pokemon Red.gb`:
-> `python3 scripts/apply_ips.py "Pokemon Red.gb" pokered_color/pokered_color_vanilla.ips "Pokemon Red Color.gbc"`
-> (header 0x143 pasa a 0xC0 = modo GBC → color).
-
-### Controles
-
-**Game Boy / GBC** (default)
-
-| Tecla | GB |
-|---|---|
-| `← ↑ ↓ →` | D-pad |
-| `X` | A |
-| `Z` | B |
-| `Enter` | Start |
-| `⇧ Right` / `⌫` | Select |
-
-**N64** (al cargar un `.z64`): `←↑↓→` stick · `X`=A · `Z`=B · `C`=Z · `Q`/`E`=L/R · `Enter`=Start ·
-`I J K L`=C-buttons. (El cliente web manda nombres de botón; el servidor mapea según el juego.)
-
-## 🎮 AI Battle Arena (Pokémon Red)
-
-Un módulo experimental expone la **batalla de Pokémon Red como un entorno para agentes de IA**
-sobre HTTP. La emulación corre el motor de batalla **real** (no una reimplementación); el agente
-lee el estado de WRAM y elige movimientos, que se ejecutan navegando el menú por *input* (no se
-hackea el engine).
-
-Arranca con la ROM con la que se capturó el savestate:
-```sh
-cargo run --release -- "Pokemon Red.gb"
+./build-docker-production.sh                                   # → pokemon-red-pvp:prod
+docker run --rm --network host -e DEV=1 pokemon-red-pvp:prod   # open http://localhost:3000
 ```
 
-Endpoints (mismo origen, `:3000`):
+**Use `--network host`**, not `-p` — WebRTC's ICE candidates are unreachable across Docker's bridge
+network (the UI loads but no video). See `docs/SCALING.md`.
 
-| Método | Ruta | Qué hace |
-|---|---|---|
-| `POST` | `/battle/load` | restaura `states/battle.state` (cuerpo vacío) o un blob crudo (`--data-binary @file`) |
-| `GET`  | `/battle/state` | JSON `BattleState` (in_battle, turnos, player/enemy {hp,lvl,moves,pp,stats}, menú) |
-| `POST` | `/battle/action` | `{"type":"move","slot":0..3}` · `{"type":"switch","slot":N}` · `{"type":"run"}` · `{"type":"buttons","presses":["A",...]}` |
-| `POST` | `/battle/save` | serializa el estado actual → devuelve el blob y escribe `states/battle.state` |
-| `GET`  | `/battle/species` | lista de especies elegibles `[[idx,"NOMBRE"],…]` |
-| `POST` | `/battle/setup` | **monta un combate a elección**: `{"player":74,"enemy":75,"level":50}` (índices internos Gen-1) |
+## What's in it
 
-**Combate de leyenda (elige los Pokémon):** `/battle/setup` carga un savestate de intro
-(`states/legendary_intro.state`) e inyecta el equipo de ambos lados, así el motor saca a los
-elegidos **con sus sprites/nombres/cries reales**. Disponibles: **Articuno (74), Zapdos (75),
-Moltres (73), Dragonite (66)** — extiende la tabla `SPECIES` en `src/battle.rs` para añadir más.
-Desde la UI: fila **MATCHUP** (dropdowns + Lv + *Start Matchup*). Stats Lv50 calculados con la
-fórmula Gen-1 (DV=15). **Requiere arrancar con `Pokemon Red.gb`** (el savestate es de esa ROM).
-```sh
-curl -s localhost:3000/battle/species
-curl -XPOST localhost:3000/battle/setup -H 'content-type: application/json' -d '{"player":74,"enemy":75,"level":50}'
-```
+- **1v1 battles** — slot-machine random Pokémon, 15s/turn, live winner.
+- **Ranking** — Today / Weekly / Monthly leaderboards (cached).
+- **Your Pokémon** — own a species after winning with it N times (collection).
+- **Live TV** — watch every battle at once (paginated WebRTC wall).
+- **AI agents (MCP)** — point an agent at the arena's MCP server and it plays. See `docs/mcp.md`.
+- **Auth** — Google sign-in + guest mode; runtime feature flags.
 
-Bucle del agente:
-```sh
-curl -X POST localhost:3000/battle/load                 # bootstrap a una batalla
-curl -s localhost:3000/battle/state | jq                # leer estado
-curl -X POST localhost:3000/battle/action -H 'content-type: application/json' \
-     -d '{"type":"move","slot":0}'                       # elegir movimiento -> se ejecuta
-# repetir: leer estado; si un texto de resultado espera, avanzar con
-#          {"type":"buttons","presses":["A"]} hasta que turns_in_battle suba y menu vuelva a MainMenu
-```
-Win/loss: `enemy.hp==0` (ganas) / `player.hp==0` (pierdes); batalla terminada cuando `in_battle==0`.
+## Controls (Game Boy)
 
-**Notas:** el savestate de batalla (`states/battle.state`) es **específico de la ROM** (capturado en
-`Pokemon Red.gb`); regenéralo jugando hasta el menú FIGHT y `POST /battle/save`. HP/stats de Gen-1 son
-**big-endian**. Detalles + RAM map en `DESIGN-BATTLE.md` y `docs/pokemon-red-ram-map.md`.
+Arrows = D-pad · `X` = A · `Z` = B · `Enter` = Start · `⇧Right` / `⌫` = Select.
 
-## Estructura
+## Docs
 
-| Fichero | Rol |
-|---|---|
-| `src/n64.rs` | frontend **libretro** genérico (dlopen del core, callbacks, opciones, input) |
-| `src/video.rs` | `frame_to_i420`: **XRGB8888 (BGRX)** ó **RGB565** → I420 + encoder VP8 |
-| `src/audio.rs` | i16 estéreo → resample `core_rate`→48000 → Opus estéreo (960/canal) |
-| `src/pipeline.rs` | hilo maestro @core-fps: retro_run → encode → broadcast; re-init en cambio de resolución |
-| `src/webrtc.rs` | PeerConnection, tracks (Opus estéreo), RTCP, data channel, señalización |
-| `src/battle.rs` | battle-arena: `BattleState` reader (WRAM, big-endian), `AgentAction`, tap-macro del menú |
-| `src/signaling.rs` | router axum: `/offer`, `/battle/*`, `/auth/*`, `/api/{me,species}`, `/ws` |
-| `src/db.rs` · `src/migrations/` · `src/entities/` | SeaORM: conexión + crear-si-falta + migrar; modelos |
-| `src/auth.rs` | argon2id, register/login/logout, sesión en cookie, extractor `AuthUser` |
-| `src/rooms.rs` | matchmaking + FSM de room + motor de batalla por turnos (timer 15 s, CPU, ganador, resume) |
-| `src/ws.rs` | WebSocket por cliente (`WsHub`, protocolo de eventos JSON) |
-| `src/main.rs` | arranque (ROM + core por argv; conecta DB; lanza el matchmaker) |
-| `logshim.c` / `build.rs` | shim C-variádico para `GET_LOG_INTERFACE` (lo necesita mupen-next) |
-| `scripts/apply_ips.py` | aplicar parches IPS (genera el `.gbc` de Pokémon Red Color) |
-| `cores/` | dylibs libretro (`fetch.sh` los baja; ignorados por git) |
-| `static/{login,lobby,room}.html` | multijugador: login · lobby (Find Match) · room (tragaperras + batalla + timer) |
-| `static/console.html` | consola de un jugador (la TV CRT + teclado; antes `index.html`) |
-| `static/index.html` · `static/sprites/` | router de primer-paint (`/api/me`) · 151 sprites Gen-1 por nº Pokédex |
-| `docs/ARCHITECTURE.md` | **guía completa del proyecto** (lineage, componentes, cores, API HTTP, build, extender) |
-| `docs/multiplayer.md` | **guía del multijugador** (DB/auth/rooms/ws, flujo, API, F5, run/jugar) |
-| `docs/battle-arena.md` | guía de la battle-arena de IA + matchup de legendarios |
-| `docs/pokemon-red-ram-map.md` | RAM map de batalla (direcciones + endianness) |
-| `DESIGN*.md` | diseños verificados + riesgos (NES, N64, GB, BATTLE, LEGENDARY, MULTIPLAYER) |
-| `test/e2e-*.cjs` | pruebas headless (Chrome/Puppeteer) |
-| `research/` | notas de investigación + capturas de prueba |
-
-## Notas técnicas (no obvias)
-
-- **Formato de píxel por core**: `video_refresh` registra `SET_PIXEL_FORMAT`. `frame_to_i420`
-  ramifica: **RGB565** (gambatte/mGBA, 2 B/px, *pitch padded* — hay que respetar `pitch`, no `w*2`)
-  vs **XRGB8888 BGRX** (N64/angrylion, SameBoy).
-- **Headless sin GL (N64)**: se rechaza `SET_HW_RENDER` → angrylion software. Game Boy es software
-  puro y nunca lo pide.
-- **Dimensiones**: GB = 160×144 fijo; N64 = 640×240 ↔ 640×480 (cambia entre título y menús). El
-  `pipeline` **re-inicializa el encoder VP8** al cambiar de tamaño (un encoder nuevo emite keyframe;
-  el navegador se adapta; el CSS estira a 4:3).
-- **Audio**: el resampler toma el `sample_rate` que reporte el core (GB gambatte = 32768 Hz; N64 =
-  44100). gambatte es upsample suave a 48k; SameBoy (2.097 MHz) aliasea con el resampler lineal de
-  2 taps — por eso el default GB es gambatte.
-- **DMG vs GBC** lo decide el header del ROM (0x143: `.gb`=0x00 gris, `.gbc`=0xC0 color), no un flag.
-- **`GET_LOG_INTERFACE`**: mupen64plus-next SIGSEGV sin un puntero de log real → lo da `logshim.c`.
-- **Keyframe al conectar** y **limpieza de tasks por peer** del diseño original.
+See **[DOCS.md](DOCS.md)** — the index of all documentation.

@@ -1,12 +1,9 @@
 # DESIGN-BATTLE.md — Pokémon Red WebRTC → AI-Agent Battle Arena
 
 Concrete, copy-pasteable implementation plan. Everything below is grounded in three verified
-probes + a read of `src/{n64.rs,pipeline.rs,signaling.rs,main.rs,webrtc.rs}`.
+probes + a read of `src/{libretro.rs,pipeline.rs,signaling.rs,main.rs,webrtc.rs}`.
 
-- Memory/savestate API verified: `research/battle-memory-api.md`
-- Reach-a-battle + RAM-map verify + CCDD experiment: `research/battle-reach-and-ccdd.md`
-- Codebase integration + clean RAM map: `research/battle-integration.md`
-- RAM addresses + endianness: `docs/pokemon-red-ram-map.md`
+- RAM addresses + endianness: `docs/pokemon-red-ram-map.md` (see DOCS.md)
 - **Captured battle savestate (REAL, 59650 bytes): `~/pokemon-pvp-red/states/battle.state`**
 
 ---
@@ -34,11 +31,11 @@ that much more than the visible RAM fields.
 Each leg is empirically proven:
 
 1. **Bootstrap via savestate.** `retro_serialize`/`retro_unserialize` round-trip cleanly (both
-   return `true`; WRAM reverts byte-for-byte; blob is portable across fresh core instances —
-   `research/battle-memory-api.md` Tasks 4/4b). A **real rival battle was reached fully headless**
-   (boot → name → bedroom → Pallet → Oak → take starter → rival battle auto-starts, `D057=2`) and
-   saved to `states/battle.state` (`research/battle-reach-and-ccdd.md` §1–2). Loading that blob
-   drops the emulator straight onto the FIGHT action-menu of a Charmander-vs-Squirtle rival fight.
+   return `true`; WRAM reverts byte-for-byte; blob is portable across fresh core instances). A
+   **real rival battle was reached fully headless** (boot → name → bedroom → Pallet → Oak → take
+   starter → rival battle auto-starts, `D057=2`) and saved to `states/battle.state`. Loading that
+   blob drops the emulator straight onto the FIGHT action-menu of a Charmander-vs-Squirtle rival
+   fight.
 2. **Battle state via per-frame WRAM read.** `RETRO_MEMORY_SYSTEM_RAM` (id 2) = exactly 8192 bytes
    = GB WRAM `0xC000–0xDFFF`; CPU addr `A` ↦ `SYSTEM_RAM[A-0xC000]`. The full battle RAM map was
    read live and is internally consistent (L5 Charmander SCRATCH/GROWL vs L5 Squirtle TACKLE/TAIL
@@ -72,9 +69,9 @@ So bootstrap works two ways and both are covered: ship the already-captured `sta
 
 ---
 
-## 2. `src/n64.rs` ADDITIONS
+## 2. `src/libretro.rs` ADDITIONS
 
-The harness resolves symbols with `lib.get(b"retro_*")` and stores raw fn pointers on `N64` (see
+The harness resolves symbols with `lib.get(b"retro_*")` and stores raw fn pointers on `Emu` (see
 `run: RunFn`). Add five symbols + two memory-id constants + four methods, matching that pattern
 exactly. `c_uint`/`c_void` are already imported at the top of the file.
 
@@ -91,10 +88,10 @@ pub const RETRO_MEMORY_SAVE_RAM: c_uint = 0;
 pub const RETRO_MEMORY_SYSTEM_RAM: c_uint = 2; // GB WRAM 0xC000..0xE000 (verified 8192 bytes)
 ```
 
-### 2b. New fields on `struct N64` (extend the existing struct, ~line 353)
+### 2b. New fields on `struct Emu` (extend the existing struct, ~line 353)
 
 ```rust
-pub struct N64 {
+pub struct Emu {
     _lib: Library, // keep the dylib mapped for the process lifetime
     run: RunFn,    // raw fn pointer (valid while _lib lives)
     get_mem_data: GetMemDataFn,
@@ -109,7 +106,7 @@ pub struct N64 {
 }
 ```
 
-### 2c. Resolve them in `N64::new`, inside the existing `unsafe { ... }` next to `run` (~line 401)
+### 2c. Resolve them in `Emu::new`, inside the existing `unsafe { ... }` next to `run` (~line 401)
 
 ```rust
             // raw fn pointer for run (outlives the borrow; valid while `lib` is alive)
@@ -153,7 +150,7 @@ and change the binding + `Ok(...)`:
         let sys_ram_len = unsafe { get_mem_size(RETRO_MEMORY_SYSTEM_RAM) };
         tracing::info!("SYSTEM_RAM size = {sys_ram_len} bytes (expect 8192 for GB WRAM)");
 
-        Ok(N64 {
+        Ok(Emu {
             _lib: lib,
             run,
             get_mem_data,
@@ -172,7 +169,7 @@ and change the binding + `Ok(...)`:
 > store the *function* pointers, not the data pointer, and re-call `get_mem_data` at every read
 > (cores may relocate the buffer). Fetching the *fn* pointers here is fine.
 
-### 2d. Public accessor methods (in `impl N64`, next to `with_frame`/`set_button`)
+### 2d. Public accessor methods (in `impl Emu`, next to `with_frame`/`set_button`)
 
 ```rust
     /// Borrow the core's SYSTEM_RAM (GB: 8 KiB WRAM, CPU 0xC000..0xE000) for the closure.
@@ -223,13 +220,13 @@ and change the binding + `Ok(...)`:
     }
 ```
 
-`n64.rs` stays Pokémon-agnostic — the `addr-0xC000` offset math and BE reads live in `battle.rs`.
+`libretro.rs` stays Pokémon-agnostic — the `addr-0xC000` offset math and BE reads live in `battle.rs`.
 
 ---
 
 ## 3. `src/battle.rs` (NEW)
 
-Pure module over `&[u8]` WRAM + an action enum. No dependency on `N64`, so unit-testable with a
+Pure module over `&[u8]` WRAM + an action enum. No dependency on `Emu`, so unit-testable with a
 fake `vec![0u8; 8192]`. Register it in `main.rs` with `mod battle;` (see §5).
 
 ```rust
@@ -238,7 +235,7 @@ fake `vec![0u8; 8192]`. Register it in `main.rs` with `mod battle;` (see §5).
 //! the in-battle menu. All addresses are CPU addresses in 0xC000..0xDFFF; see
 //! docs/pokemon-red-ram-map.md. **Every multi-byte value is BIG-ENDIAN (Gen-1 quirk).**
 
-use crate::n64::{ID_A, ID_DOWN, ID_LEFT, ID_RIGHT, ID_UP};
+use crate::libretro::{ID_A, ID_DOWN, ID_LEFT, ID_RIGHT, ID_UP};
 
 // ---------- WRAM access helpers (offset = addr - 0xC000) ----------
 #[inline]
@@ -301,7 +298,7 @@ pub struct BattleState {
     pub turns_in_battle: u8,      // CCD5
     pub player_selected_move: u8, // CCDC
     pub enemy_selected_move: u8,  // CCDD
-    pub menu: MenuPhase,          // software state machine (§4 of integration doc)
+    pub menu: MenuPhase,          // software state machine (§4)
     pub player: BattlePokemon,    // wBattleMon  (D009..)
     pub enemy: BattlePokemon,     // wEnemyMon   (CFE5..)
     pub cur_map: u8,              // D35E
@@ -321,7 +318,7 @@ pub enum AgentAction {
     Buttons { presses: Vec<String> }, // raw taps for scripting/navigation
 }
 
-// ---------- reader (pure; addresses verified live, see battle-reach-and-ccdd.md §3) ----------
+// ---------- reader (pure; addresses verified live) ----------
 fn read_player(ram: &[u8]) -> BattlePokemon {
     BattlePokemon {
         species: rd8(ram, 0xD014),
@@ -410,8 +407,8 @@ pub fn inject_enemy_party(ram: &mut [u8], species: &[u8]) {
 
 // ---------- action -> input macro (the menu driver) ----------
 /// One scheduled tap: hold `button` for `hold` frames, then `gap` idle frames before the next tap.
-/// ~4 down / ~6 up is reliable at 60 fps (the Gen-1 menu debounces). Verified determinism in
-/// battle-memory-api.md Task 5 (same state + same input script => identical WRAM).
+/// ~4 down / ~6 up is reliable at 60 fps (the Gen-1 menu debounces). Verified determinism:
+/// same state + same input script => identical WRAM.
 #[derive(Clone, Copy, Debug)]
 pub struct Tap {
     pub button: usize,
@@ -458,9 +455,9 @@ pub fn action_to_taps(a: &AgentAction) -> Vec<Tap> {
                 "Down" => Some(tap(ID_DOWN)),
                 "Left" => Some(tap(ID_LEFT)),
                 "Right" => Some(tap(ID_RIGHT)),
-                "B" => Some(tap(crate::n64::ID_B)),
-                "Start" => Some(tap(crate::n64::ID_START)),
-                "Select" => Some(tap(crate::n64::ID_SELECT)),
+                "B" => Some(tap(crate::libretro::ID_B)),
+                "Start" => Some(tap(crate::libretro::ID_START)),
+                "Select" => Some(tap(crate::libretro::ID_SELECT)),
                 _ => None,
             })
             .collect(),
@@ -468,7 +465,7 @@ pub fn action_to_taps(a: &AgentAction) -> Vec<Tap> {
 }
 
 /// Per-frame tap-macro player. Holds a button for `hold` frames, releases for `gap`, then advances.
-/// Owned by run_loop; driven by `apply_agent_action` once per frame. Reuses N64::set_button — the
+/// Owned by run_loop; driven by `apply_agent_action` once per frame. Reuses Emu::set_button — the
 /// exact path the browser input channel uses, so a human can still co-drive the same PAD bits.
 #[derive(Default)]
 pub struct TapMachine {
@@ -490,7 +487,7 @@ impl TapMachine {
         self.cur.is_some() || !self.queue.is_empty()
     }
     /// Drop everything (e.g. when leaving battle).
-    pub fn clear(&mut self, emu: &crate::n64::N64) {
+    pub fn clear(&mut self, emu: &crate::libretro::Emu) {
         if let Some(t) = self.cur.take() {
             emu.set_button(t.button, false);
         }
@@ -501,7 +498,7 @@ impl TapMachine {
 
     /// Advance one frame: call ONCE per frame, BEFORE emu.clock_frame(). Pushes button state into
     /// PAD via emu.set_button. This is the "apply_agent_action" step driven from the pipeline.
-    pub fn tick(&mut self, emu: &crate::n64::N64) {
+    pub fn tick(&mut self, emu: &crate::libretro::Emu) {
         match &self.cur {
             Some(t) => {
                 self.left -= 1;
@@ -674,7 +671,7 @@ fn run_loop(
 ### 4f. Inside the loop — drain savestate cmds + agent actions + drive the macro
 
 Place this block at the **top of the loop**, before step 1 (input drain). Savestate cmds run on the
-emu thread (the only owner of `N64`), satisfying the integration doc's central constraint.
+emu thread (the only owner of `Emu`), satisfying the central single-owner constraint.
 
 ```rust
         // 0a. Savestate commands (cross async/sync via oneshot, like existing channels).
@@ -826,7 +823,7 @@ oneshot channels drained in §4f. `AppState` is reused unchanged.
 
 ## 6. CCDD EXPERIMENT CONCLUSION + RECOMMENDATION
 
-**CCDD experiment result (verified, `research/battle-reach-and-ccdd.md` §4):** within a turn the
+**CCDD experiment result (verified):** within a turn the
 player's move locks into `CCDC` (~frame 130), then **the enemy AI writes its move into `CCDD`
 (~frame 141)**, then moves execute (~frame 331), then `CCD5` (turns) increments. Writing `CCDD`
 **before** ~f141 is **overwritten** by the AI pick. Writing `CCDD` **after** the AI pick (and
@@ -844,7 +841,7 @@ of `CCDD` only if an agent must also control the enemy).**
 - Drive the *player's* move with the **input macro** (§3) — legit menu navigation keeps all the
   invisible machine state consistent; strictly safer than poking `CCDC`.
 - If you want a 1-agent-controls-both or scripted-enemy mode, add CCDD poll-and-overwrite **inside
-  the emu thread** (it already owns `N64` and runs every frame — detect `CCDD` 0→nonzero, write the
+  the emu thread** (it already owns `Emu` and runs every frame — detect `CCDD` 0→nonzero, write the
   agent's enemy move once per `CCD5`). This needs **no ROM patch**.
 
 **Why not the alternatives:**
@@ -945,7 +942,7 @@ Agent decision rule of thumb: only `POST /battle/action` when `in_battle != 0` *
 
 | File | Change |
 |---|---|
-| `src/n64.rs` | +5 symbols, +2 mem-id consts, +5 struct fields, resolve in `new`, +`with_system_ram`/`with_system_ram_mut`/`save_state`/`load_state` (§2). |
+| `src/libretro.rs` | +5 symbols, +2 mem-id consts, +5 struct fields, resolve in `new`, +`with_system_ram`/`with_system_ram_mut`/`save_state`/`load_state` (§2). |
 | `src/battle.rs` | **NEW** — `BattleState`/`BattlePokemon`/`BattleStats`/`AgentAction`/`MenuPhase`/`Tap`/`TapMachine`, `read_battle_state`, `inject_*`, `action_to_taps`, `next_menu_phase`, tests (§3). |
 | `src/pipeline.rs` | Extend `AppInner`, new channels in `start`, new `run_loop` params, drain save/load + actions, `taps.tick`, refresh snapshot after `clock_frame` (§4). |
 | `src/signaling.rs` | +`get`/`Bytes` imports, 4 routes, 4 handlers (§5). |

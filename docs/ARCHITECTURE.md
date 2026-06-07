@@ -1,12 +1,9 @@
-# nes-web — Architecture & Project Guide
+# pokemon-red-pvp — Architecture & Project Guide
 
-A Rust server that runs a **retro console emulator 100% on the server** and streams the live
-game to a browser over **WebRTC** (VP8 video + Opus audio), with **keyboard input** sent back over
-a WebRTC data channel. The browser shows the game inside a **retro CRT TV** UI and — for Pokémon
-Red — exposes an **AI-agent battle arena** over HTTP.
-
-> The crate is still called `nes-web` for historical reasons. It began as NES and grew into a
-> generic libretro streamer. See **Lineage** below.
+A Rust server that runs a **Game Boy / Pokémon Red emulator 100% on the server** and streams the
+live game to a browser over **WebRTC** (VP8 video + Opus audio), with **keyboard input** sent back
+over a WebRTC data channel. The browser shows the game inside a **retro CRT TV** UI and exposes an
+**AI-agent battle arena** over HTTP.
 
 ---
 
@@ -14,18 +11,13 @@ Red — exposes an **AI-agent battle arena** over HTTP.
 
 | Milestone | Commit | What changed |
 |---|---|---|
-| NES over WebRTC | `5b9220d` | `tetanes-core` (pure-Rust NES), VP8+Opus, axum signaling, keyframe-on-connect |
-| Player 2 input | `f6ac40c` | 2-player keymap |
-| **N64** (libretro) | `eb6d084` | swapped to a **libretro frontend**: dlopen a core, drive it headless. `mupen64plus-next`/`parallel_n64` + **angrylion software RDP** (refuse `SET_HW_RENDER`) |
-| Retro CRT UI | `c0285a4` | the web page became a CRT television (scanlines, curvature, glow) |
-| Pokémon Stadium + RSP knob | `f25e2d8` | env-selectable RSP; per-frame **resolution-change re-init** of the VP8 encoder |
 | **Game Boy / GBC** | `3ef9cf2` | `gambatte` core; **format-aware** converter (RGB565 + XRGB8888); default Pokémon Red Color |
 | **AI battle arena** | `0a867f8` | libretro memory + savestate; `BattleState` reader; action API over HTTP |
 | In-browser battle console | `2bfb1ac` | UI panel to act as the agent |
 | **Custom legendary matchup** | `63d6263` | pick the two Pokémon; inject full party structs into an intro savestate |
 
-The libretro frontend (`src/n64.rs`) loads **any** libretro core, so the same binary runs Game
-Boy/GBC and N64 just by changing the ROM + core dylib passed on the command line.
+The libretro frontend (`src/libretro.rs`) loads a libretro core, so the same binary runs Game
+Boy/GBC just by changing the ROM + core dylib passed on the command line.
 
 ---
 
@@ -52,10 +44,10 @@ Boy/GBC and N64 just by changing the ROM + core dylib passed on the command line
 
 **Key properties**
 - The **emulator thread is the master clock**: it owns the libretro core and both encoders, runs
-  `retro_run()` once per frame, drift-paced to the core's reported fps (GB ≈ 59.73, N64 ≈ 60.13).
+  `retro_run()` once per frame, drift-paced to the core's reported fps (GB ≈ 59.73).
 - libretro callbacks are bare `extern "C" fn` (no user-data), so per-instance buffers live in
-  process **globals** (`static Mutex<FRAME/AUDIO/PAD>` in `n64.rs`). Exactly **one** emulator on
-  one thread keeps that race-free; the core's worker threads write the same buffers under the lock.
+  process **globals** (`static Mutex<FRAME/AUDIO/PAD>` in `libretro.rs`). Exactly **one** emulator
+  on one thread keeps that race-free; the core's worker threads write the same buffers under the lock.
 - Encoded media is fanned out with `tokio::sync::broadcast`; each connected peer spawns a writer
   task that pulls samples and `write_sample`s into its track.
 - HTTP signaling is **non-trickle**: the browser gathers ICE, POSTs a complete offer to `/offer`,
@@ -68,16 +60,16 @@ Boy/GBC and N64 just by changing the ROM + core dylib passed on the command line
 | File | Responsibility |
 |---|---|
 | `src/main.rs` | entry: read ROM + core paths (argv), `pipeline::start`, build the WebRTC API, serve axum on `127.0.0.1:3000`. |
-| `src/n64.rs` | **generic libretro frontend**: `dlopen` a core, wire the 6 retro callbacks, force software rendering (refuse `SET_HW_RENDER`), provide `GET_LOG_INTERFACE`, load the ROM, expose `clock_frame`, `with_frame`, `audio_drain`, `set_button/stick/cstick`, **memory** (`with_system_ram[_mut]`) and **savestates** (`save_state`/`load_state`). |
+| `src/libretro.rs` | **libretro frontend**: `dlopen` a core, wire the 6 retro callbacks, force software rendering (refuse `SET_HW_RENDER`), provide `GET_LOG_INTERFACE`, load the ROM, expose `clock_frame`, `with_frame`, `audio_drain`, `set_button`, **memory** (`with_system_ram[_mut]`) and **savestates** (`save_state`/`load_state`). |
 | `src/video.rs` | `frame_to_i420` (format-aware: **XRGB8888 BGRX** and **RGB565**, pitch-honoring) + realtime **VP8** encoder; canvas dims taken from the first frame; re-inits on resolution change. |
 | `src/audio.rs` | i16 stereo from the core → linear resample `core_rate`→48000 → **stereo Opus** in exact 960-sample (20 ms) packets. |
 | `src/pipeline.rs` | the per-frame loop; `broadcast` channels; `AppInner` (shared state + channels); input application; the battle snapshot + agent action queue + savestate/setup handlers (all on the emu thread). |
 | `src/webrtc.rs` | per-peer `RTCPeerConnection`: VP8 + stereo-Opus tracks, RTCP drain, the input data channel, non-trickle offer/answer, keyframe-on-connect, per-peer cleanup. (Module shadows the `webrtc` crate → use `::webrtc`.) |
 | `src/signaling.rs` | axum `Router` + `AppState`: `POST /offer` and the `/battle/*` API. |
 | `src/battle.rs` | **Pokémon Red battle arena**: `BattleState`/`BattlePokemon` reader (WRAM, **big-endian** Gen-1 stats), `AgentAction` + `TapMachine` (menu input macro), `inject_*`, and the **custom-matchup** system (`Gen1Species` table, Gen-1 stat formula, `build_party_mon`, `setup_matchup`). |
-| `logshim.c` + `build.rs` | a C-variadic log function for libretro `GET_LOG_INTERFACE` (mupen64plus-next SIGSEGVs without it). |
+| `logshim.c` + `build.rs` | a C-variadic log function for libretro `GET_LOG_INTERFACE`. |
 | `scripts/apply_ips.py` | apply an IPS patch (used to make `Pokemon Red Color.gbc` from the base ROM). |
-| `static/index.html` | the browser client: CRT-TV styling, WebRTC connect, keyboard mapping per system, and the AI battle console + matchup picker. |
+| `static/index.html` | the browser client: CRT-TV styling, WebRTC connect, keyboard mapping, and the AI battle console + matchup picker. |
 
 ---
 
@@ -89,16 +81,12 @@ libretro nightly buildbot. `cores/*.dylib` is **gitignored**.
 | System | Core(s) | Pixel format | Audio rate | Notes |
 |---|---|---|---|---|
 | **Game Boy / GBC** | `gambatte` (default), `sameboy` | gambatte **RGB565** (pitch 512, 160 visible) / sameboy XRGB8888 | gambatte 32768 Hz | software; auto-detects DMG vs GBC from ROM header `0x143`. |
-| **N64** | `parallel_n64` (default), `mupen64plus_next` | XRGB8888 (BGRX), 640×240 (line-doubled) ↔ 640×480 | 44100 Hz | **angrylion software RDP** (no GL); `N64_RSP=hle`/`cxd4`. |
-| NES (historical) | `tetanes-core` (removed) | — | — | replaced by the libretro path; see `DESIGN.md`. |
 
 **Running each:**
 ```sh
 cargo run --release                                            # default: Pokémon Red Color (.gbc)
 cargo run --release -- "Pokemon Red.gb"                        # GB, grayscale + battle arena
 cargo run --release -- "Pokemon Red Color.gbc" cores/sameboy_libretro.dylib
-cargo run --release -- "Super Smash Bros. (U) [!].z64" cores/parallel_n64_libretro.dylib
-N64_RSP=hle cargo run --release -- "<rom>.z64" cores/parallel_n64_libretro.dylib
 ```
 (`./run.sh [rom] [core]` is a convenience wrapper that also exports the homebrew lib paths.)
 
@@ -108,7 +96,7 @@ N64_RSP=hle cargo run --release -- "<rom>.z64" cores/parallel_n64_libretro.dylib
 
 0. Drain emu-thread commands: **savestate** save/load, **/battle/setup** (load intro + inject),
    **agent actions** → `TapMachine`; then `taps.tick()` (push button bits via `set_button`).
-1. Apply pending **browser input** (data channel → `input_rx`): digital buttons + analog stick.
+1. Apply pending **browser input** (data channel → `input_rx`): digital buttons.
 2. If a new viewer connected, **reset the VP8 encoder** so the next frame is a keyframe.
 3. `emu.clock_frame()` (one `retro_run`). Then **publish the BattleState snapshot** from WRAM.
 4. If the frame **resolution changed**, re-init the encoder (VP8 can't resize mid-stream).
@@ -139,7 +127,6 @@ N64_RSP=hle cargo run --release -- "<rom>.z64" cores/parallel_n64_libretro.dylib
   LED (amber standby → green playing). Pure CSS/JS; served live (no rebuild to change it).
 - **Controls** (sent as `{type:"down|up", button, player}` over the data channel):
   - **Game Boy**: arrows = D-pad, `X`=A, `Z`=B, `Enter`=Start, `⇧Right`/`⌫`=Select.
-  - **N64**: arrows = control stick, `X`=A, `Z`=B, `C`=Z, `Q`/`E`=L/R, `Enter`=Start, `IJKL`=C-buttons.
 - **AGENT BATTLE CONSOLE** (Pokémon Red): Load Battle / Save State / Advance ▶A; live HP bars +
   state; four move buttons; Run; and a **MATCHUP** row (player/enemy dropdowns + level + Start
   Matchup) populated from `/battle/species`.
@@ -176,18 +163,17 @@ See **`docs/battle-arena.md`** for the `BattleState` schema, the agent loop, and
 ```sh
 cargo build --release          # or ./run.sh
 ./cores/fetch.sh               # (re)download cores if cores/*.dylib are missing
-RUST_LOG=nes_web=info,webrtc=warn cargo run --release    # verbose logs
+RUST_LOG=pokemon_red_pvp=info,webrtc=warn cargo run --release    # verbose logs
 ```
 
 ---
 
 ## 10. Extending
 
-**Add a libretro core / system.** Drop the arm64 `*_libretro.dylib` in `cores/` (add it to
-`cores/fetch.sh`), run `cargo run -- "<rom>" cores/<core>.dylib`. The frontend is generic; if the
-core uses a new pixel format, add a branch to `frame_to_i420`. If it needs forced options, add them
-to `forced_option` in `n64.rs` (a core only queries its own keys). GL-only cores would need an
-offscreen context (see `DESIGN-N64.md` §10) — the current path is software-only.
+**Add a libretro core.** Drop the arm64 `*_libretro.dylib` in `cores/` (add it to `cores/fetch.sh`),
+run `cargo run -- "<rom>" cores/<core>.dylib`. If the core uses a new pixel format, add a branch to
+`frame_to_i420`. If it needs forced options, add them to `forced_option` in `libretro.rs` (a core
+only queries its own keys). The current path is software-only.
 
 **Add a battle species.** Append a `Gen1Species` row to `SPECIES` in `src/battle.rs` with the
 **internal index** (NOT the Pokédex number), base stats, type ids, catch rate, and a 4-move set
@@ -197,8 +183,8 @@ offscreen context (see `DESIGN-N64.md` §10) — the current path is software-on
 
 ## 11. Known quirks / gotchas
 
-- **Headless = refuse `SET_HW_RENDER`** → keeps cores in software (angrylion for N64). Don't accept it.
-- **`GET_LOG_INTERFACE` needs a real C-variadic fn** (`logshim.c`) or mupen64plus-next SIGSEGVs.
+- **Headless = refuse `SET_HW_RENDER`** → keeps the core in software. Don't accept it.
+- **`GET_LOG_INTERFACE` needs a real C-variadic fn** (`logshim.c`).
 - **Pixel format & pitch**: always stride by the callback's real `pitch` (gambatte pads 160→256px).
 - **Gen-1 HP/stats are BIG-ENDIAN** — the #1 battle-reader bug (a unit test pins it).
 - **HRAM (e.g. FFF3) is not exposed** by libretro memory; battle turn/phase is derived from WRAM.
@@ -213,8 +199,8 @@ offscreen context (see `DESIGN-N64.md` §10) — the current path is software-on
 ## 12. Repository layout
 
 ```
-nes-web/
-├── src/{main,n64,video,audio,pipeline,webrtc,signaling,battle}.rs
+pokemon-red-pvp/
+├── src/{main,libretro,video,audio,pipeline,webrtc,signaling,battle}.rs
 ├── static/index.html            CRT-TV client + battle console
 ├── logshim.c · build.rs         libretro log shim
 ├── scripts/apply_ips.py         IPS patcher (makes the .gbc)
@@ -224,14 +210,13 @@ nes-web/
 ├── docs/ARCHITECTURE.md         this file
 ├── docs/battle-arena.md         AI battle arena guide
 ├── docs/pokemon-red-ram-map.md  Gen-1 battle RAM map
-├── DESIGN*.md                   verified design docs (NES, N64, GB, BATTLE, LEGENDARY)
-├── research/                    grounded probe findings + proof screenshots
+├── DESIGN-GB.md · DESIGN-BATTLE.md   verified design docs (see DOCS.md)
 ├── CLAUDE.md                    guide for Claude Code
 └── README.md
 ```
 
 **Gitignored** (not in version control): `cores/*.dylib`, `states/`, all ROMs/patches
-(`*.gb *.gbc *.ips *.z64 *.n64 *.v64 *.sfc *.smc *.nes`), `/target`.
+(`*.gb *.gbc *.ips`), `/target`.
 
 ---
 
@@ -241,5 +226,5 @@ End-to-end is validated with **headless Chrome (Puppeteer)** — see `test/` and
 media decode (correct dimensions + stereo Opus), keyboard input reaching the core, peer cleanup,
 GB color vs DMG grayscale, and the battle-arena flows (load → state → move; matchup → correct
 sprites). Unit tests in `src/battle.rs` pin the big-endian HP read and the Lv50 stat formula.
-Liveness signal in the server log: `n64: ~60.0 fps | … | viewers v=.. a=..` every 5 s.
+Liveness signal in the server log: `~60.0 fps | … | viewers v=.. a=..` every 5 s.
 ```
