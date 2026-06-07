@@ -3,7 +3,7 @@
 //! the in-battle menu. All addresses are CPU addresses in 0xC000..0xDFFF; see
 //! docs/pokemon-red-ram-map.md. **Every multi-byte value is BIG-ENDIAN (Gen-1 quirk).**
 
-use crate::n64::{ID_A, ID_B, ID_DOWN, ID_LEFT, ID_RIGHT, ID_UP};
+use crate::libretro::{ID_A, ID_B, ID_DOWN, ID_LEFT, ID_RIGHT, ID_UP};
 
 // ---------- WRAM access helpers (offset = addr - 0xC000) ----------
 #[inline]
@@ -231,9 +231,9 @@ pub fn action_to_taps(a: &AgentAction) -> Vec<Tap> {
                 "Down" => Some(tap(ID_DOWN)),
                 "Left" => Some(tap(ID_LEFT)),
                 "Right" => Some(tap(ID_RIGHT)),
-                "B" => Some(tap(crate::n64::ID_B)),
-                "Start" => Some(tap(crate::n64::ID_START)),
-                "Select" => Some(tap(crate::n64::ID_SELECT)),
+                "B" => Some(tap(crate::libretro::ID_B)),
+                "Start" => Some(tap(crate::libretro::ID_START)),
+                "Select" => Some(tap(crate::libretro::ID_SELECT)),
                 _ => None,
             })
             .collect(),
@@ -241,7 +241,7 @@ pub fn action_to_taps(a: &AgentAction) -> Vec<Tap> {
 }
 
 /// Per-frame tap-macro player. Holds a button for `hold` frames, releases for `gap`, then advances.
-/// Owned by run_loop; driven once per frame. Reuses N64::set_button — the exact path the browser
+/// Owned by run_loop; driven once per frame. Reuses Emu::set_button — the exact path the browser
 /// input channel uses, so a human can still co-drive the same PAD bits.
 #[derive(Default)]
 pub struct TapMachine {
@@ -263,7 +263,7 @@ impl TapMachine {
         self.cur.is_some() || !self.queue.is_empty()
     }
     /// Drop everything (e.g. when leaving battle / after a state teleport).
-    pub fn clear(&mut self, emu: &crate::n64::N64) {
+    pub fn clear(&mut self, emu: &crate::libretro::Emu) {
         if let Some(t) = self.cur.take() {
             emu.set_button(t.button, false);
         }
@@ -273,7 +273,7 @@ impl TapMachine {
     }
 
     /// Advance one frame: call ONCE per frame, BEFORE emu.clock_frame().
-    pub fn tick(&mut self, emu: &crate::n64::N64) {
+    pub fn tick(&mut self, emu: &crate::libretro::Emu) {
         match &self.cur {
             Some(t) => {
                 self.left -= 1;

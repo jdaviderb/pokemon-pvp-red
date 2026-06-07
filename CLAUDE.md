@@ -4,13 +4,15 @@ Guidance for Claude Code when working in this repository.
 
 ## What this is
 
-`nes-web` runs a **console emulator entirely server-side** and streams the live game to a browser
-over **WebRTC** (VP8 video + Opus audio), with **keyboard input** sent back over a WebRTC data
-channel. Open `http://localhost:3000`, click **Connect**, watch/play.
+**Pokémon Red PVP** (crate `pokemon-red-pvp`) runs **Pokémon Red entirely server-side** (gambatte
+libretro core, Game Boy / GBC) and streams the live game to a browser over **WebRTC** (VP8 video +
+Opus audio), with **keyboard input** sent back over a WebRTC data channel. On top of that it adds the
+PvP arena: matchmaking, 2-player battles, ranking, a collection, a live TV wall, and an **MCP server**
+so AI agents can play. Open `http://localhost:3000`.
 
-The crate name is historical: NES (tetanes-core) → N64 (libretro) → now also **Game Boy / GBC**
-(libretro). The libretro frontend (`src/n64.rs`) loads ANY core. Emulation is server-only — the
-browser only receives the stream.
+The libretro frontend (`src/libretro.rs`) is **core-agnostic** — it can load any core (the project
+grew out of an NES→N64→GB streaming experiment, and that general capability is still here and reusable)
+— but the product is Pokémon Red PVP. Emulation is server-only; the browser only receives the stream.
 
 > **Full docs:** `docs/ARCHITECTURE.md` (complete project guide: lineage, components, cores, HTTP
 > API, build, extending), `docs/battle-arena.md` (the AI battle arena + matchup), and
@@ -97,7 +99,9 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
 
 | File | Role |
 |---|---|
-| `src/n64.rs` | libretro frontend: dlopen core, 6 callbacks, force angrylion software, load .z64, input |
+| `src/libretro.rs` | libretro frontend (core-agnostic): dlopen core, 6 callbacks, load ROM, input. The emulator handle is `Emu` |
+| `src/mcp.rs` | MCP server (rmcp): remote streamable-HTTP at `/mcp` + stdio (`--mcp`) so AI agents play. See `docs/mcp.md` |
+| `Dockerfile` · `build-docker-production.sh` | production linux/amd64 image (bundles ROM + Linux core + states); see `docs/SCALING.md` |
 | `src/video.rs` | XRGB8888(BGRX)→I420 (`xrgb_to_i420`) + VP8 encoder; canvas sized from 1st frame |
 | `src/audio.rs` | i16 stereo → 44100→48000 linear resample → stereo Opus 960-frame packets |
 | `src/pipeline.rs` | the core-fps loop; broadcast channels; `AppInner`; N64 input; stats |

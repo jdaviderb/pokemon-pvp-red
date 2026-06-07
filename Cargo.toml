@@ -1,12 +1,12 @@
 [package]
-name = "nes-web"
+name = "pokemon-red-pvp"
 version = "0.1.0"
 edition = "2021"
 # Pinned to the 1.92 toolchain (see rust-toolchain.toml) which webrtc 0.17.x requires.
 rust-version = "1.92"
 
 [dependencies]
-# --- N64 emulation: load a libretro core (parallel_n64 / mupen64plus-next) via dlopen ---
+# --- Emulation: load a libretro core (gambatte Game Boy/GBC; any core works) via dlopen ---
 libloading = "0.8"
 
 # --- async runtime (shared by axum + webrtc-rs) ---

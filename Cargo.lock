@@ -1789,39 +1789,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nes-web"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "argon2",
- "async-trait",
- "axum",
- "axum-extra",
- "bytes",
- "chrono",
- "dotenvy",
- "futures-util",
- "http",
- "libloading",
- "opus",
- "rand 0.8.6",
- "reqwest",
- "rmcp",
- "sea-orm",
- "sea-orm-migration",
- "serde",
- "serde_json",
- "time",
- "tokio",
- "tokio-tungstenite",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "vpx-encode",
- "webrtc",
-]
-
-[[package]]
 name = "nix"
 version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2123,6 +2090,39 @@ name = "plain"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
+
+[[package]]
+name = "pokemon-red-pvp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "argon2",
+ "async-trait",
+ "axum",
+ "axum-extra",
+ "bytes",
+ "chrono",
+ "dotenvy",
+ "futures-util",
+ "http",
+ "libloading",
+ "opus",
+ "rand 0.8.6",
+ "reqwest",
+ "rmcp",
+ "sea-orm",
+ "sea-orm-migration",
+ "serde",
+ "serde_json",
+ "time",
+ "tokio",
+ "tokio-tungstenite",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "vpx-encode",
+ "webrtc",
+]
 
 [[package]]
 name = "poly1305"

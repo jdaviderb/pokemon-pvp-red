@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the production nes-web image for linux/amd64 (bundling the ROM, the Linux gambatte core, the
+# Build the production Pokemon Red PVP image for linux/amd64 (bundling the ROM, the Linux gambatte core, the
 # savestates and the static UI), then print how to run it.
 #
 # On an arm64 host (Apple Silicon) this builds amd64 via QEMU emulation — correct but slow; on an
@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-IMAGE="${IMAGE:-nes-web:prod}"
+IMAGE="${IMAGE:-pokemon-red-pvp:prod}"
 PORT="${PORT:-3000}"
 
 echo "==> Building $IMAGE for linux/amd64 ..."

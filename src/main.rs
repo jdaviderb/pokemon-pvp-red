@@ -1,10 +1,11 @@
-//! Server-side N64 emulation streamed to the browser over WebRTC.
+//! Pokémon Red PVP — server-side Game Boy emulation streamed to the browser over WebRTC.
 //!
-//! A libretro core (parallel_n64 / mupen64plus-next, angrylion software RDP) runs headless on
-//! the server; the browser at http://localhost:3000 receives live VP8 video + stereo Opus audio
-//! and sends keyboard input back over a data channel.
+//! A libretro core (gambatte, Game Boy / GBC) runs headless on the server; the browser at
+//! http://localhost:3000 receives live VP8 video + stereo Opus audio and sends keyboard input back
+//! over a data channel. (The libretro frontend is generic — it can load any core — but the game is
+//! Pokémon Red PVP.)
 //!
-//! Args: [1] ROM path (.z64), [2] core dylib path. Both optional.
+//! Args: [1] ROM path (.gb), [2] core path. Both optional.
 
 mod audio;
 mod auth;
@@ -15,7 +16,7 @@ mod entities;
 mod flags;
 mod mcp;
 mod migrations;
-mod n64;
+mod libretro;
 mod oauth;
 mod pipeline;
 mod ranking;
@@ -29,9 +30,9 @@ mod ws;
 use axum_extra::extract::cookie::Key;
 use signaling::{router, AppState, Role};
 
-// Default to "Pokemon Red.gb": gambatte's GBC auto-colorization (forced in n64.rs) renders it in
-// color out of the box, AND its savestates power the battle arena + 2-player multiplayer. Pass the
-// native romhack ".gbc" as argv[1] for its own colors, or any other ROM/core for GB/GBC/N64.
+// Default to "Pokemon Red.gb": gambatte's GBC auto-colorization (forced in libretro.rs) renders it
+// in color out of the box, AND its savestates power the battle arena + 2-player multiplayer. Pass
+// the native romhack ".gbc" as argv[1] for its own colors, or any other ROM/core for GB/GBC.
 const DEFAULT_ROM: &str = "~/pokemon-pvp-red/Pokemon Red.gb";
 const DEFAULT_CORE: &str =
     "~/pokemon-pvp-red/cores/gambatte_libretro.dylib";
@@ -63,14 +64,14 @@ async fn main() -> anyhow::Result<()> {
     // .env, which on this machine is ~/.env full of unrelated prod secrets. Real env vars win.
     let _ = dotenvy::from_path(".env");
 
-    // `nes-web --mcp`: run the stdio MCP server (an AI agent plays via NES_TOKEN/NES_URL). Handled
+    // `pokemon-red-pvp --mcp`: run the stdio MCP server (an AI agent plays via ARENA_TOKEN/ARENA_URL). Handled
     // FIRST and with STDERR-only logging — stdout is the MCP JSON-RPC channel and must stay clean.
     if std::env::args().any(|a| a == "--mcp") {
         tracing_subscriber::fmt()
             .with_writer(std::io::stderr)
             .with_env_filter(
                 tracing_subscriber::EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| "nes_web=warn".into()),
+                    .unwrap_or_else(|_| "pokemon_red_pvp=warn".into()),
             )
             .init();
         return mcp::run().await;
@@ -79,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "nes_web=info,webrtc=warn".into()),
+                .unwrap_or_else(|_| "pokemon_red_pvp=info,webrtc=warn".into()),
         )
         .init();
 

@@ -4,7 +4,7 @@
 //!   player points their agent at the URL with their bearer token; tools run IN-PROCESS, driving the
 //!   game via [`crate::rooms::handle_client_msg`] + receiving events through [`crate::ws::WsHub`]
 //!   (the exact path the browser uses). This is the simple "just paste a URL" setup.
-//! * **Stdio** — `run()` (`nes-web --mcp`) is a standalone client process holding one token-auth
+//! * **Stdio** — `run()` (`pokemon-red-pvp --mcp`) is a standalone client process holding one token-auth
 //!   WebSocket to the arena; handy for a local agent. Both feed the SAME state machine.
 //!
 //! STDIO GOTCHA: stdout is the JSON-RPC channel, so `--mcp` logs only to STDERR.
@@ -470,9 +470,9 @@ pub fn mcp_router(st: AppState) -> axum::Router<AppState> {
     axum::Router::new().nest_service("/mcp", svc)
 }
 
-// ============================ Stdio transport: `nes-web --mcp` ============================
+// ============================ Stdio transport: `pokemon-red-pvp --mcp` ============================
 
-/// Per-process handler for the stdio MCP server; one user (NES_TOKEN) over one self-held WebSocket.
+/// Per-process handler for the stdio MCP server; one user (ARENA_TOKEN) over one self-held WebSocket.
 #[derive(Clone)]
 pub struct Arena {
     state: Arc<Mutex<St>>,
@@ -599,15 +599,15 @@ impl ServerHandler for Arena {
     }
 }
 
-/// Entry point for `nes-web --mcp` (stdio transport).
+/// Entry point for `pokemon-red-pvp --mcp` (stdio transport).
 pub async fn run() -> anyhow::Result<()> {
-    let base = std::env::var("NES_URL")
+    let base = std::env::var("ARENA_URL")
         .unwrap_or_else(|_| "http://localhost:3000".into())
         .trim_end_matches('/')
         .to_string();
-    let token = std::env::var("NES_TOKEN").unwrap_or_default();
+    let token = std::env::var("ARENA_TOKEN").unwrap_or_default();
     if token.is_empty() {
-        eprintln!("[nes-mcp] WARNING: NES_TOKEN is empty; the arena will reject the WebSocket.");
+        eprintln!("[nes-mcp] WARNING: ARENA_TOKEN is empty; the arena will reject the WebSocket.");
     }
 
     let mut names = HashMap::new();

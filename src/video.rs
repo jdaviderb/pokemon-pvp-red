@@ -1,4 +1,4 @@
-//! XRGB8888 (BGRX) -> I420 + realtime VP8 encoder for the N64 output.
+//! XRGB8888 (BGRX) -> I420 + realtime VP8 encoder for the Emu output.
 //!
 //! angrylion delivers XRGB8888 (pitch-strided, memory byte order B,G,R,X). The encoder canvas
 //! is sized from the first real frame (pipeline.rs); we copy/letterbox each live frame onto that
@@ -7,7 +7,7 @@
 use vpx_encode::{Config, Encoder, VideoCodecId};
 
 // libretro pixel-format ids (mirror of src/n64.rs)
-pub const PIXFMT_XRGB8888: u32 = 1; // 4-byte BGRX in memory (N64/angrylion, SameBoy)
+pub const PIXFMT_XRGB8888: u32 = 1; // 4-byte BGRX in memory (Emu/angrylion, SameBoy)
 pub const PIXFMT_RGB565: u32 = 2; // 2-byte little-endian u16 (gambatte / mGBA Game Boy)
 
 /// Packed I420 byte length for a w x h canvas.
@@ -42,7 +42,7 @@ pub fn frame_to_i420(
 ) {
     match fmt {
         PIXFMT_RGB565 => rgb565_to_i420(src, sw, sh, pitch, dst, dw, dh),
-        // XRGB8888 (1) and anything else fall back to the 4-byte BGRX path (N64/angrylion, SameBoy).
+        // XRGB8888 (1) and anything else fall back to the 4-byte BGRX path (Emu/angrylion, SameBoy).
         _ => xrgb_to_i420(src, sw, sh, pitch, dst, dw, dh),
     }
 }

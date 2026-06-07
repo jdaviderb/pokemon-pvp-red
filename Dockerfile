@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
-# Production image for nes-web. Targets linux/amd64 — build with:
-#   docker buildx build --platform linux/amd64 -t nes-web:prod --load .
+# Production image for Pokemon Red PVP. Targets linux/amd64 — build with:
+#   docker buildx build --platform linux/amd64 -t pokemon-red-pvp:prod --load .
 # (or ./build-docker-production.sh). Single-container = --solo (one process, one port). The scalable
 # coordinator+worker model needs orchestration — see docs/SCALING.md.
 
@@ -15,7 +15,7 @@ ENV PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig \
     LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
 WORKDIR /src
 COPY . .
-RUN cargo build --release && cp target/release/nes-web /nes-web
+RUN cargo build --release && cp target/release/pokemon-red-pvp /pokemon-red-pvp
 # Linux libretro core (the repo's cores/ hold macOS .dylib only).
 RUN curl -fsSL -o /tmp/gb.zip \
       https://buildbot.libretro.com/nightly/linux/x86_64/latest/gambatte_libretro.so.zip \
@@ -27,13 +27,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libvpx7 libopus0 libstdc++6 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=builder /nes-web /app/nes-web
+COPY --from=builder /pokemon-red-pvp /app/pokemon-red-pvp
 COPY --from=builder /gambatte_libretro.so /app/cores/gambatte_libretro.so
 COPY static /app/static
 COPY states /app/states
 COPY ["Pokemon Red.gb", "/app/Pokemon Red.gb"]
 # 0.0.0.0 so Docker can publish the port; DEV unset => prod (no /battle/* or /console).
 ENV BIND_ADDR=0.0.0.0 \
-    RUST_LOG=nes_web=info,webrtc=warn
+    RUST_LOG=pokemon_red_pvp=info,webrtc=warn
 EXPOSE 3000
-CMD ["/app/nes-web", "--solo", "Pokemon Red.gb", "cores/gambatte_libretro.so"]
+CMD ["/app/pokemon-red-pvp", "Pokemon Red.gb", "cores/gambatte_libretro.so"]

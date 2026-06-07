@@ -1,4 +1,4 @@
-//! One dedicated OS thread runs the N64 core at real-time core-fps, encodes each frame to
+//! One dedicated OS thread runs the Emu core at real-time core-fps, encodes each frame to
 //! VP8 + stereo Opus, and fans the encoded media out over broadcast channels to every peer.
 
 use std::collections::HashSet;
@@ -11,10 +11,10 @@ use tokio::sync::{broadcast, mpsc};
 
 use crate::audio::OpusStreamer;
 use crate::battle::{AgentAction, BattleState, MenuPhase, TapMachine};
-use crate::n64::{map_button, N64Action, AXIS_MAX, N64};
+use crate::libretro::{map_button, EmuAction, AXIS_MAX, Emu};
 use crate::video::{frame_to_i420, i420_len, make_vp8_encoder};
 
-/// Reply channels for emu-thread-only savestate ops (the thread owns `N64`).
+/// Reply channels for emu-thread-only savestate ops (the thread owns `Emu`).
 type SaveReq = tokio::sync::oneshot::Sender<Option<Vec<u8>>>;
 type LoadReq = (Vec<u8>, tokio::sync::oneshot::Sender<bool>);
 
@@ -177,7 +177,7 @@ fn run_loop(
     enemy_force: Arc<AtomicU8>,
     player_force: Arc<AtomicU8>,
 ) -> anyhow::Result<()> {
-    let mut emu = N64::new(&core_path, &rom_path)?;
+    let mut emu = Emu::new(&core_path, &rom_path)?;
     let mut opus =
         OpusStreamer::new(emu.sample_rate).map_err(|e| anyhow::anyhow!("opus init: {e:?}"))?;
 
@@ -214,7 +214,7 @@ fn run_loop(
     let mut stat_apkts: u64 = 0;
 
     loop {
-        // 0a. Savestate commands run on THIS thread (the only owner of `N64`).
+        // 0a. Savestate commands run on THIS thread (the only owner of `Emu`).
         while let Ok(reply) = save_rx.try_recv() {
             let _ = reply.send(emu.save_state());
         }
@@ -280,11 +280,11 @@ fn run_loop(
         while let Ok(ev) = input_rx.try_recv() {
             let pressed = ev.kind == "down";
             match map_button(&ev.button) {
-                Some(N64Action::Btn(id)) => {
+                Some(EmuAction::Btn(id)) => {
                     tracing::info!("input P{}: {} {} (btn {id})", ev.player, ev.kind, ev.button);
                     emu.set_button(id, pressed);
                 }
-                Some(N64Action::Stick) | Some(N64Action::CStick) => {
+                Some(EmuAction::Stick) | Some(EmuAction::CStick) => {
                     tracing::info!("input P{}: {} {} (analog)", ev.player, ev.kind, ev.button);
                     if pressed {
                         held.insert(ev.button.clone());
@@ -358,7 +358,7 @@ fn run_loop(
             });
         }
 
-        // 3b. Resolution change? (N64 games switch lo-res 640x240 <-> hi-res 640x480, e.g. Pokémon
+        // 3b. Resolution change? (Emu games switch lo-res 640x240 <-> hi-res 640x480, e.g. Pokémon
         //     Stadium menus). VP8 needs fixed dims per encoder, so re-init to match — a fresh
         //     encoder starts with a keyframe and the browser adapts (CSS stretches to the 4:3 box).
         let (fw, fh) = emu.with_frame(|f| ((f.w & !1).max(2), (f.h & !1).max(2)));
@@ -372,7 +372,7 @@ fn run_loop(
             }
         }
 
-        // 4. VIDEO: latest framebuffer (format-aware: XRGB8888 for N64/SameBoy, RGB565 for gambatte)
+        // 4. VIDEO: latest framebuffer (format-aware: XRGB8888 for Emu/SameBoy, RGB565 for gambatte)
         //    -> I420 -> VP8 -> broadcast.
         emu.with_frame(|f| {
             if !f.bytes.is_empty() {

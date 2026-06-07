@@ -119,7 +119,7 @@ impl WorkerPool {
             .env("DATABASE_URL", &self.db_url)
             .env("INTERNAL_SECRET", &self.secret)
             .env("COORDINATOR_ORIGIN", &self.coord_origin)
-            .env("RUST_LOG", "nes_web=warn,webrtc=off")
+            .env("RUST_LOG", "pokemon_red_pvp=warn,webrtc=off")
             .spawn()
             .ok()?;
         self.workers.lock().unwrap().push(Worker {

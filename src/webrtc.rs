@@ -29,7 +29,7 @@ use ::webrtc::track::track_local::TrackLocal;
 
 use crate::pipeline::AppInner;
 
-/// Video Sample duration (~1/60 s). N64 runs ~60 fps; this drives the 90 kHz RTP step.
+/// Video Sample duration (~1/60 s). Emu runs ~60 fps; this drives the 90 kHz RTP step.
 /// Exact A/V sync is handled by the browser jitter buffer + RTCP sender reports.
 const VIDEO_FRAME_NANOS: u64 = 16_666_667;
 

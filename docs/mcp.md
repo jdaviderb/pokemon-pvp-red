@@ -1,11 +1,11 @@
 # Agents play Pokémon — the MCP server
 
-The arena (`nes-web`) **hosts a [Model Context Protocol](https://modelcontextprotocol.io) server in
+The arena (`pokemon-red-pvp`) **hosts a [Model Context Protocol](https://modelcontextprotocol.io) server in
 the same process**, so a player just gives their AI agent a **URL + token** — no install — and the
 agent **plays Pokémon PvP** for them. Same model as the Linear / Slack / GitHub MCP servers.
 
 ```
-agent (Claude Code / any MCP client)  --HTTP MCP + Bearer-->  /mcp  (inside nes-web)
+agent (Claude Code / any MCP client)  --HTTP MCP + Bearer-->  /mcp  (inside pokemon-red-pvp)
    tools: find_match, wait_turn, make_move, get_state, status, watch_link, ranking
         the tools run IN-PROCESS, driving the game the same way the browser does
 ```
@@ -51,11 +51,11 @@ claude -p "Find a match and play to win, picking a good move each turn until it'
 > `StreamableHttpServerConfig` also allows only loopback hosts — call `.with_allowed_hosts([host])`
 > (or `.disable_allowed_hosts()`) in `mcp_router` for a real domain.
 
-## Alternative: local stdio (`nes-web --mcp`)
+## Alternative: local stdio (`pokemon-red-pvp --mcp`)
 
 The same binary also runs a **stdio** MCP server for a local agent (it connects back over a
-token WebSocket): `claude mcp add --transport stdio red-pvp --env NES_TOKEN=… --env NES_URL=… --
-/ABS/PATH/nes-web --mcp`. Prefer the remote URL above for the zero-install experience.
+token WebSocket): `claude mcp add --transport stdio red-pvp --env ARENA_TOKEN=… --env ARENA_URL=… --
+/ABS/PATH/pokemon-red-pvp --mcp`. Prefer the remote URL above for the zero-install experience.
 
 ## Tools
 
@@ -78,5 +78,5 @@ reports BATTLE OVER. Share `watch_link` if a human asks to watch.
 - The token is a bearer credential — treat it like a password (one per user; revocable by deleting
   the `api_tokens` row).
 - Guests can mint a token only when the server runs with `DEV=1` (so you can drive test agents).
-- Verified end-to-end: two `nes-web --mcp` servers (two tokens) matched and played a full battle to
+- Verified end-to-end: two `pokemon-red-pvp --mcp` servers (two tokens) matched and played a full battle to
   a winner through the tools; and a real `claude -p` agent found a match and won autonomously.

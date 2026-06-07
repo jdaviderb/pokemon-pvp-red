@@ -1,6 +1,6 @@
-//! Headless libretro frontend for N64. Loads a software-rendering libretro core
-//! (parallel_n64 or mupen64plus-next, both with the angrylion software RDP), drives it
-//! with NO window and NO GL context, and exposes the shape the pipeline needs.
+//! Headless libretro frontend. dlopens a libretro core (default: gambatte, Game Boy / GBC), drives
+//! it with NO window and NO GL context, and exposes the shape the pipeline needs. Core-agnostic, so
+//! any libretro core works; Pokemon Red PVP ships gambatte.
 //!
 //! VERIFIED (research/n64-*.md): Super Smash Bros. (U) boots headless, emitting an XRGB8888
 //! framebuffer (memory byte order B,G,R,X) via video_refresh, i16 stereo audio via
@@ -75,7 +75,7 @@ pub const ID_A: usize = 8;
 pub const ID_X: usize = 9;
 pub const ID_L: usize = 10;
 pub const ID_R: usize = 11;
-pub const ID_L2: usize = 12; // N64 Z trigger on both cores
+pub const ID_L2: usize = 12; // Emu Z trigger on both cores
 pub const ID_R2: usize = 13;
 
 pub const AXIS_MAX: i16 = 0x7FFF;
@@ -168,7 +168,7 @@ static mut SAVE_DIR: *const c_char = ptr::null();
 fn forced_option(key: &str) -> Option<String> {
     let rsp = std::env::var("N64_RSP").unwrap_or_else(|_| "cxd4".into());
     Some(match key {
-        // ParaLLEl N64
+        // ParaLLEl Emu
         "parallel-n64-gfxplugin" => "angrylion".into(),
         "parallel-n64-rspplugin" => rsp,
         "parallel-n64-screensize" => "320x240".into(),
@@ -366,7 +366,7 @@ type UnserializeFn = unsafe extern "C" fn(*const c_void, usize) -> bool;
 pub const RETRO_MEMORY_SAVE_RAM: c_uint = 0;
 pub const RETRO_MEMORY_SYSTEM_RAM: c_uint = 2;
 
-pub struct N64 {
+pub struct Emu {
     _lib: Library, // keep the dylib mapped for the process lifetime
     run: RunFn,    // raw fn pointer (valid while _lib lives)
     get_mem_data: GetMemDataFn,
@@ -380,7 +380,7 @@ pub struct N64 {
     pub height: u32,
 }
 
-impl N64 {
+impl Emu {
     pub fn new(core_path: &str, rom_path: &str) -> anyhow::Result<Self> {
         std::fs::create_dir_all("/tmp/n64sys").ok();
         std::fs::create_dir_all("/tmp/n64save").ok();
@@ -479,7 +479,7 @@ impl N64 {
              system_ram={sys_ram_len}B"
         );
 
-        Ok(N64 {
+        Ok(Emu {
             _lib: lib,
             run,
             get_mem_data,
@@ -572,21 +572,21 @@ impl N64 {
     }
 }
 
-/// Browser wire button name -> N64 action. Analog directions fold into the control/C stick so
-/// a keyboard can drive the N64 pad. Returns None for unknown names (ignored).
-pub enum N64Action {
+/// Browser wire button name -> Emu action. Analog directions fold into the control/C stick so
+/// a keyboard can drive the Emu pad. Returns None for unknown names (ignored).
+pub enum EmuAction {
     Btn(usize),
     Stick,  // a control-stick direction key (vector recomputed from held set in the pipeline)
     CStick, // a C-stick direction key
 }
-pub fn map_button(b: &str) -> Option<N64Action> {
-    use N64Action::*;
+pub fn map_button(b: &str) -> Option<EmuAction> {
+    use EmuAction::*;
     Some(match b {
         "A" => Btn(ID_A),
         "B" => Btn(ID_B),
         "Start" => Btn(ID_START),
-        "Select" => Btn(ID_SELECT), // N64 has no Select; Game Boy does
-        "Z" => Btn(ID_L2), // N64 Z trigger
+        "Select" => Btn(ID_SELECT), // Emu has no Select; Game Boy does
+        "Z" => Btn(ID_L2), // Emu Z trigger
         "L" => Btn(ID_L),
         "R" => Btn(ID_R),
         "StickUp" | "StickDown" | "StickLeft" | "StickRight" => Stick,
