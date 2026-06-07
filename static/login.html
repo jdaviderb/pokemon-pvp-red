@@ -87,7 +87,10 @@
     </div>
 
     <div class="gb panel">
-      <div id="providers"></div>
+      <div id="menu0">
+        <button class="provbtn" id="playBtn"><span class="cur">▶</span>PLAY</button>
+        <button class="provbtn" id="howtoBtn"><span class="cur">▶</span>HOW TO PLAY</button>
+      </div>
       <div id="devauth" style="display:none">
         <div class="press blink" id="press"><span class="pball"></span> PRESS START <span class="pball"></span></div>
         <div class="form" id="form">
@@ -107,9 +110,13 @@
     <div class="arrow" id="arrow" style="display:none">▾</div>
   </div>
 
-  <div id="guestModal" class="gmodal hidden">
+  <div id="playModal" class="gmodal hidden">
     <div class="gb gbox">
-      <div id="gConfirm">
+      <div id="gMethod">
+        <div class="gtext">HOW DO YOU WANT TO PLAY?</div>
+        <div class="gmenu" id="methodMenu"></div>
+      </div>
+      <div id="gConfirm" style="display:none">
         <div class="gtext">PLAY AS GUEST<br><br>Your progress will NOT be saved. AI agents (MCP) are disabled for guest accounts.</div>
         <div class="gmenu">
           <button class="gbtn" id="gYes"><span class="cur">▶</span>YES, CONTINUE</button>
@@ -154,41 +161,32 @@
     })();
     const msg = (t, ok) => { const m = $("msg"); m.textContent = t; m.style.color = ok ? "#2c6e44" : "#9a2c2c"; };
     (async () => { try { const r = await fetch("/api/me"); if (r.ok) location.replace("/"); } catch (e) {} })();
-    // Login options from the server: social providers always; username/password only in DEV mode.
-    let USERNAME_LOGIN = false;
-    const PROV_LABEL = { google: "SIGN IN WITH GOOGLE", twitter: "SIGN IN WITH X", apple: "SIGN IN WITH APPLE", github: "SIGN IN WITH GITHUB" };
-    (async () => {
-      let cfg = { providers: [], username_login: false, guest: false };
-      try { cfg = await (await fetch("/api/config")).json(); } catch (e) {}
-      USERNAME_LOGIN = !!cfg.username_login;
-      const box = $("providers");
-      (cfg.providers || []).forEach((p) => {
-        const a = document.createElement("a");
-        a.className = "provbtn"; a.href = "/auth/oauth/" + p;
-        a.innerHTML = '<span class="cur">▶</span>' + (PROV_LABEL[p] || ("SIGN IN WITH " + p.toUpperCase()));
-        box.appendChild(a);
-      });
-      if (cfg.guest) {
-        const g = document.createElement("button");
-        g.className = "provbtn"; g.type = "button";
-        g.innerHTML = '<span class="cur">▶</span>PLAY AS GUEST';
-        g.onclick = openGuest;
-        box.appendChild(g);
-      }
-      // HOW TO PLAY is always available.
-      const h = document.createElement("button");
-      h.className = "provbtn"; h.type = "button";
-      h.innerHTML = '<span class="cur">▶</span>HOW TO PLAY';
-      h.onclick = () => $("howtoModal").classList.remove("hidden");
-      box.appendChild(h);
-      if (USERNAME_LOGIN) { $("devauth").style.display = ""; $("arrow").style.display = ""; }
-      if (!(cfg.providers || []).length && !cfg.guest && !USERNAME_LOGIN) $("nologin").style.display = "";
-    })();
+    // Login config from the server (which methods are available).
+    let CFG = { providers: [], username_login: false, guest: false };
+    const PROV_LABEL = { google: "LOGIN WITH GOOGLE", twitter: "LOGIN WITH X", apple: "LOGIN WITH APPLE", github: "LOGIN WITH GITHUB" };
+    (async () => { try { CFG = await (await fetch("/api/config")).json(); } catch (e) {} })();
+
+    const mkBtn = (label, onclick) => { const b = document.createElement("button"); b.className = "gbtn"; b.type = "button"; b.innerHTML = '<span class="cur">▶</span>' + label; b.onclick = onclick; return b; };
+    const showStep = (id) => ["gMethod", "gConfirm", "gName"].forEach((s) => ($(s).style.display = s === id ? "" : "none"));
+    // PLAY -> modal: pick a method (Google / guest / username).
+    function openPlay() {
+      const menu = $("methodMenu"); menu.innerHTML = "";
+      (CFG.providers || []).forEach((p) => menu.appendChild(mkBtn(PROV_LABEL[p] || ("LOGIN WITH " + p.toUpperCase()), () => (location.href = "/auth/oauth/" + p))));
+      if (CFG.guest) menu.appendChild(mkBtn("PLAY AS GUEST", () => showStep("gConfirm")));
+      if (CFG.username_login) menu.appendChild(mkBtn("LOGIN WITH USERNAME", openUsername));
+      if (!menu.children.length) menu.appendChild(mkBtn("- LOGIN NOT CONFIGURED -", () => {}));
+      showStep("gMethod"); $("playModal").classList.remove("hidden");
+    }
+    $("playBtn").onclick = openPlay;
+    $("howtoBtn").onclick = () => $("howtoModal").classList.remove("hidden");
+    $("howClose").onclick = () => $("howtoModal").classList.add("hidden");
+    // click the dim backdrop to dismiss a modal
+    ["playModal", "howtoModal"].forEach((m) => ($(m).onclick = (e) => { if (e.target.id === m) $(m).classList.add("hidden"); }));
+
     // --- guest flow: confirm -> choose name -> create -> straight into matchmaking ---
-    function randNick() { const x = "0123456789ABCDEF"; let s = ""; for (let i = 0; i < 4; i++) s += x[Math.floor(Math.random() * 16)]; return "Guest-" + s; }
-    function openGuest() { $("guestModal").classList.remove("hidden"); $("gConfirm").style.display = ""; $("gName").style.display = "none"; }
-    $("gNo").onclick = () => $("guestModal").classList.add("hidden");
-    $("gYes").onclick = () => { $("gConfirm").style.display = "none"; $("gName").style.display = ""; $("gNick").value = randNick(); $("gNick").focus(); $("gNick").select(); };
+    const randNick = () => { const x = "0123456789ABCDEF"; let s = ""; for (let i = 0; i < 4; i++) s += x[Math.floor(Math.random() * 16)]; return "Guest-" + s; };
+    $("gNo").onclick = () => showStep("gMethod");
+    $("gYes").onclick = () => { showStep("gName"); $("gNick").value = randNick(); $("gNick").focus(); $("gNick").select(); };
     $("gOk").onclick = submitGuest;
     $("gNick").addEventListener("keydown", (e) => { if (e.key === "Enter") submitGuest(); });
     async function submitGuest() {
@@ -200,10 +198,12 @@
         $("gMsg").textContent = (await r.text()).toUpperCase() || ("HTTP " + r.status);
       } catch (e) { $("gMsg").textContent = "NETWORK ERROR"; }
     }
-    $("howClose").onclick = () => $("howtoModal").classList.add("hidden");
-    function start() { $("press").style.display = "none"; $("arrow").style.display = "none"; $("form").classList.add("on"); $("u").focus(); }
-    $("press").onclick = start;
-    document.addEventListener("keydown", (e) => { if (USERNAME_LOGIN && !$("form").classList.contains("on") && (e.key === "Enter" || e.key === " ")) start(); });
+    // username/password form, revealed from the PLAY modal when the flag/DEV enables it
+    function openUsername() { $("playModal").classList.add("hidden"); $("devauth").style.display = ""; $("press").style.display = "none"; $("form").classList.add("on"); $("u").focus(); }
+    // Enter/Space on the title opens PLAY (when nothing else is open).
+    document.addEventListener("keydown", (e) => {
+      if ((e.key === "Enter" || e.key === " ") && $("playModal").classList.contains("hidden") && $("howtoModal").classList.contains("hidden") && $("devauth").style.display === "none") openPlay();
+    });
     async function go(path) {
       const username = $("u").value.trim(), password = $("p").value;
       if (username.length < 3) return msg("USERNAME NEEDS 3+ CHARACTERS");
