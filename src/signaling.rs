@@ -288,7 +288,7 @@ async fn collection_handler(
     Json(serde_json::json!({ "threshold": threshold, "mons": mons }))
 }
 
-const ONLINE_WINDOW_SECS: u64 = 30;
+const ONLINE_WINDOW_SECS: u64 = 16;
 const CID_COOKIE: &str = "nes_cid";
 
 /// GET /api/online -> {online: N}. A presence heartbeat keyed by a STABLE identity so refreshes,

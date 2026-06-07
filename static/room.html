@@ -216,7 +216,7 @@
   const TYPE_ICON  = {NORMAL:"●",FIGHTING:"✊",FLYING:"🪶",POISON:"☠",GROUND:"⛰",ROCK:"⛰",BUG:"🐛",GHOST:"👻",FIRE:"🔥",WATER:"💧",GRASS:"🌿",ELECTRIC:"⚡",PSYCHIC:"👁",ICE:"❄",DRAGON:"🐉"};
   const $ = (id) => document.getElementById(id);
   // presence heartbeat (server keys by account/cookie, so tabs/refreshes don't double-count)
-  { const hb = () => fetch("/api/online").catch(() => {}); hb(); setInterval(hb, 10000); }
+  { const hb = () => fetch("/api/online").catch(() => {}); hb(); setInterval(hb, 5000); }
   const setF = (side, field, txt) => document.querySelectorAll(".s" + side + "." + field).forEach((e) => (e.textContent = txt));
   const setSprite = (side, dex) => document.querySelectorAll(".s" + side + ".sprite").forEach((e) => (e.src = "/sprites/" + dex + ".png"));
 

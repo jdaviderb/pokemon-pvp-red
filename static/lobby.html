@@ -61,7 +61,7 @@
   <script>
     const $ = (id) => document.getElementById(id);
     // presence heartbeat (server keys by account/cookie, so tabs/refreshes don't double-count)
-    { const hb = () => fetch("/api/online").catch(() => {}); hb(); setInterval(hb, 10000); }
+    { const hb = () => fetch("/api/online").catch(() => {}); hb(); setInterval(hb, 5000); }
     // intro parade: each pass swaps to a random Gen-1 mon
     { const pick = () => "/sprites/" + (Math.floor(Math.random() * 151) + 1) + ".png";
       ["paradeMon", "paradeMon2"].forEach((id) => { const m = $(id); if (!m) return; m.src = pick(); m.addEventListener("animationiteration", () => (m.src = pick())); }); }
