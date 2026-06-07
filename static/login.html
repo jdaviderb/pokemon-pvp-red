@@ -51,6 +51,11 @@
     .menu:hover .mitem:first-child .cur { opacity:0; }
     .mitem:hover .cur { opacity:1; }
     .msg { margin-top:12px; min-height:20px; font-size:18px; color:#333; }
+    /* real Pokemon Red title assets (from pret/pokered gfx/title) */
+    .logo-img { width:min(76vw,520px); height:auto; image-rendering:pixelated; }
+    .verrow { display:flex; align-items:center; justify-content:center; gap:22px; margin-top:6px; }
+    .ver-txt { font-family:"PokeRed", monospace; font-size:26px; color:#000; letter-spacing:2px; image-rendering:pixelated; }
+    .red-img { width:min(13vw,76px); height:auto; image-rendering:pixelated; }
   </style>
 </head>
 <body>
@@ -59,11 +64,11 @@
   <div class="gb corner tr">MODE<b>1 VS 1</b>LEVEL CAP: 50</div>
 
   <div class="stage">
-    <div class="balls"><span class="pball"></span>
-      <div class="logo">RED STADIUM<br>ENGINE</div>
-      <span class="pball"></span>
+    <img class="logo-img" src="/title/pokemon_logo.png" alt="POKEMON" />
+    <div class="verrow">
+      <span class="ver-txt">Red Version</span>
+      <img class="red-img" src="/title/player.png" alt="" />
     </div>
-    <div class="sub">- RANDOM BATTLE ARENA -</div>
 
     <div class="gb panel">
       <div class="press blink" id="press"><span class="pball"></span> PRESS START <span class="pball"></span></div>
