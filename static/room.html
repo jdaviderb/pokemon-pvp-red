@@ -220,6 +220,7 @@
   const setSprite = (side, dex) => document.querySelectorAll(".s" + side + ".sprite").forEach((e) => (e.src = "/sprites/" + dex + ".png"));
 
   let ws, pc, mySeat = 0, timerHandle = null, resultShown = false, lastProgress = Date.now(), watchdog = null;
+  let COORD = ""; // coordinator origin when this page runs on a worker; "" when solo
   let SP = {}, byDex = {}, allDex = [], lockedIdx = { 1:null, 2:null }, myMoves = null, reelsStarted = false, ppMax = {};
 
   async function connectVideo() {
@@ -345,11 +346,12 @@
   function showResult(youWon){ resultShown=true; stopTimer(); if(watchdog)clearInterval(watchdog);
     $("resultText").textContent=youWon?"YOU WIN!":"YOU LOSE"; $("resultText").className="result"; $("resultText").style.fontSize="44px"; $("result").classList.remove("hidden"); }
   function bail(msg){ resultShown=true; stopTimer(); if(watchdog)clearInterval(watchdog);
-    $("resultText").textContent=msg; $("resultText").className="result"; $("resultText").style.fontSize="22px"; $("result").classList.remove("hidden"); setTimeout(()=>location.replace("/lobby"),2300); }
-  $("home").onclick = () => location.replace("/lobby");
+    $("resultText").textContent=msg; $("resultText").className="result"; $("resultText").style.fontSize="22px"; $("result").classList.remove("hidden"); setTimeout(()=>location.replace(COORD + "/lobby"),2300); }
+  $("home").onclick = () => location.replace(COORD + "/lobby");
 
   const roomParam = new URLSearchParams(location.search).get("id");
   (async () => {
+    try { const cfg = await (await fetch("/api/config")).json(); COORD = cfg.coordinator_origin || ""; } catch (e) {}
     let me = null;
     try { const r = await fetch("/api/me"); if (r.ok) me = await r.json(); } catch (e) {}
     // Player only if logged in AND this URL is their own room; everyone else just watches.
@@ -374,7 +376,7 @@
       det.textContent = sub;
       $("resultText").after(det);
     }
-    $("home").textContent = "BACK ▸"; $("home").onclick = () => (location.href = "/");
+    $("home").textContent = "BACK ▸"; $("home").onclick = () => (location.href = COORD + "/");
     $("result").classList.remove("hidden");
   }
   function showEnded(info) {

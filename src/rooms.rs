@@ -239,7 +239,9 @@ pub fn spawn_matchmaker(game: Arc<GameState>) {
                     }
                 };
                 match pair {
-                    Some((a, b)) if a != b => create_room(&game, a, b).await,
+                    Some((a, b)) if a != b => {
+                        create_room(&game, a, b).await;
+                    }
                     Some(_) => {} // same user twice somehow; skip
                     None => break,
                 }
@@ -249,7 +251,7 @@ pub fn spawn_matchmaker(game: Arc<GameState>) {
     });
 }
 
-async fn create_room(game: &Arc<GameState>, a: UserId, b: UserId) {
+async fn create_room(game: &Arc<GameState>, a: UserId, b: UserId) -> Option<String> {
     let ua = username_of(&game.db, a).await;
     let ub = username_of(&game.db, b).await;
     let inserted = e_rooms::ActiveModel {
@@ -266,7 +268,7 @@ async fn create_room(game: &Arc<GameState>, a: UserId, b: UserId) {
         Ok(m) => m.id,
         Err(e) => {
             tracing::error!("room insert failed: {e}");
-            return;
+            return None;
         }
     };
     for u in [a, b] {
@@ -294,6 +296,14 @@ async fn create_room(game: &Arc<GameState>, a: UserId, b: UserId) {
     game.ws.send_to(a, json!({"type":"matched","room_id":public_id,"seat":1,"opponent":ub})).await;
     game.ws.send_to(b, json!({"type":"matched","room_id":public_id,"seat":2,"opponent":ua})).await;
     tracing::info!("room {rid}: matched {a} vs {b}");
+    Some(public_id)
+}
+
+/// Coordinator path: create a room for (a,b) on THIS worker and start it; returns the public UUID.
+pub async fn assign_battle(game: &Arc<GameState>, a: UserId, b: UserId) -> Option<String> {
+    let pid = create_room(game, a, b).await?;
+    maybe_start_next(game).await;
+    Some(pid)
 }
 
 async fn maybe_start_next(game: &Arc<GameState>) {
@@ -789,7 +799,7 @@ async fn push_live_phase(game: &Arc<GameState>, rid: RoomId, uid: UserId) {
 // DB helpers + resume/recovery
 // ---------------------------------------------------------------------------
 
-async fn username_of(db: &DatabaseConnection, uid: UserId) -> String {
+pub(crate) async fn username_of(db: &DatabaseConnection, uid: UserId) -> String {
     e_users::Entity::find_by_id(uid)
         .one(db)
         .await

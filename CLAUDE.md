@@ -40,11 +40,21 @@ still power the battle arena + multiplayer. Override via argv: `cargo run --rele
 ## Build & run
 
 ```sh
-cargo run --release            # env + toolchain come from .cargo/config.toml + rust-toolchain.toml
+cargo run --release                          # SOLO: one emulator, one battle at a time (default)
+cargo run --release -- --coordinator --workers 8   # SCALABLE: pool of 8 emulator workers = 8 concurrent battles
 cargo build --release
 ./cores/fetch.sh               # (re)download the libretro N64 cores if cores/*.dylib are missing
 ```
 Then open **http://localhost:3000** in **Chrome** and click **Connect**.
+
+**Scaling (`src/coordinator.rs`):** one emulator = one battle (libretro globals are per-process), so
+concurrency = N worker PROCESSES. `--coordinator` runs no emulator; it owns auth/lobby/matchmaking +
+a pool of `--worker --port N` processes (each = this binary, own emulator, **shared DB** via
+`DATABASE_URL`), pairs players, and **redirects** each match to a free worker (`/room?id=` → 303 →
+`worker:port`; WebRTC + battle WS go browser↔worker directly; localhost shares cookies across ports
+so the session still authenticates). Use **Postgres** (`DATABASE_URL`) in real multi-process deploys —
+sqlite write-contention across processes is fine for local dev only. Default (no flags) = `Solo`,
+fully backwards-compatible.
 Controls (Game Boy, P1): arrows = D-pad, `X`=A, `Z`=B, `Enter`=Start, `⇧Right`/`⌫`=Select.
 (N64: arrows=stick, `X`=A `Z`=B `C`=Z `Q`/`E`=L/R `Enter`=Start `IJKL`=C-buttons.)
 
@@ -92,7 +102,8 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
 | `src/auth.rs` | argon2id, register/login/logout, session cookie, `AuthUser` extractor |
 | `src/rooms.rs` | multiplayer: matchmaking, room FSM, turn-based battle engine (15s timer, CPU, winner, resume) |
 | `src/ws.rs` | per-client WebSocket (`WsHub`, JSON event protocol) |
-| `src/main.rs` | entry: ROM + core paths, start pipeline, connect DB, spawn matchmaker, serve axum |
+| `src/main.rs` | entry: parse flags (`--coordinator`/`--worker`/`--port`/`--workers`), pick Role, serve axum |
+| `src/coordinator.rs` | SCALABLE mode: spawn + manage the emulator worker pool, global matchmaking, `/internal/{assign,status}`, redirect players to their worker (`AppState.role` = Solo/Worker/Coordinator) |
 | `logshim.c` + `build.rs` | C-variadic log fn for `GET_LOG_INTERFACE` (mupen-next needs it) |
 | `scripts/apply_ips.py` | IPS patcher (makes `Pokemon Red Color.gbc`) |
 | `static/{login,lobby,room}.html` | multiplayer UI; `index.html` = `/api/me` router. `dev/console.html` = single-player dev console, served at `/console` **only when env `DEV=1`** (so are the unauthenticated `/battle/*` endpoints) |

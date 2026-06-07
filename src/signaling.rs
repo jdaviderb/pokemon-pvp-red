@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use axum::body::Bytes;
 use axum::extract::{FromRef, Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use axum_extra::extract::cookie::Key;
@@ -17,6 +18,17 @@ use ::webrtc::api::API;
 
 use crate::pipeline::AppInner;
 
+/// How this process participates in the (optionally) multi-process arena.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Role {
+    /// Single process: emulator + matchmaking + everything (the default, backwards-compatible).
+    Solo,
+    /// Emulator worker: runs one battle assigned by the coordinator (no own matchmaking).
+    Worker,
+    /// No emulator: auth/lobby/matchmaking + a pool of worker processes; redirects players to them.
+    Coordinator,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub api: Arc<API>,
@@ -24,6 +36,9 @@ pub struct AppState {
     pub db: DatabaseConnection,
     pub cookie_key: Key,
     pub game: Arc<crate::rooms::GameState>,
+    pub role: Role,
+    /// Coordinator only: the worker-process pool (for the /room redirect + matchmaking).
+    pub pool: Option<Arc<crate::coordinator::WorkerPool>>,
     /// DEV mode (env `DEV`): when off, the unauthenticated /battle/* dev endpoints and the dev
     /// console are NOT mounted at all (security: no anonymous control of the shared emulator).
     pub dev: bool,
@@ -74,9 +89,17 @@ pub fn router(state: AppState) -> Router {
         // --- clean (extensionless) page URLs — more professional than *.html ---
         .route_service("/login", ServeFile::new("static/login.html"))
         .route_service("/lobby", ServeFile::new("static/lobby.html"))
-        .route_service("/room", ServeFile::new("static/room.html"))
+        // /room: worker/solo serve the page; the coordinator redirects to the worker running it.
+        .route("/room", get(room_page_handler))
         // --- realtime ---
         .route("/ws", get(crate::ws::ws_upgrade));
+
+    // Worker only: the coordinator drives battles through these internal (secret-gated) endpoints.
+    if state.role == Role::Worker {
+        app = app
+            .route("/internal/assign", post(crate::coordinator::assign_handler))
+            .route("/internal/status", get(crate::coordinator::status_handler));
+    }
 
     // DEV-only: the dev console + the unauthenticated emulator-control endpoints. Off by default so
     // they don't exist in production (no anonymous /battle/* control of the shared emulator).
@@ -128,7 +151,37 @@ async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value
         "providers": providers,
         "username_login": crate::auth::username_login_on(&state).await,
         "guest": crate::flags::enabled(&state.db, crate::flags::GUEST_MODE).await,
+        // On a worker this points back at the coordinator so "RETURN HOME" leaves the worker port.
+        "coordinator_origin": std::env::var("COORDINATOR_ORIGIN").unwrap_or_default(),
     }))
+}
+
+#[derive(Deserialize)]
+struct RoomPageQ {
+    #[serde(default)]
+    id: String,
+}
+
+/// GET /room: worker/solo serve the battle page; the coordinator redirects to the worker running
+/// this room UUID (browser then talks to that worker directly for video + the battle WS). If the
+/// room isn't live, the coordinator serves the page too — it shows the recorded result or
+/// "BATTLE NOT FOUND" from /api/room.
+async fn room_page_handler(
+    State(st): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<RoomPageQ>,
+) -> Response {
+    if st.role == Role::Coordinator {
+        if let Some(port) = st.pool.as_ref().and_then(|p| p.worker_for(&q.id)) {
+            let host = headers.get("host").and_then(|h| h.to_str().ok()).unwrap_or("localhost");
+            let hostname = host.split(':').next().unwrap_or("localhost");
+            return Redirect::to(&format!("http://{hostname}:{port}/room?id={}", q.id)).into_response();
+        }
+    }
+    match tokio::fs::read_to_string("static/room.html").await {
+        Ok(html) => Html(html).into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, "room page missing").into_response(),
+    }
 }
 
 /// GET /api/room/{id} -> spectator info for a room UUID ({found, live, phase, p1, p2}). Public so a
