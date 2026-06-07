@@ -46,8 +46,17 @@ cargo run --release                          # DEFAULT = COORDINATOR: spawns an 
 MAX_WORKERS=8 cargo run --release            # ...capped at 8 concurrent battles (else unbounded)
 cargo run --release -- --solo                # SOLO: single process, one emulator, one battle at a time
 cargo build --release
-./cores/fetch.sh               # (re)download the libretro N64 cores if cores/*.dylib are missing
+./cores/fetch.sh               # (re)download the libretro cores if cores/*.dylib are missing
+
+./build-docker-production.sh                          # build the linux/amd64 image (pokemon-red-pvp:prod)
+docker run --rm --network host -e DEV=1 pokemon-red-pvp:prod   # then open http://localhost:3000
 ```
+> **Docker gotcha (verified):** run the container with **`--network host`**, NOT `-p`. WebRTC
+> advertises the server's ICE candidates; under Docker bridge networking those are the container's
+> internal `127.0.0.1`/`172.x` → the UI loads but **no video reaches the browser**. Host networking
+> makes them reachable (TV video flows). `-e DEV=1` lets guest agents mint MCP tokens (prod: real
+> accounts). For a public deploy without host-net, use `set_nat_1to1_ips(<public IP>)` in the WebRTC
+> SettingEngine + a published UDP range. See `docs/SCALING.md`.
 > The default is now the scalable coordinator (so multiple battles — incl. agent battles via MCP —
 > run at once). `--solo` is the old single-emulator mode. `--worker` is internal (spawned by the
 > coordinator). `--mcp` runs the stdio MCP server (see `docs/mcp.md`).
