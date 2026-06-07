@@ -367,6 +367,12 @@ pub fn species_by_index(idx: u8) -> Option<&'static Gen1Species> {
     SPECIES.iter().find(|s| s.species == idx)
 }
 
+/// (national Pokédex number, NAME) for an internal species index — the sprite folder is keyed by
+/// dex (SPECIES is in dex order, so position+1 = dex). Used by the collection ("Your Pokémon").
+pub fn dex_name_by_index(idx: u8) -> Option<(usize, &'static str)> {
+    SPECIES.iter().enumerate().find(|(_, s)| s.species == idx).map(|(i, s)| (i + 1, s.name))
+}
+
 /// Gen-1 stat formula, DV=15, stat-EXP=0:
 /// stat = floor((base+DV)*2*level/100) + 5 ; HP = same + level + 10.
 const DV: u32 = 15;

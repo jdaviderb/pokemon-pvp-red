@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RED PVP MOD - YOUR POKEMON</title>
+  <script src="/gbfx.js"></script>
+  <style>
+    @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
+    :root { --bg:#e9e7dd; --ink:#000; --inkdim:#666; --red:#b5302a; --field:#f0f0f0; --gauge:#3a7d3a; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
+      font-family:"PokeRed", ui-monospace, "Courier New", monospace; -webkit-font-smoothing:none;
+      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.07) 0 1px, transparent 1px 3px);
+      display:flex; flex-direction:column; align-items:center; padding:18px 14px 40px; gap:10px; }
+    .head { display:flex; align-items:center; gap:16px; }
+    .logo-img { width:min(30vw,170px); height:auto; image-rendering:pixelated; }
+    .title { font-size:24px; letter-spacing:4px; } .sub { color:var(--inkdim); font-size:13px; letter-spacing:1px; }
+    .count { font-size:15px; color:var(--inkdim); letter-spacing:1px; }
+    .box { width:100%; max-width:720px; background:#fff; border:14px solid transparent;
+      border-image:url("/gb-frame.png") 7 fill / 14px / 0 stretch; image-rendering:pixelated; padding:14px;
+      display:grid; grid-template-columns:repeat(auto-fill, minmax(120px,1fr)); gap:12px; }
+    .cell { text-align:center; padding:8px 4px; border:2px solid #d8d3c4; border-radius:8px; background:#fbfbf7; }
+    .cell.owned { border-color:var(--ink); background:#fff; }
+    .cell img { width:72px; height:72px; object-fit:contain; image-rendering:pixelated; }
+    .cell.locked img { filter:grayscale(1) brightness(.55) contrast(1.1); opacity:.75; }
+    .cell .nm { font-size:14px; letter-spacing:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cell .st { font-size:13px; margin-top:3px; color:var(--inkdim); }
+    .cell.owned .st { color:var(--red); }
+    .bar { height:7px; background:#ddd9cc; border:1px solid #b7b29f; border-radius:4px; margin:5px 6px 0; overflow:hidden; }
+    .bar > i { display:block; height:100%; background:var(--gauge); }
+    .ball { display:inline-block; width:13px; height:13px; vertical-align:-2px; margin-right:4px;
+      border-radius:50%; background:linear-gradient(var(--red) 0 47%,#111 47% 53%,#fff 53% 100%); border:2px solid #0a0a0a; }
+    .empty { grid-column:1/-1; text-align:center; color:var(--inkdim); padding:40px 10px; font-size:18px; line-height:1.7; }
+    .links { font-size:18px; color:#7c7c68; } .links a { color:#7c7c68; text-decoration:none; } .links a:hover { color:var(--ink); }
+  </style>
+</head>
+<body>
+  <div class="head"><img class="logo-img" src="/title/pokemon_logo.png" alt="POKEMON" /><div><div class="title">YOUR POKEMON</div><div class="sub" id="sub">- COLLECTION -</div></div></div>
+  <div class="count" id="count"></div>
+  <div class="box" id="box"><div class="empty">Loading…</div></div>
+  <div class="links"><a href="/lobby">BACK</a></div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    async function load() {
+      let d;
+      try {
+        const r = await fetch("/api/collection");
+        if (r.status === 401) return location.replace("/login");
+        d = await r.json();
+      } catch (e) { $("box").innerHTML = '<div class="empty">Could not load your collection.</div>'; return; }
+      const N = d.threshold || 5;
+      $("sub").textContent = "- WIN " + N + "x WITH A POKEMON TO OWN IT -";
+      const mons = (d.mons || []).slice().sort((a, b) => (b.owned - a.owned) || (b.wins - a.wins));
+      const owned = mons.filter((m) => m.owned).length;
+      $("count").textContent = owned + " OWNED  -  " + mons.length + " BATTLED";
+      if (!mons.length) { $("box").innerHTML = '<div class="empty">No Pokemon yet.<br>Win battles to start your collection!</div>'; return; }
+      $("box").innerHTML = mons.map((m) => {
+        const pct = Math.min(100, Math.round((m.wins / N) * 100));
+        const status = m.owned
+          ? '<div class="st"><span class="ball"></span>OWNED - ' + m.wins + ' WINS</div>'
+          : '<div class="st">' + m.wins + ' / ' + N + '</div><div class="bar"><i style="width:' + pct + '%"></i></div>';
+        return '<div class="cell ' + (m.owned ? "owned" : "locked") + '">' +
+          '<img src="/sprites/' + m.dex + '.png" alt="" />' +
+          '<div class="nm">' + (m.name || "?") + '</div>' + status + '</div>';
+      }).join("");
+    }
+    load();
+  </script>
+</body>
+</html>

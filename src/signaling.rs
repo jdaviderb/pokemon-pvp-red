@@ -11,7 +11,7 @@ use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use axum_extra::extract::cookie::Key;
-use sea_orm::DatabaseConnection;
+use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
 use serde::{Deserialize, Serialize};
 use tower_http::services::{ServeDir, ServeFile};
 
@@ -90,6 +90,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/room/{id}", get(room_info_handler))
         .route("/api/live", get(live_handler))
         .route("/api/ranking", get(ranking_handler))
+        .route("/api/collection", get(collection_handler))
         // --- social login (provider-agnostic: /auth/oauth/{provider}[/callback]) ---
         .route("/auth/oauth/{provider}", get(crate::oauth::start))
         .route("/auth/oauth/{provider}/callback", get(crate::oauth::callback))
@@ -98,6 +99,7 @@ pub fn router(state: AppState) -> Router {
         .route_service("/lobby", ServeFile::new("static/lobby.html"))
         .route_service("/tv", ServeFile::new("static/tv.html"))
         .route_service("/ranking", ServeFile::new("static/ranking.html"))
+        .route_service("/collection", ServeFile::new("static/collection.html"))
         // /room: worker/solo serve the page; the coordinator redirects to the worker running it.
         .route("/room", get(room_page_handler))
         // --- realtime ---
@@ -234,6 +236,46 @@ async fn live_handler(State(st): State<AppState>) -> Json<serde_json::Value> {
 /// (a background job refreshes it every RANKING_REFRESH_SECS); never hits the DB on the request path.
 async fn ranking_handler(State(st): State<AppState>) -> Json<serde_json::Value> {
     Json(st.ranking.lock().unwrap().clone())
+}
+
+/// GET /api/collection (authed) -> {threshold, mons:[{index,dex,name,wins,owned}]}. A trainer OWNS a
+/// Pokemon once they've WON with it `COLLECTION_WINS` times (env, default 5) — "gotta catch 'em all".
+async fn collection_handler(
+    State(st): State<AppState>,
+    crate::auth::AuthUser(u): crate::auth::AuthUser,
+) -> Json<serde_json::Value> {
+    let threshold: i64 =
+        std::env::var("COLLECTION_WINS").ok().and_then(|s| s.parse().ok()).unwrap_or(5);
+    let backend = st.db.get_database_backend();
+    let (p1, p2) = if matches!(backend, sea_orm::DatabaseBackend::Postgres) {
+        ("$1", "$2")
+    } else {
+        ("?", "?")
+    };
+    // Count finished wins grouped by the species the user WON with (their own side).
+    let sql = format!(
+        "SELECT species, COUNT(*) AS wins FROM (\
+            SELECT (CASE WHEN winner_seat = 1 THEN p1_species ELSE p2_species END) AS species \
+            FROM matches WHERE (winner_seat = 1 AND p1_user = {p1}) OR (winner_seat = 2 AND p2_user = {p2})\
+         ) t GROUP BY species ORDER BY wins DESC"
+    );
+    let rows = st
+        .db
+        .query_all(Statement::from_sql_and_values(backend, &sql, [u.id.into(), u.id.into()]))
+        .await
+        .unwrap_or_default();
+    let mons: Vec<serde_json::Value> = rows
+        .iter()
+        .filter_map(|r| {
+            let idx: i32 = r.try_get("", "species").ok()?;
+            let wins: i64 = r.try_get("", "wins").ok()?;
+            let (dex, name) = crate::battle::dex_name_by_index(idx as u8)?;
+            Some(serde_json::json!({
+                "index": idx, "dex": dex, "name": name, "wins": wins, "owned": wins >= threshold,
+            }))
+        })
+        .collect();
+    Json(serde_json::json!({ "threshold": threshold, "mons": mons }))
 }
 
 #[derive(Deserialize)]
