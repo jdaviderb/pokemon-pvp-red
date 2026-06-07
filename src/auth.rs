@@ -44,9 +44,10 @@ pub struct Credentials {
     pub password: String,
 }
 
-/// Username/password login is on when the `login_username` feature flag is set (or in DEV).
-pub(crate) async fn username_login_on(st: &AppState) -> bool {
-    st.dev || crate::flags::enabled(&st.db, crate::flags::LOGIN_USERNAME).await
+/// Username/password login is on when the `login_username` feature flag is set (or in DEV). Reads
+/// the in-memory flag cache (refreshed every ~30s) so it costs no DB round-trip.
+pub(crate) fn username_login_on(st: &AppState) -> bool {
+    st.dev || crate::flags::cached(&st.game, crate::flags::LOGIN_USERNAME)
 }
 
 pub async fn register(
@@ -54,7 +55,7 @@ pub async fn register(
     jar: PrivateCookieJar,
     Json(c): Json<Credentials>,
 ) -> Result<(PrivateCookieJar, StatusCode), (StatusCode, String)> {
-    if !username_login_on(&st).await {
+    if !username_login_on(&st) {
         return Err((StatusCode::FORBIDDEN, "username login disabled".into()));
     }
     if c.username.len() < 3 || c.password.len() < 6 {
@@ -86,7 +87,7 @@ pub async fn login(
     jar: PrivateCookieJar,
     Json(c): Json<Credentials>,
 ) -> Result<(PrivateCookieJar, StatusCode), (StatusCode, String)> {
-    if !username_login_on(&st).await {
+    if !username_login_on(&st) {
         return Err((StatusCode::FORBIDDEN, "username login disabled".into()));
     }
     let user = users::Entity::find()

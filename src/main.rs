@@ -141,6 +141,8 @@ async fn main() -> anyhow::Result<()> {
         let coord_origin = format!("http://localhost:{port}");
         let inner = pipeline::dummy();
         let game = std::sync::Arc::new(rooms::GameState::new(inner.clone(), database.clone()));
+        flags::seed_cache(&game).await; // populate the flag cache before serving /api/config
+        flags::spawn_cache_refresher(game.clone());
         let pool = std::sync::Arc::new(coordinator::WorkerPool::new(
             port, max, rom_path, core_path, db_url, coord_origin,
         ));
@@ -160,6 +162,9 @@ async fn main() -> anyhow::Result<()> {
     if role == Role::Solo {
         // Solo runs its own matchmaker; a worker's battles are assigned by the coordinator instead.
         rooms::spawn_matchmaker(game.clone());
+        rooms::spawn_presence_sweeper(game.clone());
+        flags::seed_cache(&game).await;
+        flags::spawn_cache_refresher(game.clone());
     }
     let state = AppState {
         api, inner, db: database, cookie_key, game,

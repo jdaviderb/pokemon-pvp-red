@@ -128,6 +128,9 @@ pub struct GameState {
     /// Presence heartbeats (client id -> last seen) for the "PLAYERS ONLINE" counter. std Mutex so
     /// the HTTP handler can touch it without awaiting.
     pub online: std::sync::Mutex<HashMap<String, Instant>>,
+    /// Cached feature flags (key -> enabled), refreshed off the request path so /api/config (hit on
+    /// every page load) does ZERO DB reads. Seeded at boot, refreshed every ~30s.
+    pub flags_cache: std::sync::Mutex<HashMap<String, bool>>,
 }
 
 impl GameState {
@@ -143,6 +146,7 @@ impl GameState {
             emu_busy: AtomicBool::new(false),
             ws: WsHub::new(),
             online: std::sync::Mutex::new(HashMap::new()),
+            flags_cache: std::sync::Mutex::new(HashMap::new()),
         }
     }
 }
@@ -225,6 +229,20 @@ async fn queue_position(game: &Arc<GameState>, uid: UserId) -> Option<usize> {
 }
 
 /// Background task: pair queued users into rooms, then feed the single emulator one at a time.
+/// Evict stale presence entries off the request path, so `/api/online` stays O(1) under load
+/// (the hot path only inserts + reads len; this background sweep does the O(N) retain). Runs on the
+/// coordinator/solo process.
+pub fn spawn_presence_sweeper(game: Arc<GameState>) {
+    tokio::spawn(async move {
+        let window = Duration::from_secs(crate::signaling::ONLINE_WINDOW_SECS);
+        loop {
+            tokio::time::sleep(Duration::from_secs(4)).await;
+            let now = std::time::Instant::now();
+            game.online.lock().unwrap().retain(|_, t| now.duration_since(*t) < window);
+        }
+    });
+}
+
 pub fn spawn_matchmaker(game: Arc<GameState>) {
     tokio::spawn(async move {
         loop {

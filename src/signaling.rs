@@ -186,9 +186,9 @@ async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value
     providers.sort_unstable();
     Json(serde_json::json!({
         "providers": providers,
-        "username_login": crate::auth::username_login_on(&state).await,
-        "guest": crate::flags::enabled(&state.db, crate::flags::GUEST_MODE).await,
-        "mode_box": crate::flags::enabled(&state.db, crate::flags::TITLE_MODE_BOX).await,
+        "username_login": crate::auth::username_login_on(&state),
+        "guest": crate::flags::cached(&state.game, crate::flags::GUEST_MODE),
+        "mode_box": crate::flags::cached(&state.game, crate::flags::TITLE_MODE_BOX),
         // On a worker this points back at the coordinator so "RETURN HOME" leaves the worker port.
         "coordinator_origin": std::env::var("COORDINATOR_ORIGIN").unwrap_or_default(),
     }))
@@ -234,11 +234,12 @@ async fn room_info_handler(State(state): State<AppState>, Path(id): Path<String>
 /// GET /api/live -> {battles:[{id,p1,p2}]} for the TV page. The coordinator aggregates its whole
 /// worker pool; solo/worker report their own active battle. Public (guests can watch).
 async fn live_handler(State(st): State<AppState>) -> Json<serde_json::Value> {
-    let battles = if st.role == Role::Coordinator {
-        st.pool.as_ref().map(|p| p.live()).unwrap_or_default()
-    } else {
-        crate::rooms::live_battles(&st.game).await
-    };
+    if st.role == Role::Coordinator {
+        // lock-free cached snapshot — refreshed off the request path on battle start/end
+        let snap = st.pool.as_ref().map(|p| p.live_snapshot()).unwrap_or_default();
+        return Json(serde_json::json!({ "battles": &*snap }));
+    }
+    let battles = crate::rooms::live_battles(&st.game).await;
     Json(serde_json::json!({ "battles": battles }))
 }
 
@@ -288,7 +289,7 @@ async fn collection_handler(
     Json(serde_json::json!({ "threshold": threshold, "mons": mons }))
 }
 
-const ONLINE_WINDOW_SECS: u64 = 16;
+pub(crate) const ONLINE_WINDOW_SECS: u64 = 16;
 const CID_COOKIE: &str = "nes_cid";
 
 /// GET /api/online -> {online: N}. A presence heartbeat keyed by a STABLE identity so refreshes,
@@ -317,17 +318,15 @@ async fn online_handler(
             }
         },
     };
-    let now = std::time::Instant::now();
-    let (total, players, anon) = {
+    // O(1) on the request path: just record the heartbeat + read the size. Stale entries are evicted
+    // by a background sweeper (rooms::spawn_presence_sweeper), so this hot path never does the O(N)
+    // retain under the lock — critical when every online client polls every few seconds.
+    let total = {
         let mut m = state.game.online.lock().unwrap();
-        m.insert(key, now);
-        m.retain(|_, t| now.duration_since(*t) < std::time::Duration::from_secs(ONLINE_WINDOW_SECS));
-        // Breakdown: "u:" = a distinct logged-in account (two accounts on one IP still count as two,
-        // since we key by account not IP); "c:" = a distinct anonymous browser.
-        let players = m.keys().filter(|k| k.starts_with("u:")).count();
-        (m.len(), players, m.len() - players)
+        m.insert(key, std::time::Instant::now());
+        m.len()
     };
-    (cookies, Json(serde_json::json!({ "online": total, "players": players, "anon": anon })))
+    (cookies, Json(serde_json::json!({ "online": total })))
 }
 
 fn gen1_type_name(t: u8) -> &'static str {

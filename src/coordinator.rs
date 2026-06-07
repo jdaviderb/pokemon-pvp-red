@@ -14,7 +14,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::{Child, Command};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use axum::extract::{Query, State};
@@ -42,6 +42,10 @@ pub struct WorkerPool {
     http: reqwest::Client,
     secret: String,
     workers: Mutex<Vec<Worker>>,
+    /// Pre-serialized live-battle list for /api/live, refreshed off the request path (by the reaper
+    /// + on battle start/end) so thousands of TV pollers read it lock-free instead of contending the
+    /// `workers` lock that the battle lifecycle uses.
+    live_cache: RwLock<Arc<Vec<serde_json::Value>>>,
     base_port: u16,
     /// Max concurrent workers/battles. `usize::MAX` = unbounded (the default).
     max: usize,
@@ -69,6 +73,7 @@ impl WorkerPool {
                 .unwrap_or_default(),
             secret: rooms::gen_uuid(),
             workers: Mutex::new(Vec::new()),
+            live_cache: RwLock::new(Arc::new(Vec::new())),
             base_port,
             max,
             exe: std::env::current_exe().unwrap_or_default(),
@@ -154,6 +159,7 @@ impl WorkerPool {
             w.p1_uid = p1_uid;
             w.p2_uid = p2_uid;
         }
+        self.refresh_live(); // a battle just appeared -> update /api/live immediately
     }
 
     /// Proxy a browser SDP offer to the worker running `public_id`; return its answer SDP. Media
@@ -176,6 +182,17 @@ impl WorkerPool {
         v.get("sdp").and_then(|x| x.as_str()).map(|s| s.to_string())
     }
 
+    /// Lock-free cached live-battle list for /api/live (no contention with the worker lifecycle lock).
+    pub fn live_snapshot(&self) -> Arc<Vec<serde_json::Value>> {
+        self.live_cache.read().unwrap().clone()
+    }
+
+    /// Rebuild the cached live list. Called on battle start/end + by the reaper (every 1s).
+    fn refresh_live(&self) {
+        let snapshot = self.live();
+        *self.live_cache.write().unwrap() = Arc::new(snapshot);
+    }
+
     /// All battles currently live across the pool (for the TV / live list).
     pub fn live(&self) -> Vec<serde_json::Value> {
         self.workers
@@ -196,6 +213,8 @@ impl WorkerPool {
             let _ = w.child.kill();
             let _ = w.child.wait();
         }
+        drop(ws);
+        self.refresh_live(); // a battle just ended -> update /api/live immediately
     }
 
     fn kill_all(&self) {
@@ -223,6 +242,7 @@ pub async fn run_coordinator(state: AppState, port: u16) -> anyhow::Result<()> {
 
     tokio::spawn(reaper(state.clone(), pool.clone()));
     tokio::spawn(matchmaker(state.clone(), pool.clone()));
+    rooms::spawn_presence_sweeper(state.game.clone());
 
     // Best-effort: kill all workers when the coordinator is Ctrl-C'd.
     {
