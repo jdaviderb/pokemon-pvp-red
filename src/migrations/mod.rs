@@ -5,6 +5,7 @@ mod m20260606_000002_google;
 mod m20260606_000003_flags;
 mod m20260606_000004_match_history;
 mod m20260607_000005_name_chosen;
+mod m20260607_000006_api_tokens;
 
 pub struct Migrator;
 
@@ -17,6 +18,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260606_000003_flags::Migration),
             Box::new(m20260606_000004_match_history::Migration),
             Box::new(m20260607_000005_name_chosen::Migration),
+            Box::new(m20260607_000006_api_tokens::Migration),
         ]
     }
 }

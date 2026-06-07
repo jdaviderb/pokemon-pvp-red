@@ -82,6 +82,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/logout", post(crate::auth::logout))
         .route("/auth/guest", post(crate::auth::guest))
         .route("/auth/set-name", post(crate::auth::set_name))
+        .route("/api/mcp/token", post(crate::auth::mcp_token))
         .route("/api/me", get(crate::auth::me))
         .route("/api/species", get(species_list_handler))
         .route("/api/online", get(online_handler))
@@ -100,6 +101,7 @@ pub fn router(state: AppState) -> Router {
         .route_service("/tv", ServeFile::new("static/tv.html"))
         .route_service("/ranking", ServeFile::new("static/ranking.html"))
         .route_service("/collection", ServeFile::new("static/collection.html"))
+        .route_service("/mcp", ServeFile::new("static/mcp.html"))
         // /room: worker/solo serve the page; the coordinator redirects to the worker running it.
         .route("/room", get(room_page_handler))
         // --- realtime ---

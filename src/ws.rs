@@ -5,12 +5,13 @@
 use std::collections::HashMap;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::State;
-use axum::response::Response;
+use axum::extract::{Query, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum_extra::extract::cookie::PrivateCookieJar;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{mpsc, Mutex};
 
-use crate::auth::AuthUser;
 use crate::signaling::AppState;
 
 /// Registry of live WS senders, keyed by user id (a user may have several tabs).
@@ -50,15 +51,31 @@ impl WsHub {
     }
 }
 
-/// GET /ws — authenticated WebSocket upgrade.
+#[derive(serde::Deserialize)]
+pub struct WsQuery {
+    /// Agent/MCP auth: connect with `?token=mcp_...` instead of a browser session cookie.
+    pub token: Option<String>,
+}
+
+/// GET /ws — authenticated WebSocket upgrade. A browser authenticates via the session cookie; an
+/// AI agent (the MCP server) authenticates via `?token=` (so it needs no cookie). Same protocol.
 pub async fn ws_upgrade(
-    AuthUser(user): AuthUser,
     State(st): State<AppState>,
+    jar: PrivateCookieJar,
+    Query(q): Query<WsQuery>,
     ws: WebSocketUpgrade,
 ) -> Response {
-    let uid = user.id;
-    let uname = user.username.clone();
-    ws.on_upgrade(move |socket| handle_socket(socket, st, uid, uname))
+    let user = match q.token.as_deref() {
+        Some(t) => crate::auth::user_from_token(&st, t).await,
+        None => crate::auth::user_from_jar(&st, &jar).await,
+    };
+    match user {
+        Some(u) => {
+            let (uid, uname) = (u.id, u.username.clone());
+            ws.on_upgrade(move |socket| handle_socket(socket, st, uid, uname))
+        }
+        None => (StatusCode::UNAUTHORIZED, "unauthorized").into_response(),
+    }
 }
 
 async fn handle_socket(socket: WebSocket, st: AppState, uid: i32, uname: String) {

@@ -260,25 +260,69 @@ where
         let jar = PrivateCookieJar::<Key>::from_request_parts(parts, state)
             .await
             .map_err(|_| (StatusCode::UNAUTHORIZED, "no cookie"))?;
-        let token = jar
-            .get(SESSION_COOKIE)
-            .map(|c| c.value().to_owned())
-            .ok_or((StatusCode::UNAUTHORIZED, "no session"))?;
-        let sess = sessions::Entity::find_by_id(token)
-            .one(&st.db)
-            .await
-            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "db"))?
-            .ok_or((StatusCode::UNAUTHORIZED, "session not found"))?;
-        if sess.expires < Utc::now() {
-            return Err((StatusCode::UNAUTHORIZED, "expired"));
-        }
-        let user = users::Entity::find_by_id(sess.user_id)
-            .one(&st.db)
-            .await
-            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "db"))?
-            .ok_or((StatusCode::UNAUTHORIZED, "user gone"))?;
-        Ok(AuthUser(user))
+        user_from_jar(&st, &jar).await.map(AuthUser).ok_or((StatusCode::UNAUTHORIZED, "unauthorized"))
     }
+}
+
+/// Resolve the logged-in user from the session cookie jar (the browser auth path).
+pub async fn user_from_jar(st: &AppState, jar: &PrivateCookieJar) -> Option<users::Model> {
+    let token = jar.get(SESSION_COOKIE).map(|c| c.value().to_owned())?;
+    let sess = sessions::Entity::find_by_id(token).one(&st.db).await.ok()??;
+    if sess.expires < Utc::now() {
+        return None;
+    }
+    users::Entity::find_by_id(sess.user_id).one(&st.db).await.ok()?
+}
+
+/// Resolve a user from an API bearer token (the agent / MCP-server auth path — no browser cookie).
+pub async fn user_from_token(st: &AppState, token: &str) -> Option<users::Model> {
+    let link = crate::entities::api_tokens::Entity::find_by_id(token.to_string())
+        .one(&st.db)
+        .await
+        .ok()??;
+    users::Entity::find_by_id(link.user_id).one(&st.db).await.ok()?
+}
+
+/// POST /api/mcp/token (authed) -> {token, username}. Returns the caller's agent token (minted on
+/// first call). Guests are rejected unless DEV is on (so the dev can drive test agents as guests).
+pub async fn mcp_token(
+    State(st): State<AppState>,
+    AuthUser(u): AuthUser,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    use crate::entities::api_tokens;
+    if u.is_guest && !st.dev {
+        return Err((StatusCode::FORBIDDEN, "agents require a registered account".into()));
+    }
+    let db_err = |e: sea_orm::DbErr| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+    let existing = api_tokens::Entity::find()
+        .filter(api_tokens::Column::UserId.eq(u.id))
+        .one(&st.db)
+        .await
+        .map_err(db_err)?;
+    let token = match existing {
+        Some(t) => t.token,
+        None => {
+            let tok = format!("mcp_{}", random_hex(24));
+            api_tokens::ActiveModel {
+                token: Set(tok.clone()),
+                user_id: Set(u.id),
+                label: Set("mcp".into()),
+                created_at: Set(Utc::now()),
+            }
+            .insert(&st.db)
+            .await
+            .map_err(db_err)?;
+            tok
+        }
+    };
+    Ok(Json(serde_json::json!({ "token": token, "username": u.username })))
+}
+
+fn random_hex(n: usize) -> String {
+    use rand::RngCore;
+    let mut b = vec![0u8; n];
+    OsRng.fill_bytes(&mut b);
+    b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
 /// GET /api/me -> {user, room?} for first-paint routing (login? lobby? room?).

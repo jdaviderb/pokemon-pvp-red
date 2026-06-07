@@ -57,7 +57,7 @@
   <div class="gb who" id="who">...</div>
   <button class="gb" id="find"><span class="cur">▶</span>FIND MATCH</button>
   <div class="status" id="status"></div>
-  <div class="links"><a href="/ranking">RANKING</a> - <a href="/collection">MY POKEMON</a> - <a href="/tv">LIVE TV</a> - <span id="devlink" style="display:none"><a href="/console">DEV CONSOLE</a> - </span><span id="logout">LOGOUT</span></div>
+  <div class="links"><a href="/ranking">RANKING</a> - <a href="/collection">MY POKEMON</a> - <a href="/tv">LIVE TV</a> - <span id="mcplink" style="display:none"><a href="/mcp">AGENT (MCP)</a> - </span><span id="devlink" style="display:none"><a href="/console">DEV CONSOLE</a> - </span><span id="logout">LOGOUT</span></div>
   <script>
     const $ = (id) => document.getElementById(id);
     // presence heartbeat so this player counts toward "PLAYERS ONLINE"
@@ -75,6 +75,7 @@
       if (d.user && d.user.name_chosen === false) return location.replace("/login");
       if (d.room && d.room.id != null) return location.replace("/room?id=" + d.room.id);
       if (d.dev) $("devlink").style.display = "";  // show the dev console link only in DEV mode
+      if (!d.user.is_guest || d.dev) $("mcplink").style.display = "";  // agent mode: real accounts (or any in DEV)
       $("who").innerHTML = "TRAINER <b>" + d.user.username.toUpperCase() + "</b> - " + d.user.wins + "W / " + d.user.losses + "L";
       openWs();
     })();

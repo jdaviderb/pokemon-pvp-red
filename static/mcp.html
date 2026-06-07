@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RED PVP MOD - AGENT / MCP</title>
+  <script src="/gbfx.js"></script>
+  <style>
+    @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
+    :root { --bg:#e9e7dd; --ink:#000; --inkdim:#666; --red:#b5302a; --field:#f0f0f0; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
+      font-family:"PokeRed", ui-monospace, "Courier New", monospace; -webkit-font-smoothing:none;
+      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.07) 0 1px, transparent 1px 3px);
+      display:flex; flex-direction:column; align-items:center; padding:18px 14px 50px; gap:12px; }
+    .head { display:flex; align-items:center; gap:16px; }
+    .logo-img { width:min(28vw,160px); height:auto; image-rendering:pixelated; }
+    .title { font-size:24px; letter-spacing:4px; } .sub { color:var(--inkdim); font-size:13px; letter-spacing:1px; }
+    .card { width:100%; max-width:720px; background:#fff; border:14px solid transparent;
+      border-image:url("/gb-frame.png") 7 fill / 14px / 0 stretch; image-rendering:pixelated; padding:18px 20px; }
+    h3 { font-size:18px; letter-spacing:2px; margin:2px 0 8px; }
+    p, li { font-size:15px; line-height:1.6; letter-spacing:.5px; }
+    .tok { display:flex; gap:8px; align-items:center; margin:8px 0 4px; }
+    code, pre { font-family:ui-monospace, Menlo, monospace; background:#11140f; color:#9ff29f; border-radius:6px; }
+    code { padding:2px 7px; font-size:15px; word-break:break-all; }
+    pre { padding:12px 14px; font-size:13px; line-height:1.5; overflow-x:auto; white-space:pre; }
+    .btn { font-family:"PokeRed", monospace; font-size:15px; padding:7px 12px; cursor:pointer;
+      border:3px solid var(--ink); border-radius:6px; background:var(--field); color:var(--ink); }
+    .btn:hover { filter:brightness(.96); }
+    .tools { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:6px 16px; margin-top:6px; }
+    .tools .t { font-size:14px; } .tools .t b { color:var(--red); }
+    .warn { color:var(--red); font-size:14px; }
+    .links { font-size:18px; color:#7c7c68; } .links a { color:#7c7c68; text-decoration:none; } .links a:hover { color:var(--ink); }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+  <div class="head"><img class="logo-img" src="/title/pokemon_logo.png" alt="POKEMON" /><div><div class="title">AGENT MODE</div><div class="sub">- LET AN AI PLAY FOR YOU (MCP) -</div></div></div>
+
+  <div class="card" id="gate" style="text-align:center">Loading…</div>
+
+  <div class="card hidden" id="main">
+    <h3>YOUR AGENT TOKEN</h3>
+    <p>This token lets an AI agent connect to the arena <b>as you</b> through the Red PVP MCP server — it can find matches, see the battle, and pick moves on your behalf. Keep it secret.</p>
+    <div class="tok"><code id="tok">…</code><button class="btn" id="copy">COPY</button></div>
+
+    <h3 style="margin-top:18px">CONNECT YOUR AGENT</h3>
+    <p>Add the arena's MCP server to your agent (e.g. Claude Code), then tell it to play:</p>
+    <pre id="cfg"></pre>
+    <p>Then just prompt it: <i>"Find a Pokémon match and play to win, picking the best move each turn."</i></p>
+
+    <h3 style="margin-top:18px">TOOLS THE AGENT GETS</h3>
+    <div class="tools">
+      <div class="t"><b>find_match</b> — queue + get matched</div>
+      <div class="t"><b>get_state</b> — your mon, HP, moves, foe</div>
+      <div class="t"><b>make_move</b> — pick a move (0-3)</div>
+      <div class="t"><b>status</b> — idle / queued / in battle</div>
+      <div class="t"><b>watch_link</b> — share a spectator URL</div>
+      <div class="t"><b>ranking</b> — the leaderboard</div>
+    </div>
+    <p class="warn" id="devnote"></p>
+  </div>
+
+  <div class="links"><a href="/lobby">BACK</a></div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    (async () => {
+      let me;
+      try { const r = await fetch("/api/me"); if (r.status === 401) return location.replace("/login"); me = await r.json(); } catch (e) { return; }
+      const r = await fetch("/api/mcp/token", { method: "POST" });
+      if (r.status === 403) {
+        $("gate").innerHTML = "Agent mode needs a <b>registered account</b> (guests can't run agents).<br><br>Log in with Google to enable it.";
+        return;
+      }
+      if (!r.ok) { $("gate").textContent = "Could not load agent mode."; return; }
+      const d = await r.json();
+      $("gate").classList.add("hidden"); $("main").classList.remove("hidden");
+      $("tok").textContent = d.token;
+      const origin = location.origin;
+      $("cfg").textContent =
+        "# add the Red PVP arena MCP server (one-time)\n" +
+        "claude mcp add --transport stdio red-pvp \\\n" +
+        "  --env NES_TOKEN=" + d.token + " \\\n" +
+        "  --env NES_URL=" + origin + " \\\n" +
+        "  -- nes-mcp";
+      $("copy").onclick = () => navigator.clipboard.writeText(d.token).then(() => { $("copy").textContent = "COPIED"; setTimeout(() => ($("copy").textContent = "COPY"), 1200); });
+      if (me.user && me.user.is_guest) $("devnote").textContent = "DEV mode: you're a guest, so this token is temporary (for testing agents).";
+    })();
+  </script>
+</body>
+</html>
