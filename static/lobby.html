@@ -65,6 +65,7 @@
     { const pick = () => "/sprites/" + (Math.floor(Math.random() * 151) + 1) + ".png";
       ["paradeMon", "paradeMon2"].forEach((id) => { const m = $(id); if (!m) return; m.src = pick(); m.addEventListener("animationiteration", () => (m.src = pick())); }); }
     let ws, searching = false;
+    const autofind = new URLSearchParams(location.search).has("find"); // guest flow lands here -> auto FIND MATCH
     (async () => {
       const r = await fetch("/api/me");
       if (r.status === 401) return location.replace("/login");
@@ -76,6 +77,7 @@
     })();
     function openWs() {
       ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+      ws.onopen = () => { if (autofind) { history.replaceState({}, "", "/lobby"); $("find").click(); } };
       ws.onmessage = (e) => {
         const m = JSON.parse(e.data);
         if (m.type === "queued") { searching = true; setSearching(m.position); }

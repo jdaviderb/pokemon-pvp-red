@@ -45,6 +45,16 @@
     .provbtn + .provbtn { margin-top:10px; }
     .provbtn:hover { filter:brightness(.96); }
     .provbtn .cur { color:var(--ink); }
+    /* GB modal (guest flow + how-to) */
+    .gmodal { position:fixed; inset:0; background:rgba(20,20,16,.85); display:grid; place-items:center; z-index:60; }
+    .gmodal.hidden { display:none; }
+    .gbox { max-width:min(92vw,480px); padding:24px 28px; text-align:left; }
+    .gtext { font-size:19px; line-height:1.55; color:var(--ink); }
+    .gmenu { margin-top:18px; display:flex; flex-direction:column; gap:8px; }
+    .gbtn { position:relative; display:flex; align-items:center; gap:10px; font-family:"PokeRed", monospace; font-size:19px; white-space:nowrap;
+      color:var(--ink); background:var(--field); border:3px solid var(--ink); border-radius:6px; padding:12px 16px; cursor:pointer; text-align:left; letter-spacing:1px; }
+    .gbtn:hover { filter:brightness(.96); }
+    .gmsg { margin-top:10px; min-height:18px; font-size:16px; color:#9a2c2c; }
     .form { display:none; } .form.on { display:block; }
     label { display:block; text-align:left; color:var(--inkdim); font-size:16px; letter-spacing:2px; margin:10px 0 4px; }
     input { width:100%; background:var(--field); border:3px solid var(--ink); border-radius:6px; color:var(--ink);
@@ -97,6 +107,31 @@
     <div class="arrow" id="arrow" style="display:none">▾</div>
   </div>
 
+  <div id="guestModal" class="gmodal hidden">
+    <div class="gb gbox">
+      <div id="gConfirm">
+        <div class="gtext">PLAY AS GUEST<br><br>Your progress will NOT be saved. AI agents (MCP) are disabled for guest accounts.</div>
+        <div class="gmenu">
+          <button class="gbtn" id="gYes"><span class="cur">▶</span>YES, CONTINUE</button>
+          <button class="gbtn" id="gNo"><span class="cur">▶</span>NO, GO BACK</button>
+        </div>
+      </div>
+      <div id="gName" style="display:none">
+        <div class="gtext">CHOOSE YOUR GUEST NAME:</div>
+        <input id="gNick" maxlength="20" autocomplete="off" />
+        <div class="gmenu"><button class="gbtn" id="gOk"><span class="cur">▶</span>OK - FIND MATCH</button></div>
+        <div class="gmsg" id="gMsg"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="howtoModal" class="gmodal hidden">
+    <div class="gb gbox">
+      <div class="gtext">HOW TO PLAY<br><br>(Coming soon.)</div>
+      <div class="gmenu"><button class="gbtn" id="howClose"><span class="cur">▶</span>CLOSE</button></div>
+    </div>
+  </div>
+
   <div class="foot"><span>PLAYERS ONLINE: <b id="online">--</b></span><span>PREPARE. COMPETE. BE LEGEND.</span><span></span></div>
 
   <script>
@@ -137,20 +172,35 @@
         const g = document.createElement("button");
         g.className = "provbtn"; g.type = "button";
         g.innerHTML = '<span class="cur">▶</span>PLAY AS GUEST';
-        g.onclick = guestLogin;
+        g.onclick = openGuest;
         box.appendChild(g);
       }
+      // HOW TO PLAY is always available.
+      const h = document.createElement("button");
+      h.className = "provbtn"; h.type = "button";
+      h.innerHTML = '<span class="cur">▶</span>HOW TO PLAY';
+      h.onclick = () => $("howtoModal").classList.remove("hidden");
+      box.appendChild(h);
       if (USERNAME_LOGIN) { $("devauth").style.display = ""; $("arrow").style.display = ""; }
       if (!(cfg.providers || []).length && !cfg.guest && !USERNAME_LOGIN) $("nologin").style.display = "";
     })();
-    function showErr(t) { const n = $("nologin"); n.textContent = t; n.style.display = ""; n.style.color = "#9a2c2c"; }
-    async function guestLogin() {
+    // --- guest flow: confirm -> choose name -> create -> straight into matchmaking ---
+    function randNick() { const x = "0123456789ABCDEF"; let s = ""; for (let i = 0; i < 4; i++) s += x[Math.floor(Math.random() * 16)]; return "Guest-" + s; }
+    function openGuest() { $("guestModal").classList.remove("hidden"); $("gConfirm").style.display = ""; $("gName").style.display = "none"; }
+    $("gNo").onclick = () => $("guestModal").classList.add("hidden");
+    $("gYes").onclick = () => { $("gConfirm").style.display = "none"; $("gName").style.display = ""; $("gNick").value = randNick(); $("gNick").focus(); $("gNick").select(); };
+    $("gOk").onclick = submitGuest;
+    $("gNick").addEventListener("keydown", (e) => { if (e.key === "Enter") submitGuest(); });
+    async function submitGuest() {
+      const nickname = $("gNick").value.trim();
+      $("gMsg").textContent = "...";
       try {
-        const r = await fetch("/auth/guest", { method: "POST" });
-        if (r.ok) { location.href = "/"; return; }
-        showErr((await r.text()).toUpperCase() || ("HTTP " + r.status));
-      } catch (e) { showErr("NETWORK ERROR"); }
+        const r = await fetch("/auth/guest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ nickname }) });
+        if (r.ok) { location.href = "/lobby?find=1"; return; }
+        $("gMsg").textContent = (await r.text()).toUpperCase() || ("HTTP " + r.status);
+      } catch (e) { $("gMsg").textContent = "NETWORK ERROR"; }
     }
+    $("howClose").onclick = () => $("howtoModal").classList.add("hidden");
     function start() { $("press").style.display = "none"; $("arrow").style.display = "none"; $("form").classList.add("on"); $("u").focus(); }
     $("press").onclick = start;
     document.addEventListener("keydown", (e) => { if (USERNAME_LOGIN && !$("form").classList.contains("on") && (e.key === "Enter" || e.key === " ")) start(); });

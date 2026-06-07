@@ -129,18 +129,28 @@ pub(crate) async fn start_session(
     Ok(jar.add(cookie))
 }
 
-/// POST /auth/guest -> create a disposable guest account (random nickname) and start a session.
-/// Gated by the `guest_mode` feature flag. Progress is irrelevant; the row can be purged later.
+#[derive(serde::Deserialize, Default)]
+pub struct GuestReq {
+    /// Optional chosen nickname; sanitized + made unique. Falls back to a random Guest-XXXX.
+    #[serde(default)]
+    pub nickname: String,
+}
+
+/// POST /auth/guest {nickname?} -> create a disposable guest account and start a session. Gated by
+/// the `guest_mode` feature flag. Progress is irrelevant; the row can be purged later.
 pub async fn guest(
     State(st): State<AppState>,
     jar: PrivateCookieJar,
+    Json(req): Json<GuestReq>,
 ) -> Result<(PrivateCookieJar, StatusCode), (StatusCode, String)> {
     if !crate::flags::enabled(&st.db, crate::flags::GUEST_MODE).await {
         return Err((StatusCode::FORBIDDEN, "guest mode disabled".into()));
     }
-    let username = unique_guest_name(&st)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let username = match sanitize_nick(&req.nickname) {
+        Some(base) => unique_or_suffix(&st, &base).await,
+        None => unique_guest_name(&st).await,
+    }
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let user = users::ActiveModel {
         username: Set(username),
         pass_hash: Set(String::new()),
@@ -159,6 +169,38 @@ pub async fn guest(
     Ok((jar, StatusCode::OK))
 }
 
+/// Keep alphanumerics/-/_ (max 20); None if fewer than 3 usable chars remain (-> random name).
+fn sanitize_nick(s: &str) -> Option<String> {
+    let out: String =
+        s.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(20).collect();
+    (out.len() >= 3).then_some(out)
+}
+
+async fn username_free(st: &AppState, name: &str) -> anyhow::Result<bool> {
+    Ok(users::Entity::find()
+        .filter(users::Column::Username.eq(name))
+        .one(&st.db)
+        .await?
+        .is_none())
+}
+
+/// `base` if free, else `base-XXXX`; random Guest name as a last resort.
+async fn unique_or_suffix(st: &AppState, base: &str) -> anyhow::Result<String> {
+    use rand::RngCore;
+    if username_free(st, base).await? {
+        return Ok(base.to_string());
+    }
+    for _ in 0..50 {
+        let mut b = [0u8; 2];
+        OsRng.fill_bytes(&mut b);
+        let cand = format!("{base}-{:02X}{:02X}", b[0], b[1]);
+        if username_free(st, &cand).await? {
+            return Ok(cand);
+        }
+    }
+    unique_guest_name(st).await
+}
+
 /// First free "Guest-XXXX" (random hex), retried; random suffix as a last resort.
 async fn unique_guest_name(st: &AppState) -> anyhow::Result<String> {
     use rand::RngCore;
@@ -166,12 +208,7 @@ async fn unique_guest_name(st: &AppState) -> anyhow::Result<String> {
         let mut b = [0u8; 2];
         OsRng.fill_bytes(&mut b);
         let cand = format!("Guest-{:02X}{:02X}", b[0], b[1]);
-        if users::Entity::find()
-            .filter(users::Column::Username.eq(&cand))
-            .one(&st.db)
-            .await?
-            .is_none()
-        {
+        if username_free(st, &cand).await? {
             return Ok(cand);
         }
     }
