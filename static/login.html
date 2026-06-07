@@ -257,7 +257,7 @@
         nameStr = d.name; // server-sanitized
       } catch (e) { $("gMsg").textContent = "NETWORK ERROR"; return; }
       $("doneName").textContent = nameStr;
-      $("gGo").innerHTML = '<span class="cur">▶</span>' + (entryMode === "guest" ? "LET'S GO - FIND MATCH" : "CONTINUE");
+      $("gGo").innerHTML = '<span class="cur">▶</span>' + (entryMode === "guest" ? "LET'S GO" : "CONTINUE");
       showStep("gDone");
     }
     $("gGo").onclick = async () => {
