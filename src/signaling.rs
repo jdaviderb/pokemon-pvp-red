@@ -47,6 +47,8 @@ pub struct AppState {
     pub oauth: Arc<crate::oauth::Registry>,
     /// Mark session/oauth cookies Secure (HTTPS-only). On in prod, off in DEV (localhost HTTP).
     pub cookie_secure: bool,
+    /// Cached leaderboard (Today/Weekly/Monthly), refreshed by a background job; /api/ranking reads it.
+    pub ranking: crate::ranking::RankingCache,
 }
 
 impl FromRef<AppState> for Key {
@@ -87,6 +89,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/config", get(config_handler))
         .route("/api/room/{id}", get(room_info_handler))
         .route("/api/live", get(live_handler))
+        .route("/api/ranking", get(ranking_handler))
         // --- social login (provider-agnostic: /auth/oauth/{provider}[/callback]) ---
         .route("/auth/oauth/{provider}", get(crate::oauth::start))
         .route("/auth/oauth/{provider}/callback", get(crate::oauth::callback))
@@ -94,6 +97,7 @@ pub fn router(state: AppState) -> Router {
         .route_service("/login", ServeFile::new("static/login.html"))
         .route_service("/lobby", ServeFile::new("static/lobby.html"))
         .route_service("/tv", ServeFile::new("static/tv.html"))
+        .route_service("/ranking", ServeFile::new("static/ranking.html"))
         // /room: worker/solo serve the page; the coordinator redirects to the worker running it.
         .route("/room", get(room_page_handler))
         // --- realtime ---
@@ -224,6 +228,12 @@ async fn live_handler(State(st): State<AppState>) -> Json<serde_json::Value> {
         crate::rooms::live_battles(&st.game).await
     };
     Json(serde_json::json!({ "battles": battles }))
+}
+
+/// GET /api/ranking -> the cached leaderboard {today, weekly, monthly, updated}. In-memory read
+/// (a background job refreshes it every RANKING_REFRESH_SECS); never hits the DB on the request path.
+async fn ranking_handler(State(st): State<AppState>) -> Json<serde_json::Value> {
+    Json(st.ranking.lock().unwrap().clone())
 }
 
 #[derive(Deserialize)]

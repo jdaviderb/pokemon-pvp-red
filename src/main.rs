@@ -17,6 +17,7 @@ mod migrations;
 mod n64;
 mod oauth;
 mod pipeline;
+mod ranking;
 mod rooms;
 mod signaling;
 mod species_data;
@@ -97,6 +98,14 @@ async fn main() -> anyhow::Result<()> {
         flags::seed_defaults(&database).await?;
         rooms::recover_abandoned(&database).await?;
     }
+    // Leaderboard cache: load the last file snapshot now (instant board), and on the coordinator/solo
+    // process run the background refresh job every RANKING_REFRESH_SECS (default 300 = 5 min).
+    let ranking = ranking::new_cache();
+    ranking::load_file(&ranking);
+    if !worker {
+        let secs = std::env::var("RANKING_REFRESH_SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(300);
+        ranking::spawn_job(database.clone(), ranking.clone(), std::time::Duration::from_secs(secs));
+    }
     let cookie_key = load_cookie_key();
     let dev = std::env::var("DEV").map(|v| v != "0" && !v.is_empty()).unwrap_or(false);
     let oauth = std::sync::Arc::new(oauth::registry_from_env());
@@ -119,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
         ));
         let state = AppState {
             api, inner, db: database, cookie_key, game,
-            role: Role::Coordinator, pool: Some(pool), dev, oauth, cookie_secure,
+            role: Role::Coordinator, pool: Some(pool), dev, oauth, cookie_secure, ranking,
         };
         return coordinator::run_coordinator(state, port).await;
     }
@@ -136,7 +145,7 @@ async fn main() -> anyhow::Result<()> {
     }
     let state = AppState {
         api, inner, db: database, cookie_key, game,
-        role, pool: None, dev, oauth, cookie_secure,
+        role, pool: None, dev, oauth, cookie_secure, ranking,
     };
     let app = router(state);
     let addr = SocketAddr::from(([127, 0, 0, 1], port));

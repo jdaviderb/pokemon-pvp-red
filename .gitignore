@@ -40,3 +40,4 @@ data.db-*
 .env
 .env.*
 !.env.example
+cache/
