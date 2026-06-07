@@ -71,6 +71,15 @@ pub struct AnswerResponse {
     pub kind: String, // "answer"
 }
 
+/// Address to bind: `BIND_ADDR` env (e.g. `0.0.0.0` in Docker) else loopback for local safety.
+pub fn bind_addr(port: u16) -> std::net::SocketAddr {
+    let ip = std::env::var("BIND_ADDR")
+        .ok()
+        .and_then(|s| s.parse::<std::net::IpAddr>().ok())
+        .unwrap_or_else(|| std::net::IpAddr::from([127, 0, 0, 1]));
+    std::net::SocketAddr::new(ip, port)
+}
+
 pub fn router(state: AppState) -> Router {
     // Serve ./static, index.html as the directory index for "/".
     let static_service = ServeDir::new("static").append_index_html_on_directories(true);

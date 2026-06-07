@@ -256,7 +256,7 @@ pub async fn run_coordinator(state: AppState, port: u16) -> anyhow::Result<()> {
 
     let cap = if pool.max == usize::MAX { "∞".to_string() } else { pool.max.to_string() };
     let app = crate::signaling::router(state);
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = crate::signaling::bind_addr(port);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("▶  COORDINATOR on http://localhost:{port}  (max workers: {cap}, spawned on demand)");
     axum::serve(listener, app).await?;

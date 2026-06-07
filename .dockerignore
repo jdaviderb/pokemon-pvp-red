@@ -1,0 +1,14 @@
+# Keep the build context small + free of host/mac artifacts.
+target/
+.git/
+data.db
+data.db-*
+.cookie_key
+cache/
+cores/*.dylib
+cores/*.so
+node_modules/
+test/
+research/
+*.log
+.env

@@ -26,8 +26,6 @@ mod video;
 mod webrtc; // our module; refer to the crate as `::webrtc`
 mod ws;
 
-use std::net::SocketAddr;
-
 use axum_extra::extract::cookie::Key;
 use signaling::{router, AppState, Role};
 
@@ -171,7 +169,7 @@ async fn main() -> anyhow::Result<()> {
         role, pool: None, dev, oauth, cookie_secure, ranking,
     };
     let app = router(state);
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = signaling::bind_addr(port);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("▶  {role:?} on http://localhost:{port}");
     axum::serve(listener, app).await?;
