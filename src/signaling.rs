@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use axum::body::Bytes;
 use axum::extract::{FromRef, Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use axum_extra::extract::cookie::Key;
@@ -17,6 +18,17 @@ use ::webrtc::api::API;
 
 use crate::pipeline::AppInner;
 
+/// How this process participates in the (optionally) multi-process arena.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Role {
+    /// Single process: emulator + matchmaking + everything (the default, backwards-compatible).
+    Solo,
+    /// Emulator worker: runs one battle assigned by the coordinator (no own matchmaking).
+    Worker,
+    /// No emulator: auth/lobby/matchmaking + a pool of worker processes; redirects players to them.
+    Coordinator,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub api: Arc<API>,
@@ -24,6 +36,9 @@ pub struct AppState {
     pub db: DatabaseConnection,
     pub cookie_key: Key,
     pub game: Arc<crate::rooms::GameState>,
+    pub role: Role,
+    /// Coordinator only: the worker-process pool (for the /room redirect + matchmaking).
+    pub pool: Option<Arc<crate::coordinator::WorkerPool>>,
     /// DEV mode (env `DEV`): when off, the unauthenticated /battle/* dev endpoints and the dev
     /// console are NOT mounted at all (security: no anonymous control of the shared emulator).
     pub dev: bool,
@@ -68,15 +83,25 @@ pub fn router(state: AppState) -> Router {
         .route("/api/online", get(online_handler))
         .route("/api/config", get(config_handler))
         .route("/api/room/{id}", get(room_info_handler))
+        .route("/api/live", get(live_handler))
         // --- social login (provider-agnostic: /auth/oauth/{provider}[/callback]) ---
         .route("/auth/oauth/{provider}", get(crate::oauth::start))
         .route("/auth/oauth/{provider}/callback", get(crate::oauth::callback))
         // --- clean (extensionless) page URLs — more professional than *.html ---
         .route_service("/login", ServeFile::new("static/login.html"))
         .route_service("/lobby", ServeFile::new("static/lobby.html"))
-        .route_service("/room", ServeFile::new("static/room.html"))
+        .route_service("/tv", ServeFile::new("static/tv.html"))
+        // /room: worker/solo serve the page; the coordinator redirects to the worker running it.
+        .route("/room", get(room_page_handler))
         // --- realtime ---
         .route("/ws", get(crate::ws::ws_upgrade));
+
+    // Worker only: the coordinator drives battles through these internal (secret-gated) endpoints.
+    if state.role == Role::Worker {
+        app = app
+            .route("/internal/assign", post(crate::coordinator::assign_handler))
+            .route("/internal/status", get(crate::coordinator::status_handler));
+    }
 
     // DEV-only: the dev console + the unauthenticated emulator-control endpoints. Off by default so
     // they don't exist in production (no anonymous /battle/* control of the shared emulator).
@@ -128,7 +153,37 @@ async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value
         "providers": providers,
         "username_login": crate::auth::username_login_on(&state).await,
         "guest": crate::flags::enabled(&state.db, crate::flags::GUEST_MODE).await,
+        // On a worker this points back at the coordinator so "RETURN HOME" leaves the worker port.
+        "coordinator_origin": std::env::var("COORDINATOR_ORIGIN").unwrap_or_default(),
     }))
+}
+
+#[derive(Deserialize)]
+struct RoomPageQ {
+    #[serde(default)]
+    id: String,
+}
+
+/// GET /room: worker/solo serve the battle page; the coordinator redirects to the worker running
+/// this room UUID (browser then talks to that worker directly for video + the battle WS). If the
+/// room isn't live, the coordinator serves the page too — it shows the recorded result or
+/// "BATTLE NOT FOUND" from /api/room.
+async fn room_page_handler(
+    State(st): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<RoomPageQ>,
+) -> Response {
+    if st.role == Role::Coordinator {
+        if let Some(port) = st.pool.as_ref().and_then(|p| p.worker_for(&q.id)) {
+            let host = headers.get("host").and_then(|h| h.to_str().ok()).unwrap_or("localhost");
+            let hostname = host.split(':').next().unwrap_or("localhost");
+            return Redirect::to(&format!("http://{hostname}:{port}/room?id={}", q.id)).into_response();
+        }
+    }
+    match tokio::fs::read_to_string("static/room.html").await {
+        Ok(html) => Html(html).into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, "room page missing").into_response(),
+    }
 }
 
 /// GET /api/room/{id} -> spectator info for a room UUID ({found, live, phase, p1, p2}). Public so a
@@ -138,6 +193,17 @@ async fn room_info_handler(State(state): State<AppState>, Path(id): Path<String>
         Some(v) => Json(v),
         None => Json(serde_json::json!({ "found": false })),
     }
+}
+
+/// GET /api/live -> {battles:[{id,p1,p2}]} for the TV page. The coordinator aggregates its whole
+/// worker pool; solo/worker report their own active battle. Public (guests can watch).
+async fn live_handler(State(st): State<AppState>) -> Json<serde_json::Value> {
+    let battles = if st.role == Role::Coordinator {
+        st.pool.as_ref().map(|p| p.live()).unwrap_or_default()
+    } else {
+        crate::rooms::live_battles(&st.game).await
+    };
+    Json(serde_json::json!({ "battles": battles }))
 }
 
 #[derive(Deserialize)]
@@ -176,11 +242,32 @@ fn type_label(t1: u8, t2: u8) -> String {
     }
 }
 
+#[derive(Deserialize)]
+struct OfferRoomQ {
+    room: Option<String>,
+}
+
 async fn offer_handler(
     State(state): State<AppState>,
+    Query(q): Query<OfferRoomQ>,
     Json(offer): Json<OfferRequest>,
 ) -> Result<Json<AnswerResponse>, (StatusCode, String)> {
     let _ = &offer.kind; // expected "offer"
+    // Coordinator owns no emulator: proxy the SDP to the worker running this room (the answer carries
+    // the worker's ICE candidates, so media flows browser<->worker directly). Used by the TV wall to
+    // play every live battle same-origin from :3000.
+    if state.role == Role::Coordinator {
+        let room = q.room.ok_or((StatusCode::BAD_REQUEST, "room query required".to_string()))?;
+        let pool = state
+            .pool
+            .as_ref()
+            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "no pool".to_string()))?;
+        let sdp = pool
+            .proxy_offer(&room, &offer.sdp)
+            .await
+            .ok_or((StatusCode::BAD_GATEWAY, "worker offer failed".to_string()))?;
+        return Ok(Json(AnswerResponse { sdp, kind: "answer".to_owned() }));
+    }
     let answer_sdp = crate::webrtc::build_peer_and_answer(&state.api, &state.inner, offer.sdp)
         .await
         .map_err(|e| {

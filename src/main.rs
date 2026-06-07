@@ -9,6 +9,7 @@
 mod audio;
 mod auth;
 mod battle;
+mod coordinator;
 mod db;
 mod entities;
 mod flags;
@@ -26,7 +27,7 @@ mod ws;
 use std::net::SocketAddr;
 
 use axum_extra::extract::cookie::Key;
-use signaling::{router, AppState};
+use signaling::{router, AppState, Role};
 
 // Default to "Pokemon Red.gb": gambatte's GBC auto-colorization (forced in n64.rs) renders it in
 // color out of the box, AND its savestates power the battle arena + 2-player multiplayer. Pass the
@@ -69,48 +70,78 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let rom_path = std::env::args().nth(1).unwrap_or_else(|| DEFAULT_ROM.to_string());
-    let core_path = std::env::args().nth(2).unwrap_or_else(|| DEFAULT_CORE.to_string());
-    tracing::info!("ROM:  {rom_path}");
-    tracing::info!("core: {core_path}");
+    // Args: positional [rom] [core]; flags --port N, --worker, --coordinator, --workers N.
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    let mut positional = Vec::new();
+    let mut port: u16 = 3000;
+    let mut workers: Option<usize> = None; // explicit cap; else MAX_WORKERS env; else unbounded
+    let (mut worker, mut coordinator) = (false, false);
+    let mut i = 0;
+    while i < raw.len() {
+        match raw[i].as_str() {
+            "--port" => { port = raw.get(i + 1).and_then(|s| s.parse().ok()).unwrap_or(3000); i += 2; }
+            "--workers" => { workers = raw.get(i + 1).and_then(|s| s.parse().ok()); i += 2; }
+            "--worker" => { worker = true; i += 1; }
+            "--coordinator" => { coordinator = true; i += 1; }
+            other => { positional.push(other.to_string()); i += 1; }
+        }
+    }
+    let rom_path = positional.first().cloned().unwrap_or_else(|| DEFAULT_ROM.to_string());
+    let core_path = positional.get(1).cloned().unwrap_or_else(|| DEFAULT_CORE.to_string());
 
-    // The N64 core is loaded on the emulator thread inside pipeline::start.
-    let inner = pipeline::start(core_path, rom_path);
-
-    // Build the shared WebRTC API once.
+    // Shared by every mode. Workers DON'T migrate/seed/recover — the coordinator (or solo) owns the
+    // shared schema; N workers re-running migrations on boot just contends the single writer.
     let api = crate::webrtc::build_api()?;
-
-    // DB: create-if-missing (sqlite) + run migrations; swap to Postgres via DATABASE_URL.
-    let database = db::connect_and_migrate().await?;
-    flags::seed_defaults(&database).await?;
-    rooms::recover_abandoned(&database).await?;
-
-    // Session cookie key — STABLE across restarts so sessions survive `cargo run`. COOKIE_SECRET
-    // (>=64 bytes) wins; otherwise a key is generated once and persisted to .cookie_key.
+    let database = db::connect(!worker).await?;
+    if !worker {
+        flags::seed_defaults(&database).await?;
+        rooms::recover_abandoned(&database).await?;
+    }
     let cookie_key = load_cookie_key();
-
-    // Game/room layer: matchmaking queue, rooms, WS hub. The matchmaker pairs queued players and
-    // feeds the single emulator one match at a time.
-    let game = std::sync::Arc::new(rooms::GameState::new(inner.clone(), database.clone()));
-    rooms::spawn_matchmaker(game.clone());
-
-    // DEV mode: set env `DEV=1` to mount the dev console + the unauthenticated /battle/* endpoints.
-    // Off by default (production-safe).
     let dev = std::env::var("DEV").map(|v| v != "0" && !v.is_empty()).unwrap_or(false);
-
-    // OAuth providers (Google now; Twitter/Apple/... later) built from env.
     let oauth = std::sync::Arc::new(oauth::registry_from_env());
-
-    // Mark cookies Secure (HTTPS-only) by default in production; off in DEV (localhost is plain HTTP).
-    // Override with COOKIE_SECURE=1/0. A public deploy MUST be behind TLS so this stays on.
     let cookie_secure =
         std::env::var("COOKIE_SECURE").map(|v| v != "0" && !v.is_empty()).unwrap_or(!dev);
 
-    let state = AppState { api, inner, db: database, cookie_key, game, dev, oauth, cookie_secure };
+    // --- Coordinator: no emulator; spawns ephemeral worker processes on demand (scalable mode). ---
+    if coordinator {
+        // Max concurrent workers: explicit --workers, else MAX_WORKERS env, else UNBOUNDED.
+        let max = workers
+            .or_else(|| std::env::var("MAX_WORKERS").ok().and_then(|s| s.parse().ok()))
+            .unwrap_or(usize::MAX);
+        let db_url =
+            std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://./data.db?mode=rwc".to_string());
+        let coord_origin = format!("http://localhost:{port}");
+        let inner = pipeline::dummy();
+        let game = std::sync::Arc::new(rooms::GameState::new(inner.clone(), database.clone()));
+        let pool = std::sync::Arc::new(coordinator::WorkerPool::new(
+            port, max, rom_path, core_path, db_url, coord_origin,
+        ));
+        let state = AppState {
+            api, inner, db: database, cookie_key, game,
+            role: Role::Coordinator, pool: Some(pool), dev, oauth, cookie_secure,
+        };
+        return coordinator::run_coordinator(state, port).await;
+    }
+
+    // --- Worker / Solo: real emulator on this process. ---
+    tracing::info!("ROM:  {rom_path}");
+    tracing::info!("core: {core_path}");
+    let inner = pipeline::start(core_path, rom_path);
+    let game = std::sync::Arc::new(rooms::GameState::new(inner.clone(), database.clone()));
+    let role = if worker { Role::Worker } else { Role::Solo };
+    if role == Role::Solo {
+        // Solo runs its own matchmaker; a worker's battles are assigned by the coordinator instead.
+        rooms::spawn_matchmaker(game.clone());
+    }
+    let state = AppState {
+        api, inner, db: database, cookie_key, game,
+        role, pool: None, dev, oauth, cookie_secure,
+    };
     let app = router(state);
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!("▶  open http://localhost:3000  (click Connect)");
+    tracing::info!("▶  {role:?} on http://localhost:{port}");
     axum::serve(listener, app).await?;
     Ok(())
 }

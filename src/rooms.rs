@@ -215,7 +215,7 @@ async fn find_match(game: &Arc<GameState>, uid: UserId, _uname: &str) {
     game.ws.send_to(uid, json!({"type":"queued","position":pos})).await;
 }
 
-async fn cancel_queue(game: &Arc<GameState>, uid: UserId) {
+pub(crate) async fn cancel_queue(game: &Arc<GameState>, uid: UserId) {
     game.queue.lock().await.retain(|&u| u != uid);
     game.ws.send_to(uid, json!({"type":"lobby","queued":false,"queue_size":0})).await;
 }
@@ -239,7 +239,9 @@ pub fn spawn_matchmaker(game: Arc<GameState>) {
                     }
                 };
                 match pair {
-                    Some((a, b)) if a != b => create_room(&game, a, b).await,
+                    Some((a, b)) if a != b => {
+                        create_room(&game, a, b).await;
+                    }
                     Some(_) => {} // same user twice somehow; skip
                     None => break,
                 }
@@ -249,7 +251,7 @@ pub fn spawn_matchmaker(game: Arc<GameState>) {
     });
 }
 
-async fn create_room(game: &Arc<GameState>, a: UserId, b: UserId) {
+async fn create_room(game: &Arc<GameState>, a: UserId, b: UserId) -> Option<String> {
     let ua = username_of(&game.db, a).await;
     let ub = username_of(&game.db, b).await;
     let inserted = e_rooms::ActiveModel {
@@ -266,7 +268,7 @@ async fn create_room(game: &Arc<GameState>, a: UserId, b: UserId) {
         Ok(m) => m.id,
         Err(e) => {
             tracing::error!("room insert failed: {e}");
-            return;
+            return None;
         }
     };
     for u in [a, b] {
@@ -294,6 +296,14 @@ async fn create_room(game: &Arc<GameState>, a: UserId, b: UserId) {
     game.ws.send_to(a, json!({"type":"matched","room_id":public_id,"seat":1,"opponent":ub})).await;
     game.ws.send_to(b, json!({"type":"matched","room_id":public_id,"seat":2,"opponent":ua})).await;
     tracing::info!("room {rid}: matched {a} vs {b}");
+    Some(public_id)
+}
+
+/// Coordinator path: create a room for (a,b) on THIS worker and start it; returns the public UUID.
+pub async fn assign_battle(game: &Arc<GameState>, a: UserId, b: UserId) -> Option<String> {
+    let pid = create_room(game, a, b).await?;
+    maybe_start_next(game).await;
+    Some(pid)
 }
 
 async fn maybe_start_next(game: &Arc<GameState>) {
@@ -789,7 +799,7 @@ async fn push_live_phase(game: &Arc<GameState>, rid: RoomId, uid: UserId) {
 // DB helpers + resume/recovery
 // ---------------------------------------------------------------------------
 
-async fn username_of(db: &DatabaseConnection, uid: UserId) -> String {
+pub(crate) async fn username_of(db: &DatabaseConnection, uid: UserId) -> String {
     e_users::Entity::find_by_id(uid)
         .one(db)
         .await
@@ -924,6 +934,16 @@ pub async fn spectate_info(st: &AppState, public_id: &str) -> Option<serde_json:
         "p1": r.p1.username,
         "p2": r.p2.username,
     }))
+}
+
+/// Live battles on THIS process (solo/worker: 0 or 1). The coordinator uses its pool instead.
+pub async fn live_battles(game: &Arc<GameState>) -> Vec<serde_json::Value> {
+    let active = *game.active_room.lock().await;
+    let rooms = game.rooms.lock().await;
+    active
+        .and_then(|rid| rooms.get(&rid))
+        .map(|r| vec![json!({ "id": r.public_id, "p1": r.p1.username, "p2": r.p2.username })])
+        .unwrap_or_default()
 }
 
 /// Restart cleanup: any room still live in the DB had its in-process emulator state lost. Mark it

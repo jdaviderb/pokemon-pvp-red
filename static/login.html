@@ -89,6 +89,7 @@
     <div class="gb panel">
       <div id="menu0">
         <button class="provbtn" id="playBtn"><span class="cur">▶</span>PLAY</button>
+        <button class="provbtn" id="tvBtn"><span class="cur">▶</span>WATCH (TV)</button>
         <button class="provbtn" id="howtoBtn"><span class="cur">▶</span>HOW TO PLAY</button>
       </div>
       <div id="devauth" style="display:none">
@@ -178,6 +179,7 @@
       showStep("gMethod"); $("playModal").classList.remove("hidden");
     }
     $("playBtn").onclick = openPlay;
+    $("tvBtn").onclick = () => (location.href = "/tv");
     $("howtoBtn").onclick = () => $("howtoModal").classList.remove("hidden");
     $("howClose").onclick = () => $("howtoModal").classList.add("hidden");
     // click the dim backdrop to dismiss a modal

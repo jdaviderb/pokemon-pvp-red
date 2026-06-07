@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RED PVP MOD - TV</title>
+  <style>
+    @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
+    :root { --bg:#e9e7dd; --parch:#ffffff; --ink:#000000; --inkdim:#666; --red:#b5302a; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
+      font-family:"PokeRed", ui-monospace, "Courier New", monospace; font-size:16px; -webkit-font-smoothing:none; font-smooth:never;
+      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.07) 0 1px, transparent 1px 3px);
+      display:flex; flex-direction:column; align-items:center; padding:18px; gap:10px; }
+    .head { display:flex; align-items:center; gap:18px; }
+    .logo-img { width:min(34vw,200px); height:auto; image-rendering:pixelated; }
+    .title { font-size:24px; letter-spacing:4px; } .sub { color:var(--inkdim); font-size:14px; letter-spacing:2px; }
+    .grid { width:100%; max-width:1280px; display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:12px; }
+    .tvcell { position:relative; cursor:pointer; background:#fff; border:14px solid transparent;
+      border-image:url("/gb-frame.png") 7 fill / 14px / 0 stretch; image-rendering:pixelated; overflow:hidden; }
+    .tvcell:hover { filter:brightness(.97); }
+    .tvcell video { display:block; width:100%; aspect-ratio:160/144; object-fit:contain; background:#fff; image-rendering:pixelated; }
+    .tvcell .lbl { position:absolute; left:0; right:0; bottom:0; padding:5px 8px; font-size:13px; letter-spacing:1px;
+      background:rgba(255,255,255,.82); color:#000; white-space:nowrap; overflow:hidden; text-overflow:clip; }
+    .tvcell .lbl .live { color:var(--red); margin-right:6px; }
+    .tvcell .hint { position:absolute; top:6px; right:8px; font-size:12px; color:#000; background:rgba(255,255,255,.8); padding:1px 6px; border-radius:4px; opacity:0; }
+    .tvcell:hover .hint { opacity:1; }
+    .empty { color:var(--inkdim); text-align:center; padding:40px 10px; font-size:18px; line-height:1.6; }
+    .links { margin-top:6px; font-size:18px; color:#7c7c68; } .links a { color:#7c7c68; text-decoration:none; } .links a:hover { color:var(--ink); }
+    .more { color:var(--inkdim); font-size:15px; }
+  </style>
+</head>
+<body>
+  <div class="head"><img class="logo-img" src="/title/pokemon_logo.png" alt="POKEMON" /><div><div class="title">LIVE TV</div><div class="sub">- ALL BATTLES, LIVE -</div></div></div>
+  <div class="empty" id="empty">NO LIVE BATTLES RIGHT NOW.<br>Start one, or check back soon.</div>
+  <div class="grid" id="grid"></div>
+  <div class="more" id="more"></div>
+  <div class="links"><a href="/">BACK</a></div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const MAX = 12;                 // cap visible screens (each is a live WebRTC stream)
+    const cells = new Map();        // id -> { el, pc }
+
+    // Receive-only WebRTC to /offer?room=ID (the coordinator proxies to that battle's worker).
+    async function connect(id, video) {
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      pc.addTransceiver("video", { direction: "recvonly" });
+      pc.addTransceiver("audio", { direction: "recvonly" });
+      const remote = new MediaStream(); video.srcObject = remote; pc.ontrack = (e) => remote.addTrack(e.track);
+      await pc.setLocalDescription(await pc.createOffer());
+      await new Promise((res) => {
+        if (pc.iceGatheringState === "complete") return res();
+        const c = () => { if (pc.iceGatheringState === "complete") { pc.removeEventListener("icegatheringstatechange", c); res(); } };
+        pc.addEventListener("icegatheringstatechange", c); setTimeout(res, 2500);
+      });
+      const r = await fetch("/offer?room=" + encodeURIComponent(id), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type }),
+      });
+      if (!r.ok) { pc.close(); return null; }
+      await pc.setRemoteDescription(await r.json());
+      return pc;
+    }
+
+    function makeCell(b) {
+      const el = document.createElement("div");
+      el.className = "tvcell";
+      el.innerHTML =
+        '<video muted autoplay playsinline></video>' +
+        '<div class="hint">WATCH ▶</div>' +
+        '<div class="lbl"><span class="live">[LIVE]</span>' + (b.p1 || "P1").toUpperCase() + " vs " + (b.p2 || "P2").toUpperCase() + "</div>";
+      el.onclick = () => (location.href = "/room?id=" + encodeURIComponent(b.id));
+      return el;
+    }
+
+    async function refresh() {
+      let battles = [];
+      try { battles = (await (await fetch("/api/live")).json()).battles || []; } catch (e) {}
+      $("empty").style.display = battles.length ? "none" : "";
+      const shown = battles.slice(0, MAX);
+      const ids = new Set(shown.map((b) => b.id));
+      // remove screens whose battle ended -> close the peer + drop the cell
+      for (const [id, c] of cells) {
+        if (!ids.has(id)) { if (c.pc) try { c.pc.close(); } catch (e) {} c.el.remove(); cells.delete(id); }
+      }
+      // add new screens (connect a live stream)
+      for (const b of shown) {
+        if (cells.has(b.id)) continue;
+        const el = makeCell(b); $("grid").appendChild(el);
+        const entry = { el, pc: null }; cells.set(b.id, entry);
+        connect(b.id, el.querySelector("video")).then((pc) => { if (cells.has(b.id)) entry.pc = pc; }).catch(() => {});
+      }
+      $("more").textContent = battles.length > MAX ? "+ " + (battles.length - MAX) + " more battles live" : "";
+    }
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>

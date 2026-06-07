@@ -71,8 +71,10 @@ pub struct AppInner {
 }
 
 pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
-    let (video_tx, _) = broadcast::channel::<EncodedVideo>(16);
-    let (audio_tx, _) = broadcast::channel::<EncodedAudio>(64);
+    // Generous buffers so a slow spectator lags (drops + asks for a keyframe) instead of stalling
+    // the whole fan-out; the emulator (single producer) never blocks on a lagging viewer.
+    let (video_tx, _) = broadcast::channel::<EncodedVideo>(240);
+    let (audio_tx, _) = broadcast::channel::<EncodedAudio>(256);
     let (input_tx, input_rx) = mpsc::unbounded_channel::<InputEvent>();
     let keyframe_req = Arc::new(AtomicBool::new(false));
 
@@ -111,6 +113,32 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
         setup_tx,
         enemy_force,
         player_force,
+    })
+}
+
+/// An `AppInner` with NO emulator thread — for the coordinator process, which owns auth/lobby/
+/// matchmaking but never runs a battle (those run on worker processes). The channels exist only so
+/// `AppState`/`GameState` type-check; their receivers are dropped, so any send is a harmless no-op.
+pub fn dummy() -> Arc<AppInner> {
+    let (video_tx, _) = broadcast::channel::<EncodedVideo>(1);
+    let (audio_tx, _) = broadcast::channel::<EncodedAudio>(1);
+    let (input_tx, _input_rx) = mpsc::unbounded_channel::<InputEvent>();
+    let (action_tx, _action_rx) = mpsc::unbounded_channel::<AgentAction>();
+    let (save_tx, _save_rx) = mpsc::unbounded_channel::<SaveReq>();
+    let (load_tx, _load_rx) = mpsc::unbounded_channel::<LoadReq>();
+    let (setup_tx, _setup_rx) = mpsc::unbounded_channel::<SetupReq>();
+    Arc::new(AppInner {
+        video_tx,
+        audio_tx,
+        input_tx,
+        keyframe_req: Arc::new(AtomicBool::new(false)),
+        battle: Arc::new(Mutex::new(None)),
+        action_tx,
+        save_tx,
+        load_tx,
+        setup_tx,
+        enemy_force: Arc::new(AtomicU8::new(0xFF)),
+        player_force: Arc::new(AtomicU8::new(0xFF)),
     })
 }
 
