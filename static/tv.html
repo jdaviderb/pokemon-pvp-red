@@ -29,18 +29,30 @@
     .empty { color:var(--inkdim); text-align:center; padding:40px 10px; font-size:18px; line-height:1.6; }
     .links { margin-top:6px; font-size:18px; color:#7c7c68; } .links a { color:#7c7c68; text-decoration:none; } .links a:hover { color:var(--ink); }
     .more { color:var(--inkdim); font-size:15px; }
+    .pager { display:flex; align-items:center; gap:16px; }
+    .pgbtn { font-family:"PokeRed", monospace; font-size:17px; letter-spacing:2px; padding:8px 16px; cursor:pointer;
+      border:3px solid var(--ink); border-radius:6px; background:#f0f0f0; color:var(--ink); }
+    .pgbtn:disabled { opacity:.35; cursor:default; }
+    .pgbtn:not(:disabled):hover { filter:brightness(.96); }
+    .pglabel { font-size:15px; color:var(--inkdim); letter-spacing:1px; min-width:170px; text-align:center; }
   </style>
 </head>
 <body>
   <div class="head"><img class="logo-img" src="/title/pokemon_logo.png" alt="POKEMON" /><div><div class="title">LIVE TV</div><div class="sub">- ALL BATTLES, LIVE -</div></div></div>
   <div class="empty" id="empty">NO LIVE BATTLES RIGHT NOW.<br>Start one, or check back soon.</div>
   <div class="grid" id="grid"></div>
-  <div class="more" id="more"></div>
+  <div class="pager" id="pager" style="display:none">
+    <button class="pgbtn" id="prev">◀ PREV</button>
+    <span class="pglabel" id="pglabel"></span>
+    <button class="pgbtn" id="next">NEXT ▶</button>
+  </div>
   <div class="links"><a href="/">BACK</a></div>
   <script>
     const $ = (id) => document.getElementById(id);
-    const MAX = 12;                 // cap visible screens (each is a live WebRTC stream)
-    const cells = new Map();        // id -> { el, pc }
+    const PAGE = 12;                // screens per page (each is a live WebRTC stream)
+    const cells = new Map();        // id -> { el, pc }  (only the CURRENT page is rendered/streamed)
+    let battles = [];               // full live list from /api/live (lightweight: just id/p1/p2)
+    let page = 0;
 
     // Receive-only WebRTC to /offer?room=ID (the coordinator proxies to that battle's worker).
     async function connect(id, video) {
@@ -74,25 +86,38 @@
       return el;
     }
 
-    async function refresh() {
-      let battles = [];
-      try { battles = (await (await fetch("/api/live")).json()).battles || []; } catch (e) {}
-      $("empty").style.display = battles.length ? "none" : "";
-      const shown = battles.slice(0, MAX);
+    // Render exactly the current page's battles as live cells; tear down everything off-page so we
+    // never hold more than PAGE WebRTC streams at once (50+ concurrent battles won't melt the tab).
+    function render() {
+      const pages = Math.max(1, Math.ceil(battles.length / PAGE));
+      if (page > pages - 1) page = pages - 1;
+      if (page < 0) page = 0;
+      const shown = battles.slice(page * PAGE, page * PAGE + PAGE);
       const ids = new Set(shown.map((b) => b.id));
-      // remove screens whose battle ended -> close the peer + drop the cell
+      // drop cells not on this page (ended battles OR battles on another page) -> close their peers
       for (const [id, c] of cells) {
         if (!ids.has(id)) { if (c.pc) try { c.pc.close(); } catch (e) {} c.el.remove(); cells.delete(id); }
       }
-      // add new screens (connect a live stream)
+      // add cells for this page's battles + start their streams
       for (const b of shown) {
         if (cells.has(b.id)) continue;
         const el = makeCell(b); $("grid").appendChild(el);
         const entry = { el, pc: null }; cells.set(b.id, entry);
         connect(b.id, el.querySelector("video")).then((pc) => { if (cells.has(b.id)) entry.pc = pc; }).catch(() => {});
       }
-      $("more").textContent = battles.length > MAX ? "+ " + (battles.length - MAX) + " more battles live" : "";
+      $("empty").style.display = battles.length ? "none" : "";
+      $("pager").style.display = battles.length > PAGE ? "flex" : "none";
+      $("pglabel").textContent = "PAGE " + (page + 1) + " / " + pages + "  -  " + battles.length + " LIVE";
+      $("prev").disabled = page <= 0;
+      $("next").disabled = page >= pages - 1;
     }
+
+    async function refresh() {
+      try { battles = (await (await fetch("/api/live")).json()).battles || []; } catch (e) {}
+      render();
+    }
+    $("prev").onclick = () => { page--; render(); };
+    $("next").onclick = () => { page++; render(); };
     refresh();
     setInterval(refresh, 5000);
   </script>
