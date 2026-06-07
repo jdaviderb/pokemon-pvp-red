@@ -44,11 +44,19 @@ pub struct Credentials {
     pub password: String,
 }
 
+/// Username/password login is on when the `login_username` feature flag is set (or in DEV).
+pub(crate) async fn username_login_on(st: &AppState) -> bool {
+    st.dev || crate::flags::enabled(&st.db, crate::flags::LOGIN_USERNAME).await
+}
+
 pub async fn register(
     State(st): State<AppState>,
     jar: PrivateCookieJar,
     Json(c): Json<Credentials>,
 ) -> Result<(PrivateCookieJar, StatusCode), (StatusCode, String)> {
+    if !username_login_on(&st).await {
+        return Err((StatusCode::FORBIDDEN, "username login disabled".into()));
+    }
     if c.username.len() < 3 || c.password.len() < 6 {
         return Err((StatusCode::BAD_REQUEST, "username>=3, password>=6".into()));
     }
@@ -78,6 +86,9 @@ pub async fn login(
     jar: PrivateCookieJar,
     Json(c): Json<Credentials>,
 ) -> Result<(PrivateCookieJar, StatusCode), (StatusCode, String)> {
+    if !username_login_on(&st).await {
+        return Err((StatusCode::FORBIDDEN, "username login disabled".into()));
+    }
     let user = users::Entity::find()
         .filter(users::Column::Username.eq(&c.username))
         .one(&st.db)
@@ -116,6 +127,57 @@ pub(crate) async fn start_session(
         .max_age(time::Duration::hours(SESSION_TTL_HOURS))
         .build();
     Ok(jar.add(cookie))
+}
+
+/// POST /auth/guest -> create a disposable guest account (random nickname) and start a session.
+/// Gated by the `guest_mode` feature flag. Progress is irrelevant; the row can be purged later.
+pub async fn guest(
+    State(st): State<AppState>,
+    jar: PrivateCookieJar,
+) -> Result<(PrivateCookieJar, StatusCode), (StatusCode, String)> {
+    if !crate::flags::enabled(&st.db, crate::flags::GUEST_MODE).await {
+        return Err((StatusCode::FORBIDDEN, "guest mode disabled".into()));
+    }
+    let username = unique_guest_name(&st)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let user = users::ActiveModel {
+        username: Set(username),
+        pass_hash: Set(String::new()),
+        wins: Set(0),
+        losses: Set(0),
+        created_at: Set(Utc::now()),
+        is_guest: Set(true),
+        ..Default::default()
+    }
+    .insert(&st.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let jar = start_session(&st, jar, user.id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok((jar, StatusCode::OK))
+}
+
+/// First free "Guest-XXXX" (random hex), retried; random suffix as a last resort.
+async fn unique_guest_name(st: &AppState) -> anyhow::Result<String> {
+    use rand::RngCore;
+    for _ in 0..50 {
+        let mut b = [0u8; 2];
+        OsRng.fill_bytes(&mut b);
+        let cand = format!("Guest-{:02X}{:02X}", b[0], b[1]);
+        if users::Entity::find()
+            .filter(users::Column::Username.eq(&cand))
+            .one(&st.db)
+            .await?
+            .is_none()
+        {
+            return Ok(cand);
+        }
+    }
+    let mut b = [0u8; 4];
+    OsRng.fill_bytes(&mut b);
+    Ok(format!("Guest-{}", b.iter().map(|x| format!("{x:02X}")).collect::<String>()))
 }
 
 pub async fn logout(State(st): State<AppState>, jar: PrivateCookieJar) -> PrivateCookieJar {
@@ -173,7 +235,7 @@ pub struct MeRoom {
 pub async fn me(State(st): State<AppState>, AuthUser(u): AuthUser) -> Json<serde_json::Value> {
     let room = crate::rooms::current_room_for(&st, u.id).await;
     Json(serde_json::json!({
-        "user": {"id": u.id, "username": u.username, "wins": u.wins, "losses": u.losses},
+        "user": {"id": u.id, "username": u.username, "wins": u.wins, "losses": u.losses, "is_guest": u.is_guest},
         "room": room,
         "dev": st.dev,
     }))

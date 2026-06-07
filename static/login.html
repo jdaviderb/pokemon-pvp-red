@@ -120,12 +120,12 @@
     const msg = (t, ok) => { const m = $("msg"); m.textContent = t; m.style.color = ok ? "#2c6e44" : "#9a2c2c"; };
     (async () => { try { const r = await fetch("/api/me"); if (r.ok) location.replace("/"); } catch (e) {} })();
     // Login options from the server: social providers always; username/password only in DEV mode.
-    let DEV = false;
+    let USERNAME_LOGIN = false;
     const PROV_LABEL = { google: "SIGN IN WITH GOOGLE", twitter: "SIGN IN WITH X", apple: "SIGN IN WITH APPLE", github: "SIGN IN WITH GITHUB" };
     (async () => {
-      let cfg = { providers: [], dev: false };
+      let cfg = { providers: [], username_login: false, guest: false };
       try { cfg = await (await fetch("/api/config")).json(); } catch (e) {}
-      DEV = !!cfg.dev;
+      USERNAME_LOGIN = !!cfg.username_login;
       const box = $("providers");
       (cfg.providers || []).forEach((p) => {
         const a = document.createElement("a");
@@ -133,12 +133,27 @@
         a.innerHTML = '<span class="cur">▶</span>' + (PROV_LABEL[p] || ("SIGN IN WITH " + p.toUpperCase()));
         box.appendChild(a);
       });
-      if (DEV) { $("devauth").style.display = ""; $("arrow").style.display = ""; }
-      if (!(cfg.providers || []).length && !DEV) $("nologin").style.display = "";
+      if (cfg.guest) {
+        const g = document.createElement("button");
+        g.className = "provbtn"; g.type = "button";
+        g.innerHTML = '<span class="cur">▶</span>PLAY AS GUEST';
+        g.onclick = guestLogin;
+        box.appendChild(g);
+      }
+      if (USERNAME_LOGIN) { $("devauth").style.display = ""; $("arrow").style.display = ""; }
+      if (!(cfg.providers || []).length && !cfg.guest && !USERNAME_LOGIN) $("nologin").style.display = "";
     })();
+    function showErr(t) { const n = $("nologin"); n.textContent = t; n.style.display = ""; n.style.color = "#9a2c2c"; }
+    async function guestLogin() {
+      try {
+        const r = await fetch("/auth/guest", { method: "POST" });
+        if (r.ok) { location.href = "/"; return; }
+        showErr((await r.text()).toUpperCase() || ("HTTP " + r.status));
+      } catch (e) { showErr("NETWORK ERROR"); }
+    }
     function start() { $("press").style.display = "none"; $("arrow").style.display = "none"; $("form").classList.add("on"); $("u").focus(); }
     $("press").onclick = start;
-    document.addEventListener("keydown", (e) => { if (DEV && !$("form").classList.contains("on") && (e.key === "Enter" || e.key === " ")) start(); });
+    document.addEventListener("keydown", (e) => { if (USERNAME_LOGIN && !$("form").classList.contains("on") && (e.key === "Enter" || e.key === " ")) start(); });
     async function go(path) {
       const username = $("u").value.trim(), password = $("p").value;
       if (username.length < 3) return msg("USERNAME NEEDS 3+ CHARACTERS");

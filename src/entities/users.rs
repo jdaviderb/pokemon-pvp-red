@@ -11,6 +11,9 @@ pub struct Model {
     pub wins: i32,
     pub losses: i32,
     pub created_at: ChronoDateTimeUtc,
+    /// Disposable guest account (random nickname, progress irrelevant); false for real accounts.
+    #[sea_orm(default_value = false)]
+    pub is_guest: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

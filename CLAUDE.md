@@ -87,7 +87,8 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
 | `src/webrtc.rs` | per-peer PeerConnection, tracks (Opus stereo cap), RTCP drain, data channel, signaling, cleanup |
 | `src/battle.rs` | Pokémon Red battle arena: `BattleState`/`BattlePokemon`/`AgentAction`, `read_battle_state` (WRAM, BIG-ENDIAN), inject_*, `TapMachine` (action→menu input) |
 | `src/signaling.rs` | axum `Router` + `AppState`; `/offer`, `/battle/*`, `/auth/*`, `/api/{me,species}`, `/ws` |
-| `src/db.rs` · `src/migrations/` · `src/entities/` | SeaORM: connect + create-if-missing + migrate; models (users/sessions/rooms/matches/user_room) |
+| `src/db.rs` · `src/migrations/` · `src/entities/` | SeaORM: connect + create-if-missing + migrate; models (users/sessions/rooms/matches/user_room/oauth_accounts/feature_flags) |
+| `src/oauth.rs` · `src/flags.rs` | provider-agnostic OAuth2 social login (Google; `/auth/oauth/{provider}`) · runtime feature flags (`login_username`, `guest_mode`) read live from DB |
 | `src/auth.rs` | argon2id, register/login/logout, session cookie, `AuthUser` extractor |
 | `src/rooms.rs` | multiplayer: matchmaking, room FSM, turn-based battle engine (15s timer, CPU, winner, resume) |
 | `src/ws.rs` | per-client WebSocket (`WsHub`, JSON event protocol) |

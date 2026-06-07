@@ -11,6 +11,7 @@ mod auth;
 mod battle;
 mod db;
 mod entities;
+mod flags;
 mod migrations;
 mod n64;
 mod oauth;
@@ -81,6 +82,7 @@ async fn main() -> anyhow::Result<()> {
 
     // DB: create-if-missing (sqlite) + run migrations; swap to Postgres via DATABASE_URL.
     let database = db::connect_and_migrate().await?;
+    flags::seed_defaults(&database).await?;
     rooms::recover_abandoned(&database).await?;
 
     // Session cookie key — STABLE across restarts so sessions survive `cargo run`. COOKIE_SECRET

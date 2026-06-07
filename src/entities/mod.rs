@@ -1,3 +1,4 @@
+pub mod feature_flags;
 pub mod matches;
 pub mod oauth_accounts;
 pub mod rooms;

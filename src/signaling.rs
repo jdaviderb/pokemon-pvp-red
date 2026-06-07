@@ -62,6 +62,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/register", post(crate::auth::register))
         .route("/auth/login", post(crate::auth::login))
         .route("/auth/logout", post(crate::auth::logout))
+        .route("/auth/guest", post(crate::auth::guest))
         .route("/api/me", get(crate::auth::me))
         .route("/api/species", get(species_list_handler))
         .route("/api/online", get(online_handler))
@@ -117,12 +118,16 @@ async fn species_list_handler() -> Json<Vec<serde_json::Value>> {
     )
 }
 
-/// GET /api/config -> {providers:["google",...], dev:bool}. Public; the login page uses it to show
-/// the right buttons (social providers always; the username/password form only in DEV mode).
+/// GET /api/config -> {providers:["google",...], username_login:bool, guest:bool}. Public; the login
+/// page uses it to decide which options to render. Deliberately does NOT expose the raw DEV flag.
 async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value> {
     let mut providers: Vec<&str> = state.oauth.keys().map(|s| s.as_str()).collect();
     providers.sort_unstable();
-    Json(serde_json::json!({ "providers": providers, "dev": state.dev }))
+    Json(serde_json::json!({
+        "providers": providers,
+        "username_login": crate::auth::username_login_on(&state).await,
+        "guest": crate::flags::enabled(&state.db, crate::flags::GUEST_MODE).await,
+    }))
 }
 
 #[derive(Deserialize)]
