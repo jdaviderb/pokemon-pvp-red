@@ -364,6 +364,7 @@
   }
   // View-only: connect the live video, hide the player UI, show who's fighting. No WS, no controls.
   function specResult(title, sub) {
+    if (pc) { try { pc.close(); } catch (e) {} } // stop the spectator's video stream
     $("arena").style.display = "none"; // no empty battle shell behind the result panel
     $("resultText").textContent = title;
     $("resultText").className = "result"; $("resultText").style.fontSize = "36px";
@@ -376,6 +377,11 @@
     $("home").textContent = "BACK ▸"; $("home").onclick = () => (location.href = "/");
     $("result").classList.remove("hidden");
   }
+  function showEnded(info) {
+    const wn = info.winner === "p1" ? info.p1 : info.winner === "p2" ? info.p2 : null;
+    specResult(wn ? (wn.toUpperCase() + " WINS!") : "DRAW",
+      (info.p1 || "P1").toUpperCase() + " (" + (info.p1_mon || "?") + ")   VS   " + (info.p2 || "P2").toUpperCase() + " (" + (info.p2_mon || "?") + ")");
+  }
   async function bootSpectator(pid) {
     document.body.classList.add("spectating");
     $("arena").className = "phase-battle";
@@ -384,16 +390,17 @@
     // Unknown / purged room -> do NOT stream the live arena.
     if (!info.found) { specResult("BATTLE NOT FOUND", "This room does not exist or has ended."); return; }
     // Finished match -> recorded result (no live video).
-    if (info.ended) {
-      const wn = info.winner === "p1" ? info.p1 : info.winner === "p2" ? info.p2 : null;
-      specResult(wn ? (wn.toUpperCase() + " WINS!") : "DRAW",
-        (info.p1 || "P1").toUpperCase() + " (" + (info.p1_mon || "?") + ")   VS   " + (info.p2 || "P2").toUpperCase() + " (" + (info.p2_mon || "?") + ")");
-      return;
-    }
-    // Live / pending room -> watch the video.
+    if (info.ended) { showEnded(info); return; }
+    // Live / pending room -> watch the video, and poll so the result shows up the moment it ends.
     $("spectBanner").style.display = "block";
     $("spectBanner").textContent = "SPECTATING - " + (info.p1 || "P1").toUpperCase() + " VS " + (info.p2 || "P2").toUpperCase() + (info.live ? "  [LIVE]" : "  [STARTING]");
     await connectVideo().catch(() => {});
+    const poll = setInterval(async () => {
+      let i;
+      try { i = await (await fetch("/api/room/" + encodeURIComponent(pid))).json(); } catch (e) { return; }
+      if (i.ended) { clearInterval(poll); showEnded(i); }
+      else if (!i.found) { clearInterval(poll); specResult("BATTLE ENDED", "This battle has finished."); }
+    }, 4000);
   }
   </script>
 </body>
