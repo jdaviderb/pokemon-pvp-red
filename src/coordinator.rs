@@ -33,6 +33,9 @@ struct Worker {
     public_id: String, // "" until /internal/assign succeeds; then the battle's UUID
     p1: String,
     p2: String,
+    p1_uid: UserId, // for crash notification
+    p2_uid: UserId,
+    miss: u8, // consecutive failed status polls (reap after a few, not on one blip)
 }
 
 pub struct WorkerPool {
@@ -120,6 +123,9 @@ impl WorkerPool {
             public_id: String::new(),
             p1: String::new(),
             p2: String::new(),
+            p1_uid: 0,
+            p2_uid: 0,
+            miss: 0,
         });
         tracing::info!("coordinator: spawned worker on :{port} ({} live)", self.count());
         Some(port)
@@ -128,8 +134,8 @@ impl WorkerPool {
     /// Poll the worker until it answers /internal/status (emulator booted + ROM loaded).
     async fn wait_ready(&self, port: u16) -> bool {
         let url = format!("http://127.0.0.1:{port}/internal/status?secret={}", self.secret);
-        for _ in 0..80 {
-            tokio::time::sleep(Duration::from_millis(400)).await;
+        for _ in 0..60 {
+            tokio::time::sleep(Duration::from_millis(200)).await;
             if let Ok(r) = self.http.get(&url).send().await {
                 if r.status().is_success() {
                     return true;
@@ -139,11 +145,14 @@ impl WorkerPool {
         false
     }
 
-    fn set_battle(&self, port: u16, public_id: String, p1: String, p2: String) {
+    #[allow(clippy::too_many_arguments)]
+    fn set_battle(&self, port: u16, public_id: String, p1_uid: UserId, p2_uid: UserId, p1: String, p2: String) {
         if let Some(w) = self.workers.lock().unwrap().iter_mut().find(|w| w.port == port) {
             w.public_id = public_id;
             w.p1 = p1;
             w.p2 = p2;
+            w.p1_uid = p1_uid;
+            w.p2_uid = p2_uid;
         }
     }
 
@@ -159,17 +168,31 @@ impl WorkerPool {
     }
 
     /// Kill a worker process and drop it from the pool (frees its emulator/CPU/RAM + its port).
+    /// wait() reaps the zombie so we don't leak a PID per battle (eventually hitting RLIMIT_NPROC).
     fn kill(&self, port: u16) {
         let mut ws = self.workers.lock().unwrap();
         if let Some(i) = ws.iter().position(|w| w.port == port) {
             let mut w = ws.remove(i);
             let _ = w.child.kill();
+            let _ = w.child.wait();
         }
     }
 
     fn kill_all(&self) {
         for w in self.workers.lock().unwrap().iter_mut() {
             let _ = w.child.kill();
+            let _ = w.child.wait();
+        }
+    }
+
+    fn bump_miss(&self, port: u16) -> u8 {
+        let mut ws = self.workers.lock().unwrap();
+        ws.iter_mut().find(|w| w.port == port).map(|w| { w.miss += 1; w.miss }).unwrap_or(0)
+    }
+
+    fn reset_miss(&self, port: u16) {
+        if let Some(w) = self.workers.lock().unwrap().iter_mut().find(|w| w.port == port) {
+            w.miss = 0;
         }
     }
 }
@@ -178,7 +201,7 @@ impl WorkerPool {
 pub async fn run_coordinator(state: AppState, port: u16) -> anyhow::Result<()> {
     let pool = state.pool.clone().expect("coordinator requires a pool");
 
-    tokio::spawn(reaper(pool.clone()));
+    tokio::spawn(reaper(state.clone(), pool.clone()));
     tokio::spawn(matchmaker(state.clone(), pool.clone()));
 
     // Best-effort: kill all workers when the coordinator is Ctrl-C'd.
@@ -224,7 +247,10 @@ async fn matchmaker(state: AppState, pool: Arc<WorkerPool>) {
                 Some((a, b)) if a != b => (a, b),
                 _ => continue,
             };
-            // Spawn a dedicated worker for this match, boot it, then assign the battle.
+            // Reserve a worker slot synchronously (spawn_proc adds to the pool -> counts against the
+            // cap), then boot + assign in a BACKGROUND task so multiple worker boots OVERLAP. The
+            // matchmaker never blocks on the ~3-5s emulator boot, so match-start throughput is
+            // bounded by cores/cap, not by serial boots.
             let port = match pool.spawn_proc() {
                 Some(p) => p,
                 None => {
@@ -232,35 +258,39 @@ async fn matchmaker(state: AppState, pool: Arc<WorkerPool>) {
                     break;
                 }
             };
-            if !pool.wait_ready(port).await {
-                tracing::error!("coordinator: worker :{port} never became ready; killing");
-                pool.kill(port);
-                requeue(&game, a, b).await;
-                break;
-            }
-            match assign_to_worker(&pool, port, a, b).await {
-                Some(public_id) => {
-                    let ua = rooms::username_of(&game.db, a).await;
-                    let ub = rooms::username_of(&game.db, b).await;
-                    pool.set_battle(port, public_id.clone(), ua.clone(), ub.clone());
-                    game.ws.send_to(a, json!({"type":"matched","room_id":public_id,"seat":1,"opponent":ub})).await;
-                    game.ws.send_to(b, json!({"type":"matched","room_id":public_id,"seat":2,"opponent":ua})).await;
-                    tracing::info!("coordinator: {a} vs {b} -> worker :{port} room {public_id}");
+            let pool2 = pool.clone();
+            let game2 = game.clone();
+            tokio::spawn(async move {
+                if !pool2.wait_ready(port).await {
+                    tracing::error!("coordinator: worker :{port} never became ready; reaping");
+                    pool2.kill(port);
+                    requeue(&game2, a, b).await;
+                    return;
                 }
-                None => {
-                    pool.kill(port);
-                    requeue(&game, a, b).await;
-                    break;
+                match assign_to_worker(&pool2, port, a, b).await {
+                    Some(public_id) => {
+                        let ua = rooms::username_of(&game2.db, a).await;
+                        let ub = rooms::username_of(&game2.db, b).await;
+                        pool2.set_battle(port, public_id.clone(), a, b, ua.clone(), ub.clone());
+                        game2.ws.send_to(a, json!({"type":"matched","room_id":public_id,"seat":1,"opponent":ub})).await;
+                        game2.ws.send_to(b, json!({"type":"matched","room_id":public_id,"seat":2,"opponent":ua})).await;
+                        tracing::info!("coordinator: {a} vs {b} -> worker :{port} room {public_id}");
+                    }
+                    None => {
+                        pool2.kill(port);
+                        requeue(&game2, a, b).await;
+                    }
                 }
-            }
+            });
         }
     }
 }
 
 async fn requeue(game: &Arc<rooms::GameState>, a: UserId, b: UserId) {
+    // Push to the BACK so a pair that keeps hitting a bad worker can't block everyone behind them.
     let mut q = game.queue.lock().await;
-    q.push_front(b);
-    q.push_front(a);
+    q.push_back(a);
+    q.push_back(b);
 }
 
 async fn assign_to_worker(pool: &WorkerPool, port: u16, a: UserId, b: UserId) -> Option<String> {
@@ -279,39 +309,55 @@ async fn assign_to_worker(pool: &WorkerPool, port: u16, a: UserId, b: UserId) ->
     v.get("public_id").and_then(|x| x.as_str()).map(|s| s.to_string())
 }
 
-/// Reaper: once a worker's battle has ended (or the worker died), KILL the process so its emulator
-/// stops running and the slot frees for the next match.
-async fn reaper(pool: Arc<WorkerPool>) {
+/// Reaper: KILL a worker once its battle has ended so its emulator stops + the slot frees. Polls all
+/// running workers CONCURRENTLY (a hung worker can't stall the rest), tolerates transient poll blips
+/// (reaps only after several misses in a row), and on a real crash notifies BOTH players so they
+/// aren't frozen with no result.
+async fn reaper(state: AppState, pool: Arc<WorkerPool>) {
     loop {
         tokio::time::sleep(Duration::from_secs(1)).await;
-        // Only consider workers that actually started a battle (public_id assigned).
-        let running: Vec<u16> = pool
+        let targets: Vec<(u16, UserId, UserId)> = pool
             .workers
             .lock()
             .unwrap()
             .iter()
             .filter(|w| !w.public_id.is_empty())
-            .map(|w| w.port)
+            .map(|w| (w.port, w.p1_uid, w.p2_uid))
             .collect();
-        for p in running {
-            let url = format!("http://127.0.0.1:{p}/internal/status?secret={}", pool.secret);
-            match pool.http.get(&url).send().await {
-                Ok(r) => {
-                    let busy = r
+        if targets.is_empty() {
+            continue;
+        }
+        let polls = targets.iter().map(|&(port, _, _)| {
+            let pool = pool.clone();
+            async move {
+                let url = format!("http://127.0.0.1:{port}/internal/status?secret={}", pool.secret);
+                let busy = match pool.http.get(&url).send().await {
+                    Ok(r) => r
                         .json::<serde_json::Value>()
                         .await
                         .ok()
-                        .and_then(|v| v.get("busy").and_then(|x| x.as_bool()))
-                        .unwrap_or(true);
-                    if !busy {
-                        pool.kill(p);
-                        tracing::info!("coordinator: battle ended -> killed worker :{p} ({} live)", pool.count());
-                    }
+                        .and_then(|v| v.get("busy").and_then(|x| x.as_bool())),
+                    Err(_) => None,
+                };
+                (port, busy)
+            }
+        });
+        let results = futures_util::future::join_all(polls).await;
+        for ((port, p1u, p2u), (_, busy)) in targets.iter().zip(results) {
+            match busy {
+                Some(true) => pool.reset_miss(*port),
+                Some(false) => {
+                    pool.kill(*port);
+                    tracing::info!("coordinator: battle ended -> killed worker :{port} ({} live)", pool.count());
                 }
-                Err(_) => {
-                    // Unreachable (crashed) — reap it.
-                    pool.kill(p);
-                    tracing::warn!("coordinator: worker :{p} unreachable -> reaped ({} live)", pool.count());
+                None => {
+                    // Poll failed — tolerate blips; only treat as a crash after several in a row.
+                    if pool.bump_miss(*port) >= 3 {
+                        state.game.ws.send_to(*p1u, json!({"type":"room_closed","reason":"worker_crashed"})).await;
+                        state.game.ws.send_to(*p2u, json!({"type":"room_closed","reason":"worker_crashed"})).await;
+                        pool.kill(*port);
+                        tracing::warn!("coordinator: worker :{port} crashed -> reaped + notified players");
+                    }
                 }
             }
         }

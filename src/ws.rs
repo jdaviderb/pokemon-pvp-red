@@ -93,4 +93,7 @@ async fn handle_socket(socket: WebSocket, st: AppState, uid: i32, uname: String)
 
     send_task.abort();
     st.game.ws.prune(uid).await;
+    // Drop a disconnecting player from the matchmaking queue so they aren't matched as a "ghost"
+    // (which would spawn a worker for someone who already left).
+    crate::rooms::cancel_queue(&st.game, uid).await;
 }

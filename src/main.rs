@@ -89,11 +89,14 @@ async fn main() -> anyhow::Result<()> {
     let rom_path = positional.first().cloned().unwrap_or_else(|| DEFAULT_ROM.to_string());
     let core_path = positional.get(1).cloned().unwrap_or_else(|| DEFAULT_CORE.to_string());
 
-    // Shared by every mode.
+    // Shared by every mode. Workers DON'T migrate/seed/recover — the coordinator (or solo) owns the
+    // shared schema; N workers re-running migrations on boot just contends the single writer.
     let api = crate::webrtc::build_api()?;
-    let database = db::connect_and_migrate().await?;
-    flags::seed_defaults(&database).await?;
-    rooms::recover_abandoned(&database).await?;
+    let database = db::connect(!worker).await?;
+    if !worker {
+        flags::seed_defaults(&database).await?;
+        rooms::recover_abandoned(&database).await?;
+    }
     let cookie_key = load_cookie_key();
     let dev = std::env::var("DEV").map(|v| v != "0" && !v.is_empty()).unwrap_or(false);
     let oauth = std::sync::Arc::new(oauth::registry_from_env());

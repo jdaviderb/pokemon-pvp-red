@@ -6,11 +6,12 @@
 //! NOTE: this module is named `webrtc`, which shadows the `webrtc` crate inside
 //! `crate::`. Refer to the crate with a leading `::webrtc::...` everywhere below.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::broadcast::error::RecvError;
+use ::webrtc::ice_transport::ice_server::RTCIceServer;
 
 use ::webrtc::api::interceptor_registry::register_default_interceptors;
 use ::webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS, MIME_TYPE_VP8};
@@ -32,6 +33,9 @@ use crate::pipeline::AppInner;
 /// Exact A/V sync is handled by the browser jitter buffer + RTCP sender reports.
 const VIDEO_FRAME_NANOS: u64 = 16_666_667;
 
+/// Live PeerConnections (players + spectators), capped by SPECTATOR_MAX (unbounded if unset).
+static PEER_COUNT: AtomicUsize = AtomicUsize::new(0);
+
 /// Build the shared API once (MediaEngine + default codecs (VP8/Opus) + interceptors).
 pub fn build_api() -> anyhow::Result<Arc<API>> {
     let mut m = MediaEngine::default();
@@ -51,8 +55,21 @@ pub async fn build_peer_and_answer(
     inner: &Arc<AppInner>,
     offer_sdp: String,
 ) -> anyhow::Result<String> {
-    // Localhost only: no STUN needed; host candidates on 127.0.0.1 connect instantly.
-    let config = RTCConfiguration::default();
+    // Admission control: refuse new peers past SPECTATOR_MAX (unbounded if unset).
+    let cap = std::env::var("SPECTATOR_MAX").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(usize::MAX);
+    if PEER_COUNT.load(Ordering::Relaxed) >= cap {
+        anyhow::bail!("peer limit reached");
+    }
+    // Localhost: host candidates on 127.0.0.1 connect instantly (no STUN). For public-internet peers
+    // behind NAT, set STUN_URLS (comma-separated; add a TURN entry for symmetric NAT).
+    let mut config = RTCConfiguration::default();
+    if let Ok(urls) = std::env::var("STUN_URLS") {
+        let list: Vec<String> =
+            urls.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+        if !list.is_empty() {
+            config.ice_servers = vec![RTCIceServer { urls: list, ..Default::default() }];
+        }
+    }
     let pc = Arc::new(api.new_peer_connection(config).await?);
 
     // Per-peer liveness flag: cleared when the connection ends so this peer's writer
@@ -105,6 +122,7 @@ pub async fn build_peer_and_answer(
         let mut vrx = inner.video_tx.subscribe();
         let vtrack = Arc::clone(&video_track);
         let valive = Arc::clone(&alive);
+        let vkf = inner.keyframe_req.clone(); // ask for a keyframe after a lag so the decoder recovers
         let video_dur = Duration::from_nanos(VIDEO_FRAME_NANOS); // ~16.67 ms -> 90kHz RTP step
         tokio::spawn(async move {
             loop {
@@ -124,6 +142,7 @@ pub async fn build_peer_and_answer(
                     }
                     Err(RecvError::Lagged(n)) => {
                         tracing::warn!("video writer lagged {n} frames");
+                        vkf.store(true, Ordering::Relaxed); // recover this viewer with a fresh keyframe
                         continue;
                     }
                     Err(RecvError::Closed) => break,
@@ -182,23 +201,54 @@ pub async fn build_peer_and_answer(
         }));
     }
 
-    // --- Keep the connection alive past this function; force a keyframe on connect. ---
+    // --- Lifecycle: keep the PC alive past this fn WITHOUT a self-referential Arc, and CLOSE it on
+    //     disconnect / connect-timeout so PeerConnections don't leak (each freed peer drops its
+    //     tracks, ICE/UDP, and RTCP-drain tasks). PEER_COUNT tracks live peers for admission. ---
+    PEER_COUNT.fetch_add(1, Ordering::Relaxed);
     {
-        let pc_hold = Arc::clone(&pc);
+        let close = Arc::new(tokio::sync::Notify::new());
+        let connected = Arc::new(AtomicBool::new(false));
+        // Guardian: holds the only strong Arc<pc> past this fn; closes + drops it (and decrements
+        // PEER_COUNT) when signalled. The state handler holds NO strong pc -> no Arc cycle.
+        {
+            let pc_guard = Arc::clone(&pc);
+            let close = Arc::clone(&close);
+            tokio::spawn(async move {
+                close.notified().await;
+                let _ = pc_guard.close().await;
+                PEER_COUNT.fetch_sub(1, Ordering::Relaxed);
+            });
+        }
+        // Connect deadline: if it never reaches Connected within 30s, give up + close.
+        {
+            let close = Arc::clone(&close);
+            let connected = Arc::clone(&connected);
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                if !connected.load(Ordering::Relaxed) {
+                    close.notify_one();
+                }
+            });
+        }
         let keyframe_req = inner.keyframe_req.clone();
         let alive = Arc::clone(&alive);
         pc.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
             tracing::info!("peer state: {s:?}");
             match s {
                 // New viewer is live -> ask the emulator for a fresh keyframe.
-                RTCPeerConnectionState::Connected => keyframe_req.store(true, Ordering::Relaxed),
-                // Terminal/abandoned -> stop this peer's writer tasks (no ICE restart here).
+                RTCPeerConnectionState::Connected => {
+                    connected.store(true, Ordering::Relaxed);
+                    keyframe_req.store(true, Ordering::Relaxed);
+                }
+                // Terminal/abandoned -> stop this peer's writer tasks + close the PC (frees it).
                 RTCPeerConnectionState::Disconnected
                 | RTCPeerConnectionState::Failed
-                | RTCPeerConnectionState::Closed => alive.store(false, Ordering::Relaxed),
+                | RTCPeerConnectionState::Closed => {
+                    alive.store(false, Ordering::Relaxed);
+                    close.notify_one();
+                }
                 _ => {}
             }
-            let _ = &pc_hold; // hold an Arc<pc> inside the long-lived handler closure
             Box::pin(async {})
         }));
     }

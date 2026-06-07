@@ -71,8 +71,10 @@ pub struct AppInner {
 }
 
 pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
-    let (video_tx, _) = broadcast::channel::<EncodedVideo>(16);
-    let (audio_tx, _) = broadcast::channel::<EncodedAudio>(64);
+    // Generous buffers so a slow spectator lags (drops + asks for a keyframe) instead of stalling
+    // the whole fan-out; the emulator (single producer) never blocks on a lagging viewer.
+    let (video_tx, _) = broadcast::channel::<EncodedVideo>(240);
+    let (audio_tx, _) = broadcast::channel::<EncodedAudio>(256);
     let (input_tx, input_rx) = mpsc::unbounded_channel::<InputEvent>();
     let keyframe_req = Arc::new(AtomicBool::new(false));
 

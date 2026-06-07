@@ -215,7 +215,7 @@ async fn find_match(game: &Arc<GameState>, uid: UserId, _uname: &str) {
     game.ws.send_to(uid, json!({"type":"queued","position":pos})).await;
 }
 
-async fn cancel_queue(game: &Arc<GameState>, uid: UserId) {
+pub(crate) async fn cancel_queue(game: &Arc<GameState>, uid: UserId) {
     game.queue.lock().await.retain(|&u| u != uid);
     game.ws.send_to(uid, json!({"type":"lobby","queued":false,"queue_size":0})).await;
 }
