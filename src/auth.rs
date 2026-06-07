@@ -194,9 +194,11 @@ fn sanitize_nick(s: &str) -> Option<String> {
     (out.len() >= 3).then_some(out)
 }
 
+/// Case-INSENSITIVE uniqueness: "Ash" and "ASH" are the same trainer name (the DB's plain unique
+/// index is case-sensitive, so we compare on lower(username) here for every name check).
 async fn username_free(st: &AppState, name: &str) -> anyhow::Result<bool> {
     Ok(users::Entity::find()
-        .filter(users::Column::Username.eq(name))
+        .filter(sea_orm::sea_query::Expr::cust_with_values("lower(username) = ?", [name.to_lowercase()]))
         .one(&st.db)
         .await?
         .is_none())
@@ -312,7 +314,7 @@ pub async fn set_name(
     let name = sanitize_nick(&req.name)
         .ok_or((StatusCode::BAD_REQUEST, "name needs 3+ characters".to_string()))?;
     let current = u.username.clone();
-    if name != current
+    if name.to_lowercase() != current.to_lowercase()
         && !username_free(&st, &name)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?

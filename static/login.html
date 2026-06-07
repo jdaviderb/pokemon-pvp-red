@@ -226,7 +226,7 @@
     const LO = "abcdefghijklmnopqrstuvwxyz0123456789-_".split("");
     const NAMEPOOL = ["ASH", "RED", "BLUE", "GARY", "LEAF", "ROCKET", "PIKA", "NIDO", "ONIX", "EEVEE", "MEW", "ZAP"];
     let nameStr = "", upper = true, entryMode = "guest";
-    const MAXN = 12;
+    const MAXN = 16;
     const randName = () => NAMEPOOL[Math.floor(Math.random() * NAMEPOOL.length)] + (Math.floor(Math.random() * 900) + 100);
     const toGrid = (s) => (s || "").toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, MAXN);
     function renderKbd() {
