@@ -284,17 +284,34 @@ pub async fn user_from_token(st: &AppState, token: &str) -> Option<users::Model>
     users::Entity::find_by_id(link.user_id).one(&st.db).await.ok()?
 }
 
-/// POST /api/mcp/token (authed) -> {token, username}. Returns the caller's agent token (minted on
-/// first call). Guests are rejected unless DEV is on (so the dev can drive test agents as guests).
+#[derive(serde::Deserialize)]
+pub struct TokenQ {
+    /// `?renew=1` (or `true`) revokes the existing token and mints a fresh one (rotate if leaked).
+    #[serde(default)]
+    pub renew: Option<String>,
+}
+
+/// POST /api/mcp/token[?renew=1] (authed) -> {token, username}. Returns the caller's agent token
+/// (minted on first call; rotated when `renew`). Guests are rejected unless DEV is on.
 pub async fn mcp_token(
     State(st): State<AppState>,
     AuthUser(u): AuthUser,
+    Query(q): Query<TokenQ>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     use crate::entities::api_tokens;
     if u.is_guest && !st.dev {
         return Err((StatusCode::FORBIDDEN, "agents require a registered account".into()));
     }
     let db_err = |e: sea_orm::DbErr| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+    let renew = q.renew.as_deref().is_some_and(|v| v == "1" || v == "true");
+    if renew {
+        // Revoke the old token so a fresh one is minted below.
+        api_tokens::Entity::delete_many()
+            .filter(api_tokens::Column::UserId.eq(u.id))
+            .exec(&st.db)
+            .await
+            .map_err(db_err)?;
+    }
     let existing = api_tokens::Entity::find()
         .filter(api_tokens::Column::UserId.eq(u.id))
         .one(&st.db)

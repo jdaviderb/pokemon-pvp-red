@@ -20,7 +20,8 @@
       border-image:url("/gb-frame.png") 7 fill / 14px / 0 stretch; image-rendering:pixelated; padding:18px 20px; }
     h3 { font-size:18px; letter-spacing:2px; margin:2px 0 8px; }
     p, li { font-size:15px; line-height:1.6; letter-spacing:.5px; }
-    .tok { display:flex; gap:8px; align-items:center; margin:8px 0 4px; }
+    .tok { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0 4px; }
+    .klabel { font-size:13px; color:var(--inkdim); min-width:52px; letter-spacing:1px; }
     code, pre { font-family:ui-monospace, Menlo, monospace; background:#11140f; color:#9ff29f; border-radius:6px; }
     code { padding:2px 7px; font-size:15px; word-break:break-all; }
     pre { padding:12px 14px; font-size:13px; line-height:1.5; overflow-x:auto; white-space:pre; }
@@ -40,14 +41,17 @@
   <div class="card" id="gate" style="text-align:center">Loading…</div>
 
   <div class="card hidden" id="main">
-    <h3>YOUR AGENT TOKEN</h3>
-    <p>This token lets an AI agent connect to the arena <b>as you</b> through the Red PVP MCP server — it can find matches, see the battle, and pick moves on your behalf. Keep it secret.</p>
-    <div class="tok"><code id="tok">…</code><button class="btn" id="copy">COPY</button></div>
+    <h3>YOUR AGENT CREDENTIALS</h3>
+    <p>Give this <b>URL + token</b> to any MCP-capable agent — Claude Code, Cursor, your own — anything that speaks the MCP <b>HTTP transport</b>. It connects to the arena <b>as you</b> (find matches, read the battle, pick moves). Keep the token secret.</p>
+    <div class="tok"><span class="klabel">URL</span><code id="url">…</code><button class="btn" id="copyurl">COPY</button></div>
+    <div class="tok"><span class="klabel">TOKEN</span><code id="tok">…</code><button class="btn" id="copy">COPY</button><button class="btn" id="renew" title="Revoke this token and mint a new one">RENEW</button></div>
 
-    <h3 style="margin-top:18px">CONNECT YOUR AGENT</h3>
-    <p>Add the arena's MCP server to your agent (e.g. Claude Code), then tell it to play:</p>
+    <h3 style="margin-top:18px">CONNECT (any MCP client)</h3>
+    <p>Most clients take an <code>.mcp.json</code> like this — remote HTTP transport + a Bearer header:</p>
+    <pre id="cfgjson"></pre>
+    <p>Claude Code one-liner:</p>
     <pre id="cfg"></pre>
-    <p>Then just prompt it: <i>"Find a Pokémon match and play to win, picking the best move each turn."</i></p>
+    <p>Then prompt it: <i>"Find a Pokémon match and play to win, picking the best move each turn."</i></p>
 
     <h3 style="margin-top:18px">TOOLS THE AGENT GETS</h3>
     <div class="tools">
@@ -64,6 +68,15 @@
   <div class="links"><a href="/lobby">BACK</a></div>
   <script>
     const $ = (id) => document.getElementById(id);
+    const origin = location.origin;
+    const flash = (btn, txt) => { const old = btn.textContent; btn.textContent = txt; setTimeout(() => (btn.textContent = old), 1200); };
+    function applyToken(token) {
+      $("url").textContent = origin + "/mcp";
+      $("tok").textContent = token;
+      $("cfgjson").textContent = JSON.stringify(
+        { mcpServers: { "red-pvp": { type: "http", url: origin + "/mcp", headers: { Authorization: "Bearer " + token } } } }, null, 2);
+      $("cfg").textContent = 'claude mcp add --transport http red-pvp ' + origin + '/mcp --header "Authorization: Bearer ' + token + '"';
+    }
     (async () => {
       let me;
       try { const r = await fetch("/api/me"); if (r.status === 401) return location.replace("/login"); me = await r.json(); } catch (e) { return; }
@@ -75,14 +88,17 @@
       if (!r.ok) { $("gate").textContent = "Could not load agent mode."; return; }
       const d = await r.json();
       $("gate").classList.add("hidden"); $("main").classList.remove("hidden");
-      $("tok").textContent = d.token;
-      const origin = location.origin;
-      $("cfg").textContent =
-        "# connect your agent to the arena's REMOTE MCP server (no install — just a URL + your token)\n" +
-        "claude mcp add --transport http red-pvp \\\n" +
-        "  " + origin + "/mcp \\\n" +
-        '  --header "Authorization: Bearer ' + d.token + '"';
-      $("copy").onclick = () => navigator.clipboard.writeText(d.token).then(() => { $("copy").textContent = "COPIED"; setTimeout(() => ($("copy").textContent = "COPY"), 1200); });
+      applyToken(d.token);
+      $("copy").onclick = () => navigator.clipboard.writeText($("tok").textContent).then(() => flash($("copy"), "COPIED"));
+      $("copyurl").onclick = () => navigator.clipboard.writeText($("url").textContent).then(() => flash($("copyurl"), "COPIED"));
+      $("renew").onclick = async () => {
+        if (!confirm("Renew your agent token?\n\nThe current token stops working immediately — you'll have to update any agents already configured with it.")) return;
+        try {
+          const rr = await fetch("/api/mcp/token?renew=1", { method: "POST" });
+          if (rr.ok) { applyToken((await rr.json()).token); flash($("renew"), "RENEWED"); }
+          else flash($("renew"), "FAILED");
+        } catch (e) { flash($("renew"), "FAILED"); }
+      };
       if (me.user && me.user.is_guest) $("devnote").textContent = "DEV mode: you're a guest, so this token is temporary (for testing agents).";
     })();
   </script>
