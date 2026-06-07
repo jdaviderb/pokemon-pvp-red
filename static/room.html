@@ -122,7 +122,7 @@
     .overlay { position:fixed; inset:0; background:rgba(20,20,16,.97); display:grid; place-items:center; z-index:50; }
     .overlay.hidden { display:none; }
     .result-box { background:#fff; color:#000; position:relative; border:14px solid transparent;
-      border-image:url("/gb-frame.png") 7 fill / 14px / 0 stretch; image-rendering:pixelated; padding:34px 44px; text-align:center; }
+      border-image:url("/gb-frame.png") 7 fill / 14px / 0 stretch; image-rendering:pixelated; padding:34px 44px; text-align:center; max-width:min(94vw,620px); }
     .result { font-family:"PokeRed", ui-monospace, monospace; font-size:44px; letter-spacing:2px; color:#000; }
     #home { margin-top:26px; font-family:"PokeRed", ui-monospace, monospace; font-size:18px; background:#000; color:#fff; border:0; border-radius:8px; padding:14px 26px; cursor:pointer; letter-spacing:1px; image-rendering:pixelated; }
     #home:hover { filter:brightness(1.25); }
@@ -364,6 +364,7 @@
   }
   // View-only: connect the live video, hide the player UI, show who's fighting. No WS, no controls.
   function specResult(title, sub) {
+    $("arena").style.display = "none"; // no empty battle shell behind the result panel
     $("resultText").textContent = title;
     $("resultText").className = "result"; $("resultText").style.fontSize = "36px";
     if (sub) {
