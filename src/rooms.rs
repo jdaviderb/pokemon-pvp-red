@@ -419,8 +419,10 @@ async fn run_room(game: Arc<GameState>, rid: RoomId) {
         let last_turn = s.turns_in_battle;
         tracing::info!("room {rid}: turn {last_turn} -> P1 move slot {p1slot}, P2 move slot {p2slot}");
         inner.enemy_force.store(p2slot, Ordering::Relaxed); // arm P2's move (CCDD) before the round
+        inner.player_force.store(p1slot, Ordering::Relaxed); // force P1's move (CCDC) too -> no off-by-one
         let resolved = run_round(&inner, last_turn, p1slot).await;
         inner.enemy_force.store(0xFF, Ordering::Relaxed); // DISARM or P2 repeats forever
+        inner.player_force.store(0xFF, Ordering::Relaxed);
         if let Some(r) = resolved {
             if r.in_battle != 0 {
                 last_good = Some(r);

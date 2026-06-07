@@ -58,6 +58,7 @@ pub fn router(state: AppState) -> Router {
         .route("/battle/setup", post(battle_setup_handler))
         .route("/battle/species", get(battle_species_handler))
         .route("/battle/enemy", post(battle_enemy_handler))
+        .route("/battle/player", post(battle_player_handler))
         // --- auth + session ---
         .route("/auth/register", post(crate::auth::register))
         .route("/auth/login", post(crate::auth::login))
@@ -284,6 +285,20 @@ async fn battle_enemy_handler(State(state): State<AppState>, Json(req): Json<Ene
     state
         .inner
         .enemy_force
+        .store(req.slot, std::sync::atomic::Ordering::Relaxed);
+    StatusCode::ACCEPTED
+}
+
+/// POST /battle/player {"slot":0..3} -> force the PLAYER's selected move into wPlayerSelectedMove
+/// (CCDC) each turn, so the executed move is exactly that slot even if the menu macro mis-navigates.
+/// {"slot":255} or empty -> trust the menu pick.
+async fn battle_player_handler(State(state): State<AppState>, Json(req): Json<EnemyRequest>) -> StatusCode {
+    if emu_busy(&state) {
+        return StatusCode::CONFLICT;
+    }
+    state
+        .inner
+        .player_force
         .store(req.slot, std::sync::atomic::Ordering::Relaxed);
     StatusCode::ACCEPTED
 }

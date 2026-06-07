@@ -65,6 +65,9 @@ pub struct AppInner {
     pub setup_tx: mpsc::UnboundedSender<SetupReq>,
     /// Manual enemy control: 0xFF = game AI decides; 0..3 = force that enemy move slot every turn.
     pub enemy_force: Arc<AtomicU8>,
+    /// Force P1's chosen move into CCDC (wPlayerSelectedMove): 0xFF = off; 0..3 = that slot. Makes
+    /// the executed player move reliable even if the menu-nav macro drops a Down (off-by-one).
+    pub player_force: Arc<AtomicU8>,
 }
 
 pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
@@ -78,6 +81,7 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
     let (load_tx, load_rx) = mpsc::unbounded_channel::<LoadReq>();
     let (setup_tx, setup_rx) = mpsc::unbounded_channel::<SetupReq>();
     let enemy_force = Arc::new(AtomicU8::new(0xFF)); // default: game AI
+    let player_force = Arc::new(AtomicU8::new(0xFF)); // default: use the menu pick
     let battle: Arc<Mutex<Option<BattleState>>> = Arc::new(Mutex::new(None));
 
     let v = video_tx.clone();
@@ -85,10 +89,11 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
     let kf = keyframe_req.clone();
     let battle_thread = battle.clone();
     let ef = enemy_force.clone();
+    let pf = player_force.clone();
     std::thread::spawn(move || {
         if let Err(e) = run_loop(
             core_path, rom_path, v, a, input_rx, kf, action_rx, save_rx, load_rx, setup_rx,
-            battle_thread, ef,
+            battle_thread, ef, pf,
         ) {
             tracing::error!("emulator loop ended: {e:?}");
         }
@@ -105,6 +110,7 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
         load_tx,
         setup_tx,
         enemy_force,
+        player_force,
     })
 }
 
@@ -141,6 +147,7 @@ fn run_loop(
     mut setup_rx: mpsc::UnboundedReceiver<SetupReq>,
     battle: Arc<Mutex<Option<BattleState>>>,
     enemy_force: Arc<AtomicU8>,
+    player_force: Arc<AtomicU8>,
 ) -> anyhow::Result<()> {
     let mut emu = N64::new(&core_path, &rom_path)?;
     let mut opus =
@@ -301,6 +308,23 @@ fn run_loop(
                     let mv = ram[(0xCFED - 0xC000) as usize + ef as usize]; // enemy move[slot] id
                     if mv != 0 {
                         ram[ccdd] = mv;
+                    }
+                }
+            });
+        }
+
+        // 3a''. Symmetric for P1: force the chosen move into wPlayerSelectedMove (CCDC). P1 picks via
+        //       the menu-nav macro which can drop a Down (off-by-one); this guarantees the move that
+        //       actually executes is the one the player chose. 0xFF = trust the menu pick.
+        let pf = player_force.load(Ordering::Relaxed);
+        if pf < 4 {
+            emu.with_system_ram_mut(|ram| {
+                let in_battle = ram[(0xD057 - 0xC000) as usize];
+                let ccdc = (0xCCDC - 0xC000) as usize;
+                if in_battle != 0 && ram[ccdc] != 0 {
+                    let mv = ram[(0xD01C - 0xC000) as usize + pf as usize]; // player move[slot] id
+                    if mv != 0 {
+                        ram[ccdc] = mv;
                     }
                 }
             });
