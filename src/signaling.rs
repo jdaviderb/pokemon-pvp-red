@@ -83,12 +83,14 @@ pub fn router(state: AppState) -> Router {
         .route("/api/online", get(online_handler))
         .route("/api/config", get(config_handler))
         .route("/api/room/{id}", get(room_info_handler))
+        .route("/api/live", get(live_handler))
         // --- social login (provider-agnostic: /auth/oauth/{provider}[/callback]) ---
         .route("/auth/oauth/{provider}", get(crate::oauth::start))
         .route("/auth/oauth/{provider}/callback", get(crate::oauth::callback))
         // --- clean (extensionless) page URLs — more professional than *.html ---
         .route_service("/login", ServeFile::new("static/login.html"))
         .route_service("/lobby", ServeFile::new("static/lobby.html"))
+        .route_service("/tv", ServeFile::new("static/tv.html"))
         // /room: worker/solo serve the page; the coordinator redirects to the worker running it.
         .route("/room", get(room_page_handler))
         // --- realtime ---
@@ -191,6 +193,17 @@ async fn room_info_handler(State(state): State<AppState>, Path(id): Path<String>
         Some(v) => Json(v),
         None => Json(serde_json::json!({ "found": false })),
     }
+}
+
+/// GET /api/live -> {battles:[{id,p1,p2}]} for the TV page. The coordinator aggregates its whole
+/// worker pool; solo/worker report their own active battle. Public (guests can watch).
+async fn live_handler(State(st): State<AppState>) -> Json<serde_json::Value> {
+    let battles = if st.role == Role::Coordinator {
+        st.pool.as_ref().map(|p| p.live()).unwrap_or_default()
+    } else {
+        crate::rooms::live_battles(&st.game).await
+    };
+    Json(serde_json::json!({ "battles": battles }))
 }
 
 #[derive(Deserialize)]

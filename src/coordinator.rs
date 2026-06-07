@@ -31,6 +31,8 @@ struct Worker {
     port: u16,
     child: Child,
     public_id: String, // "" until /internal/assign succeeds; then the battle's UUID
+    p1: String,
+    p2: String,
 }
 
 pub struct WorkerPool {
@@ -112,7 +114,13 @@ impl WorkerPool {
             .env("RUST_LOG", "nes_web=warn,webrtc=off")
             .spawn()
             .ok()?;
-        self.workers.lock().unwrap().push(Worker { port, child, public_id: String::new() });
+        self.workers.lock().unwrap().push(Worker {
+            port,
+            child,
+            public_id: String::new(),
+            p1: String::new(),
+            p2: String::new(),
+        });
         tracing::info!("coordinator: spawned worker on :{port} ({} live)", self.count());
         Some(port)
     }
@@ -131,10 +139,23 @@ impl WorkerPool {
         false
     }
 
-    fn set_public(&self, port: u16, public_id: String) {
+    fn set_battle(&self, port: u16, public_id: String, p1: String, p2: String) {
         if let Some(w) = self.workers.lock().unwrap().iter_mut().find(|w| w.port == port) {
             w.public_id = public_id;
+            w.p1 = p1;
+            w.p2 = p2;
         }
+    }
+
+    /// All battles currently live across the pool (for the TV / live list).
+    pub fn live(&self) -> Vec<serde_json::Value> {
+        self.workers
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|w| !w.public_id.is_empty())
+            .map(|w| json!({ "id": w.public_id, "p1": w.p1, "p2": w.p2 }))
+            .collect()
     }
 
     /// Kill a worker process and drop it from the pool (frees its emulator/CPU/RAM + its port).
@@ -219,9 +240,9 @@ async fn matchmaker(state: AppState, pool: Arc<WorkerPool>) {
             }
             match assign_to_worker(&pool, port, a, b).await {
                 Some(public_id) => {
-                    pool.set_public(port, public_id.clone());
                     let ua = rooms::username_of(&game.db, a).await;
                     let ub = rooms::username_of(&game.db, b).await;
+                    pool.set_battle(port, public_id.clone(), ua.clone(), ub.clone());
                     game.ws.send_to(a, json!({"type":"matched","room_id":public_id,"seat":1,"opponent":ub})).await;
                     game.ws.send_to(b, json!({"type":"matched","room_id":public_id,"seat":2,"opponent":ua})).await;
                     tracing::info!("coordinator: {a} vs {b} -> worker :{port} room {public_id}");

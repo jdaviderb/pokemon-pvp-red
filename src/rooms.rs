@@ -936,6 +936,16 @@ pub async fn spectate_info(st: &AppState, public_id: &str) -> Option<serde_json:
     }))
 }
 
+/// Live battles on THIS process (solo/worker: 0 or 1). The coordinator uses its pool instead.
+pub async fn live_battles(game: &Arc<GameState>) -> Vec<serde_json::Value> {
+    let active = *game.active_room.lock().await;
+    let rooms = game.rooms.lock().await;
+    active
+        .and_then(|rid| rooms.get(&rid))
+        .map(|r| vec![json!({ "id": r.public_id, "p1": r.p1.username, "p2": r.p2.username })])
+        .unwrap_or_default()
+}
+
 /// Restart cleanup: any room still live in the DB had its in-process emulator state lost. Mark it
 /// abandoned (winner NULL) and clear user_room so affected users resume to the Lobby.
 pub async fn recover_abandoned(db: &DatabaseConnection) -> Result<(), sea_orm::DbErr> {

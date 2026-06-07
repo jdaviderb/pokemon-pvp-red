@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RED PVP MOD - TV</title>
+  <style>
+    @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
+    :root { --bg:#e9e7dd; --parch:#ffffff; --ink:#000000; --inkdim:#666; --field:#f3f1e6; --red:#b5302a; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
+      font-family:"PokeRed", ui-monospace, "Courier New", monospace; font-size:16px; -webkit-font-smoothing:none; font-smooth:never;
+      background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.07) 0 1px, transparent 1px 3px);
+      display:flex; flex-direction:column; align-items:center; padding:26px; gap:14px; }
+    .logo-img { width:min(56vw,340px); height:auto; image-rendering:pixelated; }
+    .title { font-size:26px; letter-spacing:4px; }
+    .sub { color:var(--inkdim); font-size:15px; letter-spacing:2px; margin-top:-6px; }
+    .gb { background:var(--parch); color:var(--ink); border:14px solid transparent;
+      border-image:url("/gb-frame.png") 7 fill / 14px / 0 stretch; image-rendering:pixelated; }
+    .list { width:min(92vw,640px); padding:16px 20px; display:flex; flex-direction:column; gap:9px; min-height:130px; }
+    .battle { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:11px 14px;
+      border:3px solid var(--ink); border-radius:6px; background:var(--field); cursor:pointer; font-size:17px; white-space:nowrap; }
+    .battle:hover { filter:brightness(.95); }
+    .battle .who { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:clip; }
+    .battle .live { color:var(--red); font-size:14px; margin-right:8px; }
+    .battle .vs { color:var(--inkdim); }
+    .battle .watch { font-size:16px; letter-spacing:1px; flex:none; }
+    .empty { color:var(--inkdim); text-align:center; padding:26px 10px; font-size:18px; line-height:1.6; }
+    .links { margin-top:6px; font-size:18px; color:#7c7c68; }
+    .links a { color:#7c7c68; text-decoration:none; } .links a:hover { color:var(--ink); }
+  </style>
+</head>
+<body>
+  <img class="logo-img" src="/title/pokemon_logo.png" alt="POKEMON" />
+  <div class="title">LIVE TV</div>
+  <div class="sub">- WATCH ANY BATTLE -</div>
+  <div class="gb list" id="list"><div class="empty">Loading...</div></div>
+  <div class="links"><a href="/">BACK</a></div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    async function refresh() {
+      let battles = [];
+      try { battles = (await (await fetch("/api/live")).json()).battles || []; } catch (e) {}
+      const list = $("list");
+      if (!battles.length) {
+        list.innerHTML = '<div class="empty">NO LIVE BATTLES RIGHT NOW.<br>Start one, or check back soon.</div>';
+        return;
+      }
+      list.innerHTML = "";
+      battles.forEach((b) => {
+        const row = document.createElement("div");
+        row.className = "battle";
+        row.innerHTML =
+          '<span class="who"><span class="live">[LIVE]</span>' +
+          (b.p1 || "P1").toUpperCase() + ' <span class="vs">VS</span> ' + (b.p2 || "P2").toUpperCase() +
+          '</span><span class="watch">WATCH ▶</span>';
+        row.onclick = () => (location.href = "/room?id=" + encodeURIComponent(b.id));
+        list.appendChild(row);
+      });
+    }
+    refresh();
+    setInterval(refresh, 3000);
+  </script>
+</body>
+</html>
