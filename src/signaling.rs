@@ -101,7 +101,7 @@ pub fn router(state: AppState) -> Router {
         .route_service("/tv", ServeFile::new("static/tv.html"))
         .route_service("/ranking", ServeFile::new("static/ranking.html"))
         .route_service("/collection", ServeFile::new("static/collection.html"))
-        .route_service("/mcp", ServeFile::new("static/mcp.html"))
+        .route_service("/agent", ServeFile::new("static/mcp.html"))
         // /room: worker/solo serve the page; the coordinator redirects to the worker running it.
         .route("/room", get(room_page_handler))
         // --- realtime ---
@@ -128,6 +128,12 @@ pub fn router(state: AppState) -> Router {
             .route("/battle/enemy", post(battle_enemy_handler))
             .route("/battle/player", post(battle_player_handler))
             .route_service("/console", ServeFile::new("dev/console.html"));
+    }
+
+    // Remote MCP server (streamable HTTP) at /mcp so an AI agent plays via a URL + bearer token.
+    // Only Solo/Worker run real battles; the Coordinator has a dummy GameState.
+    if state.role != Role::Coordinator {
+        app = app.merge(crate::mcp::mcp_router(state.clone()));
     }
 
     app.fallback_service(static_service)

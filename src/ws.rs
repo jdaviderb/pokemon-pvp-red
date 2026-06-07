@@ -25,7 +25,8 @@ impl WsHub {
         Self::default()
     }
 
-    async fn add(&self, uid: i32, tx: mpsc::UnboundedSender<serde_json::Value>) {
+    /// Register a sender for `uid` (a browser tab, or an in-process MCP agent session).
+    pub async fn add(&self, uid: i32, tx: mpsc::UnboundedSender<serde_json::Value>) {
         self.conns.lock().await.entry(uid).or_default().push(tx);
     }
 

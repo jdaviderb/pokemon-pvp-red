@@ -78,11 +78,10 @@
       $("tok").textContent = d.token;
       const origin = location.origin;
       $("cfg").textContent =
-        "# add the Red PVP arena MCP server (one-time) — it's the same Rust binary, in --mcp mode\n" +
-        "claude mcp add --transport stdio red-pvp \\\n" +
-        "  --env NES_TOKEN=" + d.token + " \\\n" +
-        "  --env NES_URL=" + origin + " \\\n" +
-        "  -- /path/to/nes-web --mcp";
+        "# connect your agent to the arena's REMOTE MCP server (no install — just a URL + your token)\n" +
+        "claude mcp add --transport http red-pvp \\\n" +
+        "  " + origin + "/mcp \\\n" +
+        '  --header "Authorization: Bearer ' + d.token + '"';
       $("copy").onclick = () => navigator.clipboard.writeText(d.token).then(() => { $("copy").textContent = "COPIED"; setTimeout(() => ($("copy").textContent = "COPY"), 1200); });
       if (me.user && me.user.is_guest) $("devnote").textContent = "DEV mode: you're a guest, so this token is temporary (for testing agents).";
     })();

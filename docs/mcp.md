@@ -1,36 +1,44 @@
 # Agents play Pokémon — the MCP server
 
-`nes-web` ships an **MCP server in the same binary**: run it with `--mcp` and it becomes a stdio
-[Model Context Protocol](https://modelcontextprotocol.io) server that lets an AI agent (Claude Code,
-or any MCP client) **play Pokémon PvP** on the arena. One binary, no extra runtime.
+The arena (`nes-web`) **hosts a [Model Context Protocol](https://modelcontextprotocol.io) server in
+the same process**, so a player just gives their AI agent a **URL + token** — no install — and the
+agent **plays Pokémon PvP** for them. Same model as the Linear / Slack / GitHub MCP servers.
 
 ```
-agent (claude -p)  --stdio JSON-RPC-->  nes-web --mcp  --token WebSocket /ws-->  arena (nes-web)
-        tools: find_match, wait_turn, make_move, ...        the same protocol the browser uses
+agent (Claude Code / any MCP client)  --HTTP MCP + Bearer-->  /mcp  (inside nes-web)
+   tools: find_match, wait_turn, make_move, get_state, status, watch_link, ranking
+        the tools run IN-PROCESS, driving the game the same way the browser does
 ```
 
-`nes-web --mcp` holds ONE token-authenticated WebSocket to the arena (`/ws?token=…`, the exact
-protocol the browser speaks) and translates tool calls ↔ WebSocket events. It adds **no game
-logic** — the arena stays the source of truth. (`src/mcp.rs`, built on the official `rmcp` crate.)
+`src/mcp.rs` mounts a **streamable-HTTP** MCP server at `/mcp` (official `rmcp` crate). Each tool
+re-checks the `Authorization: Bearer <token>` header (so a revoked token can't ride a live session)
+and drives the game in-process via `ws::WsHub` + `rooms::handle_client_msg`. It adds **no game
+logic** — the arena is the source of truth. Mounted on Solo/Worker (not the Coordinator).
 
 ## 1. Get a token
 
 Log in to the arena (a registered account; or any account when the server runs with `DEV=1`), open
-**AGENT (MCP)** from the lobby, and copy your `mcp_…` token. It authenticates the agent **as you**.
+**AGENT (MCP)** from the lobby (`/agent`), and copy your `mcp_…` token. It authenticates the agent
+**as you**.
 
-## 2. Point your agent at it
+## 2. Point your agent at the URL (remote — recommended)
 
 ```sh
-claude mcp add --transport stdio red-pvp \
-  --env NES_TOKEN=mcp_xxxxxxxx \
-  --env NES_URL=http://localhost:3000 \
-  -- /ABS/PATH/nes-web/target/release/nes-web --mcp
+claude mcp add --transport http red-pvp \
+  https://<arena-host>/mcp \
+  --header "Authorization: Bearer mcp_xxxxxxxx"
+```
+
+`.mcp.json` equivalent:
+
+```json
+{ "mcpServers": { "red-pvp": {
+  "type": "http", "url": "https://<arena-host>/mcp",
+  "headers": { "Authorization": "Bearer mcp_xxxx" } } } }
 ```
 
 Then prompt it: *"Find a Pokémon match and play to win — each turn read the state and pick the best
-move, until the battle is over."*
-
-Headless, against a config file:
+move, until the battle is over."* Headless:
 
 ```sh
 claude -p "Find a match and play to win, picking a good move each turn until it's over." \
@@ -38,11 +46,16 @@ claude -p "Find a match and play to win, picking a good move each turn until it'
   --allowedTools "mcp__red-pvp__find_match,mcp__red-pvp__wait_turn,mcp__red-pvp__get_state,mcp__red-pvp__make_move,mcp__red-pvp__status,mcp__red-pvp__watch_link"
 ```
 
-```json
-{ "mcpServers": { "red-pvp": {
-  "command": "/ABS/PATH/nes-web/target/release/nes-web", "args": ["--mcp"],
-  "env": { "NES_TOKEN": "mcp_xxxx", "NES_URL": "http://localhost:3000" } } } }
-```
+> **Deploy note:** `/mcp` is only safe over **HTTPS** (the token is a header bearer). The server
+> binds `127.0.0.1`; put it behind a TLS reverse proxy for a public URL. The default
+> `StreamableHttpServerConfig` also allows only loopback hosts — call `.with_allowed_hosts([host])`
+> (or `.disable_allowed_hosts()`) in `mcp_router` for a real domain.
+
+## Alternative: local stdio (`nes-web --mcp`)
+
+The same binary also runs a **stdio** MCP server for a local agent (it connects back over a
+token WebSocket): `claude mcp add --transport stdio red-pvp --env NES_TOKEN=… --env NES_URL=… --
+/ABS/PATH/nes-web --mcp`. Prefer the remote URL above for the zero-install experience.
 
 ## Tools
 
