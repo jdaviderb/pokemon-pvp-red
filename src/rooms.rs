@@ -12,7 +12,9 @@ use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use rand::seq::SliceRandom;
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
+};
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
@@ -808,8 +810,16 @@ async fn user_stats(db: &DatabaseConnection, uid: UserId) -> (i32, i32) {
 }
 
 async fn record_result(game: &Arc<GameState>, rid: RoomId, winner: Option<Seat>) {
-    let (p1u, p2u, p1sp, p2sp) = match game.rooms.lock().await.get(&rid) {
-        Some(r) => (r.p1.user_id, r.p2.user_id, r.p1.species as i32, r.p2.species as i32),
+    let (p1u, p2u, p1sp, p2sp, public_id, p1n, p2n) = match game.rooms.lock().await.get(&rid) {
+        Some(r) => (
+            r.p1.user_id,
+            r.p2.user_id,
+            r.p1.species as i32,
+            r.p2.species as i32,
+            r.public_id.clone(),
+            r.p1.username.clone(),
+            r.p2.username.clone(),
+        ),
         None => return,
     };
     let wseat = winner.map(|s| seat_num(s) as i32);
@@ -834,6 +844,9 @@ async fn record_result(game: &Arc<GameState>, rid: RoomId, winner: Option<Seat>)
         p2_species: Set(p2sp),
         winner_seat: Set(wseat),
         ended_at: Set(Utc::now()),
+        public_id: Set(Some(public_id)),
+        p1_name: Set(Some(p1n)),
+        p2_name: Set(Some(p2n)),
         ..Default::default()
     }
     .insert(&game.db)
@@ -877,14 +890,35 @@ pub async fn current_room_for(st: &AppState, uid: UserId) -> Option<MeRoom> {
     })
 }
 
-/// Public spectator info for a room by its UUID: who's fighting + whether it's the live battle.
-/// None if no such room exists (ended / bad link).
+/// Public spectator info for a room UUID. If the match already finished it's read from history
+/// (winner + which Pokemon), so the result shows even after the room is gone. Otherwise the live
+/// room (who's fighting + whether it's the active battle). None for an unknown link.
 pub async fn spectate_info(st: &AppState, public_id: &str) -> Option<serde_json::Value> {
+    // 1) Finished match? Show the recorded result.
+    if let Ok(Some(m)) = e_matches::Entity::find()
+        .filter(e_matches::Column::PublicId.eq(public_id))
+        .order_by_desc(e_matches::Column::Id)
+        .one(&st.db)
+        .await
+    {
+        let mon = |sp: i32| crate::battle::species_by_index(sp as u8).map(|s| s.name).unwrap_or("?");
+        return Some(json!({
+            "found": true,
+            "ended": true,
+            "winner": m.winner_seat.map(|w| if w == 1 { "p1" } else { "p2" }),
+            "p1": m.p1_name.unwrap_or_default(),
+            "p2": m.p2_name.unwrap_or_default(),
+            "p1_mon": mon(m.p1_species),
+            "p2_mon": mon(m.p2_species),
+        }));
+    }
+    // 2) Otherwise, a live / pending room.
     let active = *st.game.active_room.lock().await;
     let rooms = st.game.rooms.lock().await;
     let r = rooms.values().find(|r| r.public_id == public_id)?;
     Some(json!({
         "found": true,
+        "ended": false,
         "live": active == Some(r.id),
         "phase": r.phase.as_str(),
         "p1": r.p1.username,

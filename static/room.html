@@ -368,9 +368,23 @@
     $("arena").className = "phase-battle";
     let info = { found: false };
     try { if (pid) info = await (await fetch("/api/room/" + encodeURIComponent(pid))).json(); } catch (e) {}
+    // Finished match -> show the recorded result (no live video).
+    if (info.found && info.ended) {
+      const wn = info.winner === "p1" ? info.p1 : info.winner === "p2" ? info.p2 : null;
+      $("resultText").textContent = wn ? (wn.toUpperCase() + " WINS!") : "DRAW";
+      $("resultText").className = "result"; $("resultText").style.fontSize = "40px";
+      const det = document.createElement("div");
+      det.style.cssText = "margin-top:16px;text-align:center;font-size:18px;line-height:1.6";
+      det.textContent = (info.p1 || "P1").toUpperCase() + " (" + (info.p1_mon || "?") + ")   VS   " + (info.p2 || "P2").toUpperCase() + " (" + (info.p2_mon || "?") + ")";
+      $("resultText").after(det);
+      $("home").textContent = "BACK ▸"; $("home").onclick = () => (location.href = "/");
+      $("result").classList.remove("hidden");
+      return;
+    }
+    // Live / pending -> watch the video.
     $("spectBanner").style.display = "block";
     $("spectBanner").textContent = info.found
-      ? ("SPECTATING - " + (info.p1 || "P1").toUpperCase() + " VS " + (info.p2 || "P2").toUpperCase() + (info.live ? "  [LIVE]" : "  [ENDED]"))
+      ? ("SPECTATING - " + (info.p1 || "P1").toUpperCase() + " VS " + (info.p2 || "P2").toUpperCase() + (info.live ? "  [LIVE]" : "  [STARTING]"))
       : "SPECTATING - LIVE ARENA";
     await connectVideo().catch(() => {});
   }
