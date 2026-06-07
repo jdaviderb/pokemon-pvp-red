@@ -183,7 +183,11 @@ pub struct Tap {
 }
 
 fn tap(b: usize) -> Tap {
-    Tap { button: b, hold: 4, gap: 6 }
+    Tap { button: b, hold: 4, gap: 8 }
+}
+/// A tap with explicit timing — for menu navigation that must NOT drop a press.
+fn tap_g(b: usize, hold: u8, gap: u8) -> Tap {
+    Tap { button: b, hold, gap }
 }
 
 /// Expand a high-level action into concrete taps for the Gen-1 battle menu. Assumes the main
@@ -199,11 +203,14 @@ pub fn action_to_taps(a: &AgentAction) -> Vec<Tap> {
             //   A      -> open FIGHT (this resets the move-list cursor to slot 0)
             //   Down*n -> to the requested move; A confirms.
             // No Up-homing on the move list (it wraps; opening FIGHT already resets it to the top).
-            let mut v = vec![tap(ID_B), tap(ID_LEFT), tap(ID_UP), tap(ID_A)];
+            // Generous, well-separated taps so the Gen-1 menu (edge-triggered cursor) never drops a
+            // Down. A big "settle" gap after opening FIGHT lets the move list finish drawing before
+            // the first Down, and each Down gets a wide gap so two presses can't land too close.
+            let mut v = vec![tap(ID_B), tap(ID_LEFT), tap(ID_UP), tap_g(ID_A, 4, 20)];
             for _ in 0..(*slot).min(3) {
-                v.push(tap(ID_DOWN));
+                v.push(tap_g(ID_DOWN, 5, 13));
             }
-            v.push(tap(ID_A));
+            v.push(tap_g(ID_A, 4, 8));
             v
         }
         AgentAction::Switch { slot } => {
