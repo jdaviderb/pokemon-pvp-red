@@ -71,6 +71,8 @@
       const r = await fetch("/api/me");
       if (r.status === 401) return location.replace("/login");
       const d = await r.json();
+      // No trainer name yet (new Google user) -> must pick one first (the name-entry is on /login).
+      if (d.user && d.user.name_chosen === false) return location.replace("/login");
       if (d.room && d.room.id != null) return location.replace("/room?id=" + d.room.id);
       if (d.dev) $("devlink").style.display = "";  // show the dev console link only in DEV mode
       $("who").innerHTML = "TRAINER <b>" + d.user.username.toUpperCase() + "</b> - " + d.user.wins + "W / " + d.user.losses + "L";

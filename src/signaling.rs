@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use axum::body::Bytes;
 use axum::extract::{FromRef, Path, Query, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -121,7 +122,24 @@ pub fn router(state: AppState) -> Router {
             .route_service("/console", ServeFile::new("dev/console.html"));
     }
 
-    app.fallback_service(static_service).with_state(state)
+    app.fallback_service(static_service)
+        // Never let the browser serve a STALE cached HTML page (routing/onboarding logic lives in
+        // it). Assets keep their own caching; only text/html is marked no-cache.
+        .layer(axum::middleware::map_response(no_cache_html))
+        .with_state(state)
+}
+
+/// Mark HTML responses no-cache so page logic is always fresh (assets are untouched).
+async fn no_cache_html(mut res: Response) -> Response {
+    let is_html = res
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.contains("text/html"));
+    if is_html {
+        res.headers_mut().insert(CACHE_CONTROL, HeaderValue::from_static("no-cache, must-revalidate"));
+    }
+    res
 }
 
 /// GET /api/species -> [{dex, index, name, types, moves}] (dex = position+1; index = internal
