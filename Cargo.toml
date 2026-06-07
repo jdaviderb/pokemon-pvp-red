@@ -64,6 +64,8 @@ futures-util = "0.3" # split() the axum WebSocket into sink+stream
 # --- Google OAuth: load .env, and talk to Google's token/userinfo endpoints over rustls (no OpenSSL) ---
 dotenvy = "0.15"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+rmcp = { version = "1.7.0", features = ["server", "transport-io", "macros"] }
+tokio-tungstenite = "0.29.0"
 
 [profile.release]
 opt-level = 3

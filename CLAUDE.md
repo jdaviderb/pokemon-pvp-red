@@ -105,8 +105,10 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
 | `src/oauth.rs` · `src/flags.rs` | provider-agnostic OAuth2 social login (Google; `/auth/oauth/{provider}`) · runtime feature flags (`login_username`, `guest_mode`) read live from DB |
 | `src/auth.rs` | argon2id, register/login/logout, session cookie, `AuthUser` extractor |
 | `src/rooms.rs` | multiplayer: matchmaking, room FSM, turn-based battle engine (15s timer, CPU, winner, resume) |
-| `src/ws.rs` | per-client WebSocket (`WsHub`, JSON event protocol) |
-| `src/main.rs` | entry: parse flags (`--coordinator`/`--worker`/`--port`/`--workers`), pick Role, serve axum |
+| `src/ws.rs` | per-client WebSocket (`WsHub`, JSON event protocol); auth via session cookie OR `?token=` (agents) |
+| `src/ranking.rs` | leaderboard: background job (RANKING_REFRESH_SECS, default 300) → wins/Today/Weekly/Monthly cached in memory + `cache/ranking.json`; `/api/ranking` |
+| `src/mcp.rs` | `nes-web --mcp`: stdio MCP server (rmcp) so an AI agent plays via tools over the token WebSocket (NES_TOKEN/NES_URL). See `docs/mcp.md` |
+| `src/main.rs` | entry: parse flags (`--coordinator`/`--worker`/`--port`/`--workers`/`--mcp`), pick Role, serve axum |
 | `src/coordinator.rs` | SCALABLE mode: spawn + manage the emulator worker pool, global matchmaking, `/internal/{assign,status}`, redirect players to their worker (`AppState.role` = Solo/Worker/Coordinator) |
 | `logshim.c` + `build.rs` | C-variadic log fn for `GET_LOG_INTERFACE` (mupen-next needs it) |
 | `scripts/apply_ips.py` | IPS patcher (makes `Pokemon Red Color.gbc`) |

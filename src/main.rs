@@ -13,6 +13,7 @@ mod coordinator;
 mod db;
 mod entities;
 mod flags;
+mod mcp;
 mod migrations;
 mod n64;
 mod oauth;
@@ -63,6 +64,19 @@ async fn main() -> anyhow::Result<()> {
     // from_path (no parent-dir walk) on purpose: dotenvy::dotenv() climbs to the first ancestor
     // .env, which on this machine is ~/.env full of unrelated prod secrets. Real env vars win.
     let _ = dotenvy::from_path(".env");
+
+    // `nes-web --mcp`: run the stdio MCP server (an AI agent plays via NES_TOKEN/NES_URL). Handled
+    // FIRST and with STDERR-only logging — stdout is the MCP JSON-RPC channel and must stay clean.
+    if std::env::args().any(|a| a == "--mcp") {
+        tracing_subscriber::fmt()
+            .with_writer(std::io::stderr)
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| "nes_web=warn".into()),
+            )
+            .init();
+        return mcp::run().await;
+    }
 
     tracing_subscriber::fmt()
         .with_env_filter(
