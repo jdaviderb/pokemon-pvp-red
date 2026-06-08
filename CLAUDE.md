@@ -63,10 +63,10 @@ Then open **http://localhost:3000** in **Chrome** and click **Connect**.
 concurrency = worker PROCESSES. `--coordinator` runs no emulator; it owns auth/lobby/matchmaking and
 **spawns an EPHEMERAL `--worker` process per battle ON DEMAND** (each = this binary, own emulator,
 **shared DB** via `DATABASE_URL`); when the battle ends a reaper **KILLS the worker** to free its
-CPU/RAM. It pairs players and **redirects** each match to its worker (`/room?id=` → 303 →
-`worker:port`; WebRTC + battle WS go browser↔worker directly; localhost shares cookies across ports
-so the session still authenticates against the shared DB). Concurrency cap = `MAX_WORKERS` env or
-`--workers N`, **unbounded if neither is set**. Internal endpoints (`/internal/assign|status`) are
+CPU/RAM. It pairs players and **proxies** each match through itself to its worker — the battle WS
+(`/ws?room=`) and WebRTC (`/offer?room=`) are bridged via the coordinator, so everything stays on one
+TLS origin (no redirect to a worker port; cookie/token auth is forwarded; see "Non-obvious things").
+Concurrency cap = `MAX_WORKERS` env or `--workers N`, **unbounded if neither is set** (prod: unbounded). Internal endpoints (`/internal/assign|status`) are
 secret-gated (`INTERNAL_SECRET`). Use **Postgres** (`DATABASE_URL`) for real multi-process deploys —
 sqlite write-contention across processes is fine for local dev only. Default (no flags) = `Coordinator` (a worker/emulator per battle → N concurrent rooms); `--solo` is the single-process fallback.
 Controls (Game Boy, P1): arrows = D-pad, `X`=A, `Z`=B, `Enter`=Start, `⇧Right`/`⌫`=Select.
@@ -149,7 +149,7 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
 - **Coordinator runs behind ONE TLS origin** (prod is coordinator, not `--solo`): the battle WS
   (`/ws?room=`) and `/offer?room=` are **proxied** through the coordinator to the room's worker
   (`ws.rs::proxy_ws`, `WorkerPool::proxy_offer`); `/api/me` + `/api/room` read live battles from the
-  pool. So `/room` is same-origin (no redirect to a worker port). `MAX_WORKERS` caps concurrency.
+  pool. So `/room` is same-origin (no redirect). 1 worker process = 1 emulator = 1 battle (libretro globals are per-process); `MAX_WORKERS` caps how many run at once (prod runs it UNBOUNDED — saturates under an extreme surge by choice).
 - **Headless / software render**: the frontend refuses `SET_HW_RENDER` so the core delivers CPU
   framebuffers via `video_refresh` (no GL context). gambatte is software-only, so this is automatic.
 - **Pixel format**: gambatte delivers **RGB565** (little-endian u16, R5/G6/B5); `frame_to_i420`
