@@ -908,6 +908,15 @@ async fn clear_user_room(game: &Arc<GameState>, rid: RoomId) {
 
 /// Where is this user right now? `None` => Lobby. Used by GET /api/me for first-paint routing.
 pub async fn current_room_for(st: &AppState, uid: UserId) -> Option<MeRoom> {
+    // Coordinator: the user's battle runs on a worker, so read it from the pool (the local rooms
+    // map is empty here). This is what tells the room page "you are the player in this room".
+    if st.role == crate::signaling::Role::Coordinator {
+        return st
+            .pool
+            .as_ref()
+            .and_then(|p| p.room_for_user(uid))
+            .map(|(id, seat)| MeRoom { id, phase: "battle".to_string(), seat });
+    }
     let rid = *st.game.user_room.lock().await.get(&uid)?;
     let rooms = st.game.rooms.lock().await;
     let r = rooms.get(&rid)?;
@@ -940,7 +949,13 @@ pub async fn spectate_info(st: &AppState, public_id: &str) -> Option<serde_json:
             "p2_mon": mon(m.p2_species),
         }));
     }
-    // 2) Otherwise, a live / pending room.
+    // 2) Coordinator: a live battle runs on a worker — read it from the pool (local rooms is empty).
+    if st.role == crate::signaling::Role::Coordinator {
+        return st.pool.as_ref().and_then(|p| p.battle_names(public_id)).map(|(p1, p2)| {
+            json!({ "found": true, "ended": false, "live": true, "phase": "battle", "p1": p1, "p2": p2 })
+        });
+    }
+    // 3) Otherwise (solo/worker), a live / pending room in this process.
     let active = *st.game.active_room.lock().await;
     let rooms = st.game.rooms.lock().await;
     let r = rooms.values().find(|r| r.public_id == public_id)?;

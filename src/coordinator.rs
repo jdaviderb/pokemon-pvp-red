@@ -84,7 +84,7 @@ impl WorkerPool {
         }
     }
 
-    /// Port of the worker currently running `public_id` (used by the /room redirect).
+    /// Port of the worker currently running `public_id` (used by the /ws + /offer battle proxy).
     pub fn worker_for(&self, public_id: &str) -> Option<u16> {
         self.workers
             .lock()
@@ -92,6 +92,27 @@ impl WorkerPool {
             .iter()
             .find(|w| w.public_id == public_id)
             .map(|w| w.port)
+    }
+
+    /// (public_id, seat 1|2) of the live battle this user is in, if any. Lets the coordinator's
+    /// /api/me report a player's worker battle (the local rooms map is empty in coordinator mode).
+    pub fn room_for_user(&self, uid: UserId) -> Option<(String, u8)> {
+        self.workers
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|w| !w.public_id.is_empty() && (w.p1_uid == uid || w.p2_uid == uid))
+            .map(|w| (w.public_id.clone(), if w.p1_uid == uid { 1 } else { 2 }))
+    }
+
+    /// (p1, p2) usernames of a live battle by public id — for the coordinator's /api/room spectate.
+    pub fn battle_names(&self, public_id: &str) -> Option<(String, String)> {
+        self.workers
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|w| w.public_id == public_id)
+            .map(|w| (w.p1.clone(), w.p2.clone()))
     }
 
     fn count(&self) -> usize {

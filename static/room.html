@@ -264,14 +264,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     await new Promise((res) => { if (pc.iceGatheringState === "complete") return res();
       const c=()=>{ if(pc.iceGatheringState==="complete"){pc.removeEventListener("icegatheringstatechange",c);res();} };
       pc.addEventListener("icegatheringstatechange", c); setTimeout(res, 2500); });
-    const r = await fetch("/offer", { method:"POST", headers:{"Content-Type":"application/json"},
+    const rid = new URLSearchParams(location.search).get("id") || "";
+    const r = await fetch("/offer" + (rid ? "?room=" + encodeURIComponent(rid) : ""), { method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type }) });
     if (r.ok) await pc.setRemoteDescription(await r.json());
   }
   $("unmute").onclick = () => { $("video").muted = false; $("unmute").style.display = "none"; };
 
   function openWs() {
-    ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+    const rid = new URLSearchParams(location.search).get("id") || "";
+    ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws" + (rid ? "?room=" + encodeURIComponent(rid) : ""));
     ws.onopen = () => ws.send(JSON.stringify({ type: "resume" }));
     ws.onmessage = (e) => handle(JSON.parse(e.data));
     ws.onclose = () => setTimeout(openWs, 1500);

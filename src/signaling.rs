@@ -6,8 +6,8 @@ use std::sync::Arc;
 use axum::body::Bytes;
 use axum::extract::{FromRef, Path, Query, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
-use axum::http::{HeaderMap, HeaderValue, StatusCode};
-use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::http::{HeaderValue, StatusCode};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use axum_extra::extract::cookie::{Cookie, CookieJar, Key, PrivateCookieJar, SameSite};
@@ -204,28 +204,11 @@ async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value
     }))
 }
 
-#[derive(Deserialize)]
-struct RoomPageQ {
-    #[serde(default)]
-    id: String,
-}
-
-/// GET /room: worker/solo serve the battle page; the coordinator redirects to the worker running
-/// this room UUID (browser then talks to that worker directly for video + the battle WS). If the
-/// room isn't live, the coordinator serves the page too — it shows the recorded result or
-/// "BATTLE NOT FOUND" from /api/room.
-async fn room_page_handler(
-    State(st): State<AppState>,
-    headers: HeaderMap,
-    Query(q): Query<RoomPageQ>,
-) -> Response {
-    if st.role == Role::Coordinator {
-        if let Some(port) = st.pool.as_ref().and_then(|p| p.worker_for(&q.id)) {
-            let host = headers.get("host").and_then(|h| h.to_str().ok()).unwrap_or("localhost");
-            let hostname = host.split(':').next().unwrap_or("localhost");
-            return Redirect::to(&format!("http://{hostname}:{port}/room?id={}", q.id)).into_response();
-        }
-    }
+/// GET /room: serve the battle page (same origin everywhere). In coordinator mode the page's battle
+/// WS (`/ws?room=`) and video (`/offer?room=`) are bridged to the worker running this room, so the
+/// browser only ever talks to the public origin — no redirect to an internal worker port. The page
+/// shows the recorded result or "BATTLE NOT FOUND" (via /api/room) for an ended/unknown room.
+async fn room_page_handler() -> Response {
     match tokio::fs::read_to_string("static/room.html").await {
         Ok(html) => Html(html).into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "room page missing").into_response(),
