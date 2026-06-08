@@ -198,8 +198,11 @@ fn sanitize_nick(s: &str) -> Option<String> {
 /// Case-INSENSITIVE uniqueness: "Ash" and "ASH" are the same trainer name (the DB's plain unique
 /// index is case-sensitive, so we compare on lower(username) here for every name check).
 async fn username_free(st: &AppState, name: &str) -> anyhow::Result<bool> {
+    use sea_orm::sea_query::{Expr, Func};
+    // lower(username) = <name> — built via sea-query (NOT a raw `?` string) so the placeholder is
+    // backend-correct ($1 on Postgres, ? on sqlite). A literal `?` errored on Postgres ("near LIMIT").
     Ok(users::Entity::find()
-        .filter(sea_orm::sea_query::Expr::cust_with_values("lower(username) = ?", [name.to_lowercase()]))
+        .filter(Expr::expr(Func::lower(Expr::col(users::Column::Username))).eq(name.to_lowercase()))
         .one(&st.db)
         .await?
         .is_none())

@@ -422,7 +422,7 @@ fn run_loop(
         if stat_t.elapsed() >= Duration::from_secs(5) {
             let secs = stat_t.elapsed().as_secs_f64();
             tracing::info!(
-                "n64: {:.1} fps | {} video pkts | {} audio pkts (last {:.0}s) | viewers v={} a={}",
+                "fps: {:.1} | {} video pkts | {} audio pkts (last {:.0}s) | viewers v={} a={}",
                 stat_frames as f64 / secs,
                 stat_vpkts,
                 stat_apkts,
