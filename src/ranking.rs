@@ -27,17 +27,25 @@ pub fn new_cache() -> RankingCache {
 async fn window_wins(db: &DatabaseConnection, hours: i64) -> Vec<Value> {
     let since = (Utc::now() - ChronoDuration::hours(hours)).to_rfc3339();
     let backend = db.get_database_backend();
-    let ph = if matches!(backend, DatabaseBackend::Postgres) { "$1" } else { "?" };
+    // Postgres won't implicitly compare a `timestamptz` column to a bound TEXT param, so cast it
+    // ($1::timestamptz). sqlite stores datetimes as text and compares fine with a plain `?`.
+    let ph = if matches!(backend, DatabaseBackend::Postgres) { "$1::timestamptz" } else { "?" };
     let sql = format!(
         "SELECT name, COUNT(*) AS wins FROM (\
             SELECT (CASE WHEN winner_seat = 1 THEN p1_name ELSE p2_name END) AS name \
             FROM matches WHERE winner_seat IS NOT NULL AND ended_at >= {ph}\
          ) t WHERE name IS NOT NULL GROUP BY name ORDER BY wins DESC, name ASC LIMIT {TOP_N}"
     );
-    let rows = db
+    let rows = match db
         .query_all(Statement::from_sql_and_values(backend, &sql, [since.into()]))
         .await
-        .unwrap_or_default();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!("ranking window_wins query failed: {e}");
+            Vec::new()
+        }
+    };
     rows.iter()
         .filter_map(|r| {
             let name: String = r.try_get("", "name").ok()?;
