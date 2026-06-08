@@ -24,7 +24,7 @@
     /* Pokemon Red intro parade: a grayscale mon scrolls across the lower screen, changing each pass */
     .parade { position:fixed; left:0; right:0; bottom:0; height:60%; overflow:hidden; z-index:0; pointer-events:none; }
     .parade img { position:absolute; bottom:-6%; left:0; height:min(48vh,320px); image-rendering:pixelated;
-      filter:grayscale(1) contrast(1.12) brightness(.5); opacity:.5; animation:parade 5s linear infinite; }
+      filter:saturate(1.05) brightness(.7); opacity:.5; animation:parade 5s linear infinite; }
     .parade img.b { animation-delay:-2.5s; }
     @keyframes parade { from { transform:translateX(-34vw); } to { transform:translateX(132vw); } }
     .balls { display:flex; align-items:center; gap:24px; }
