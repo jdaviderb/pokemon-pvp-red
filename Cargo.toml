@@ -70,3 +70,8 @@ tokio-tungstenite = "0.29.0"
 
 [profile.release]
 opt-level = 3
+
+# Local fork of vpx-encode 0.6.2: VP8 cpu_used=12 (realtime; upstream leaves the default 0 = slowest)
+# and g_threads=1 (our frames are 160x144 — 8 encoder threads each was pure overhead at scale).
+[patch.crates-io]
+vpx-encode = { path = "vendor/vpx-encode" }

@@ -22,7 +22,8 @@ pub fn make_vp8_encoder(w: u32, h: u32) -> vpx_encode::Result<Encoder> {
         width: w,
         height: h,
         timebase: [1, 1000],
-        bitrate: 3500, // kbps; 640x240@60 with SSB64 motion wants more than NES. 2500..=5000 sane.
+        bitrate: 1000, // kbps; plenty for a 160x144 Game Boy frame (3500 was for 640x240 N64 — it
+        // just wasted bandwidth + made every watcher's browser decode more for no visible gain).
         codec: VideoCodecId::VP8,
     })
 }
