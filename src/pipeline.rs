@@ -379,7 +379,13 @@ fn run_loop(
         //     When it's up, paint over it with the game's bg on the RGB565 frame. The game's own
         //     battle text at other phases is untouched (we only blank during the menu). Toggle:
         //     HIDE_BATTLE_MENU=0 disables this (read once into `hide_menu` above).
+        // Only people WATCHING a battle need its video, so skip the whole RGB565->I420->VP8 pipeline
+        // (the dominant per-battle CPU cost) when no one is subscribed. An unwatched battle runs
+        // essentially for free; encoding resumes (with a keyframe, via keyframe_req) the instant a
+        // viewer/TV connects. This is what lets MANY concurrent battles run on one node.
+        let watching = video_tx.receiver_count() > 0;
         let menu_up = hide_menu
+            && watching
             && battle
                 .lock()
                 .unwrap()
@@ -394,49 +400,54 @@ fn run_loop(
             });
         }
 
-        // 4. VIDEO: latest framebuffer (format-aware: XRGB8888 for Emu/SameBoy, RGB565 for gambatte)
-        //    -> I420 -> VP8 -> broadcast.
-        emu.with_frame(|f| {
-            if !f.bytes.is_empty() {
-                frame_to_i420(
-                    &f.bytes,
-                    f.w as usize,
-                    f.h as usize,
-                    f.pitch,
-                    f.fmt,
-                    &mut i420,
-                    cw as usize,
-                    ch as usize,
-                );
-            }
-        });
-        let pts_ms = (frame_idx as f64 * 1000.0 / emu.fps) as i64;
-        match vpx.encode(pts_ms, &i420) {
-            Ok(packets) => {
-                for frame in packets {
-                    stat_vpkts += 1;
-                    let _ = video_tx.send(EncodedVideo {
-                        data: Bytes::copy_from_slice(frame.data),
-                    });
+        // 4. VIDEO (only when watched): framebuffer (XRGB8888 for Emu/SameBoy, RGB565 for gambatte)
+        //    -> I420 -> VP8 -> broadcast. Skipped entirely for unwatched battles (see `watching`).
+        if watching {
+            emu.with_frame(|f| {
+                if !f.bytes.is_empty() {
+                    frame_to_i420(
+                        &f.bytes,
+                        f.w as usize,
+                        f.h as usize,
+                        f.pitch,
+                        f.fmt,
+                        &mut i420,
+                        cw as usize,
+                        ch as usize,
+                    );
                 }
+            });
+            let pts_ms = (frame_idx as f64 * 1000.0 / emu.fps) as i64;
+            match vpx.encode(pts_ms, &i420) {
+                Ok(packets) => {
+                    for frame in packets {
+                        stat_vpkts += 1;
+                        let _ = video_tx.send(EncodedVideo {
+                            data: Bytes::copy_from_slice(frame.data),
+                        });
+                    }
+                }
+                Err(e) => tracing::warn!("vpx encode: {e:?}"),
             }
-            Err(e) => tracing::warn!("vpx encode: {e:?}"),
         }
 
-        // 5. AUDIO: drain i16 stereo @ core rate -> resample 48k -> stereo Opus -> broadcast.
+        // 5. AUDIO: always drain (so the core's audio buffer can't back up), but only resample +
+        //    Opus-encode + broadcast when someone is actually listening.
         let pcm = emu.audio_drain();
-        opus.push_i16_stereo(&pcm);
-        match opus.take_packets() {
-            Ok(pkts) => {
-                for p in pkts {
-                    stat_apkts += 1;
-                    let _ = audio_tx.send(EncodedAudio {
-                        data: Bytes::from(p.data),
-                        samples: p.samples,
-                    });
+        if audio_tx.receiver_count() > 0 {
+            opus.push_i16_stereo(&pcm);
+            match opus.take_packets() {
+                Ok(pkts) => {
+                    for p in pkts {
+                        stat_apkts += 1;
+                        let _ = audio_tx.send(EncodedAudio {
+                            data: Bytes::from(p.data),
+                            samples: p.samples,
+                        });
+                    }
                 }
+                Err(e) => tracing::warn!("opus encode: {e:?}"),
             }
-            Err(e) => tracing::warn!("opus encode: {e:?}"),
         }
 
         // 6. Stats.

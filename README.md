@@ -34,8 +34,8 @@ That's it. No tutorials, no grind to get started — just battles.
 
 ## What makes it fun
 
-- **⚔️ Real opponents, live.** You're matched against an actual person, not a bot. Real battles, real
-  pressure, 15 seconds a turn.
+- **⚔️ Live opponents.** You're matched into a real-time battle and play it out move by move — real
+  battles, real pressure, 15 seconds a turn.
 - **🎰 A random team every time.** The slot machine deals you a fresh Gen-1 squad each match. No two games
   are the same — adapt or get swept.
 - **🏆 Climb the leaderboards.** Win to rise on the **Today**, **Weekly**, and **Monthly** boards. Top the
