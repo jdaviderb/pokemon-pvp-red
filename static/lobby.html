@@ -3,7 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>RED STADIUM ENGINE - Lobby</title>
+  <title>Pokémon PVP Red — Live Lobby | Play Pokémon Red Online, Real PvP Battles</title>
+  <meta name="description" content="Pokémon PVP Red — play the original Pokémon Red in your browser, no install, in full color. Hit FIND MATCH, get a random Gen-1 team from the slot machine, and battle a REAL opponent live, 15 seconds per turn. Climb the Today / Weekly / Monthly leaderboards. Free to jump in." />
+  <meta name="keywords" content="pokemon pvp, pokemon red online, pokemon red pvp, play pokemon red in browser, online pokemon battles, pokemon multiplayer, gen 1 pokemon pvp, retro pokemon arena, pokemon battle online free" />
+  <meta name="theme-color" content="#e8403f" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://pokemonpvp.red" />
+  <meta property="og:title" content="Pokémon PVP Red — Live Lobby | Online Pokémon Red PvP Battles" />
+  <meta property="og:description" content="The original Pokémon Red, streamed live to your browser. FIND MATCH, roll a random Gen-1 team, and battle a real trainer in real time. Free Gen-1 Pokémon PvP — no install." />
+  <meta property="og:image" content="/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Pokémon PVP Red — Live Online Pokémon Red Battles" />
+  <meta name="twitter:description" content="Play Pokémon Red in your browser and battle real trainers live, 15s per turn. Roll a random Gen-1 team and climb the leaderboards. Free retro Pokémon arena." />
+  <meta name="twitter:image" content="/og.png" />
   <script src="/gbfx.js"></script>
   <style>
     @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
@@ -52,12 +64,12 @@
 </head>
 <body>
   <div class="parade"><img id="paradeMon" src="/sprites/94.png" alt="" /><img id="paradeMon2" class="b" src="/sprites/6.png" alt="" /></div>
-  <img class="logo-img" src="/title/pokemon_logo.png" alt="POKEMON" />
-  <div class="verrow"><span class="ver-txt">Red PVP MOD</span><img class="red-img" src="/title/player.png" alt="" /></div>
+  <img class="logo-img" src="/title/pokemon_logo.png" alt="Pokémon PVP Red — play Pokémon Red online" />
+  <div class="verrow"><span class="ver-txt">PVP RED</span><img class="red-img" src="/title/player.png" alt="" /></div>
   <div class="gb who" id="who">...</div>
   <button class="gb" id="find"><span class="cur">▶</span>FIND MATCH</button>
   <div class="status" id="status"></div>
-  <div class="links"><a href="/ranking">RANKING</a> - <a href="/collection">MY POKEMON</a> - <a href="/tv">LIVE TV</a> - <span id="mcplink" style="display:none"><a href="/agent">AGENT (MCP)</a> - </span><span id="devlink" style="display:none"><a href="/console">DEV CONSOLE</a> - </span><span id="logout">LOGOUT</span></div>
+  <div class="links"><a href="/ranking">LEADERBOARDS</a> - <a href="/collection">MY POKÉMON</a> - <a href="/tv">TV WALL</a> - <span id="mcplink" style="display:none"><a href="/agent">PLAY VIA AI (MCP)</a> - </span><span id="devlink" style="display:none"><a href="/console">DEV CONSOLE</a> - </span><span id="logout">LOG OUT</span></div>
   <script>
     const $ = (id) => document.getElementById(id);
     // presence heartbeat (server keys by account/cookie, so tabs/refreshes don't double-count)

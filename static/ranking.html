@@ -3,7 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>RED PVP MOD - RANKING</title>
+  <title>Pokémon PVP Red — Leaderboard (Today / Weekly / Monthly)</title>
+  <meta name="description" content="The Pokémon PVP Red leaderboard. Win real-time Gen-1 online Pokémon battles to climb Today, Weekly and Monthly. Play Pokémon Red in your browser — free, no install, in color. Find a match, battle a real opponent, become #1." />
+  <meta name="keywords" content="pokemon pvp, pokemon red online, pokemon red pvp, play pokemon red in browser, online pokemon battles, pokemon multiplayer, gen 1 pokemon pvp, retro pokemon arena, pokemon battle online free, pokemon leaderboard" />
+  <meta name="theme-color" content="#b5302a" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://pokemonpvp.red" />
+  <meta property="og:title" content="Pokémon PVP Red — Climb the Leaderboard" />
+  <meta property="og:description" content="Real opponents. Real-time Gen-1 battles. Win to rule Today, Weekly and Monthly. Play Pokémon Red online in your browser, free — no install, in color." />
+  <meta property="og:image" content="/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Pokémon PVP Red — Climb the Leaderboard" />
+  <meta name="twitter:description" content="Real opponents. Real-time Gen-1 battles. Win to top Today, Weekly and Monthly. Play Pokémon Red online in your browser, free." />
+  <meta name="twitter:image" content="/og.png" />
   <script src="/gbfx.js"></script>
   <style>
     @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
@@ -36,18 +48,18 @@
   </style>
 </head>
 <body>
-  <div class="head"><img class="logo-img" src="/title/pokemon_logo.png" alt="POKEMON" /><div><div class="title">RANKING</div><div class="sub">- TRAINER LEADERBOARD -</div></div></div>
+  <div class="head"><img class="logo-img" src="/title/pokemon_logo.png" alt="Pokémon PVP Red" /><div><div class="title">LEADERBOARD</div><div class="sub">- POKéMON PVP RED · TOP TRAINERS -</div></div></div>
   <div class="tabs">
     <div class="tab on" data-w="today">TODAY</div>
     <div class="tab" data-w="weekly">WEEKLY</div>
     <div class="tab" data-w="monthly">MONTHLY</div>
   </div>
   <div class="board">
-    <div class="hdr"><span>RANK</span><span>NAME</span><span>WON</span></div>
-    <div id="rows"><div class="empty">Loading…</div></div>
+    <div class="hdr"><span>RANK</span><span>TRAINER</span><span>WINS</span></div>
+    <div id="rows"><div class="empty">Loading the champions…</div></div>
   </div>
   <div class="foot" id="foot"></div>
-  <div class="links"><a href="/lobby">BACK</a></div>
+  <div class="links"><a href="/lobby">‹ BACK TO ARENA</a></div>
   <script>
     const $ = (id) => document.getElementById(id);
     let DATA = { today: [], weekly: [], monthly: [], updated: null };

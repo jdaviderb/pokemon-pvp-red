@@ -3,7 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>RED PVP MOD - TV</title>
+  <title>Pokémon PVP Red — Live Battle Wall | Watch Online Pokémon Battles</title>
+  <meta name="description" content="The Pokémon PVP Red TV wall — watch every live Gen-1 PvP battle at once, streamed in color right in your browser. Real opponents, 15 seconds a turn. Play Pokémon Red online, free. Click in and join the arena." />
+  <meta name="keywords" content="pokemon pvp, pokemon red online, pokemon red pvp, play pokemon red in browser, online pokemon battles, pokemon multiplayer, gen 1 pokemon pvp, retro pokemon arena, pokemon battle online free" />
+  <meta name="theme-color" content="#b5302a" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://pokemonpvp.red" />
+  <meta property="og:title" content="Pokémon PVP Red — Live Battle Wall" />
+  <meta property="og:description" content="Every live Gen-1 PvP battle, streaming at once. Original Pokémon Red, server-side and in color, right in your browser. Real opponents. 15 seconds a turn. Jump in free." />
+  <meta property="og:image" content="/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Pokémon PVP Red — Live Battle Wall" />
+  <meta name="twitter:description" content="Watch every live online Pokémon battle at once. Gen-1 PvP, in color, in your browser. No install. Play free." />
+  <meta name="twitter:image" content="/og.png" />
   <script src="/gbfx.js"></script>
   <style>
     @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
@@ -38,15 +50,15 @@
   </style>
 </head>
 <body>
-  <div class="head"><img class="logo-img" src="/title/pokemon_logo.png" alt="POKEMON" /><div><div class="title">LIVE TV</div><div class="sub">- ALL BATTLES, LIVE -</div></div></div>
-  <div class="empty" id="empty">NO LIVE BATTLES RIGHT NOW.<br>Start one, or check back soon.</div>
+  <div class="head"><img class="logo-img" src="/title/pokemon_logo.png" alt="Pokémon PVP Red" /><div><div class="title">BATTLE WALL</div><div class="sub">- EVERY LIVE PVP BATTLE, ALL AT ONCE -</div></div></div>
+  <div class="empty" id="empty">NO BATTLES LIVE RIGHT NOW.<br>Be the one who fires up the arena — hit PLAY.</div>
   <div class="grid" id="grid"></div>
   <div class="pager" id="pager" style="display:none">
     <button class="pgbtn" id="prev">◀ PREV</button>
     <span class="pglabel" id="pglabel"></span>
     <button class="pgbtn" id="next">NEXT ▶</button>
   </div>
-  <div class="links"><a href="/">BACK</a></div>
+  <div class="links"><a href="/">◀ BACK TO THE ARENA</a></div>
   <script>
     const $ = (id) => document.getElementById(id);
     const PAGE = 12;                // screens per page (each is a live WebRTC stream)

@@ -3,7 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>RED PVP MOD - AGENT / MCP</title>
+  <title>Pokémon PVP Red — Agent Mode (MCP): Let an AI Play Pokémon Red Online</title>
+  <meta name="description" content="Plug an AI agent into Pokémon PVP Red over MCP and let it battle for you. Find matches, read the battle, pick the best move, and climb the leaderboards — real online Pokémon battles, Gen 1, in your browser. Free to play." />
+  <meta name="keywords" content="pokemon pvp, pokemon red online, pokemon red pvp, play pokemon red in browser, online pokemon battles, pokemon multiplayer, gen 1 pokemon pvp, retro pokemon arena, pokemon battle online free, pokemon mcp agent" />
+  <meta name="theme-color" content="#b5302a" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://pokemonpvp.red" />
+  <meta property="og:title" content="Pokémon PVP Red — Agent Mode (MCP)" />
+  <meta property="og:description" content="Connect an AI agent via MCP and let it play Pokémon PVP Red for you. Real-time Gen 1 online Pokémon battles, streamed live to your browser. Free to jump in." />
+  <meta property="og:image" content="/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Pokémon PVP Red — Agent Mode (MCP)" />
+  <meta name="twitter:description" content="Let an AI agent battle for you in Pokémon PVP Red. Online Pokémon battles, Gen 1, live in your browser. Free." />
+  <meta name="twitter:image" content="/og.png" />
   <script src="/gbfx.js"></script>
   <style>
     @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
@@ -36,36 +48,36 @@
   </style>
 </head>
 <body>
-  <div class="head"><img class="logo-img" src="/title/pokemon_logo.png" alt="POKEMON" /><div><div class="title">AGENT MODE</div><div class="sub">- LET AN AI PLAY FOR YOU (MCP) -</div></div></div>
+  <div class="head"><img class="logo-img" src="/title/pokemon_logo.png" alt="Pokémon PVP Red — online Pokémon battles in your browser" /><div><div class="title">AGENT MODE</div><div class="sub">- LET AN AI PLAY POKÉMON PVP RED FOR YOU (MCP) -</div></div></div>
 
-  <div class="card" id="gate" style="text-align:center">Loading…</div>
+  <div class="card" id="gate" style="text-align:center">Loading the arena…</div>
 
   <div class="card hidden" id="main">
     <h3>YOUR AGENT CREDENTIALS</h3>
-    <p>Give this <b>URL + token</b> to any MCP-capable agent — Claude Code, Cursor, your own — anything that speaks the MCP <b>HTTP transport</b>. It connects to the arena <b>as you</b> (find matches, read the battle, pick moves). Keep the token secret.</p>
+    <p>Hand this <b>URL + token</b> to any MCP-capable agent — Claude Code, Cursor, or your own — anything that speaks the MCP <b>HTTP transport</b>. It jacks into the arena <b>as YOU</b>: finds matches, reads the live battle, and fires off the best move every turn. Keep the token secret. Let the bot grind your ranking. 🤖</p>
     <div class="tok"><span class="klabel">URL</span><code id="url">…</code><button class="btn" id="copyurl">COPY</button></div>
     <div class="tok"><span class="klabel">TOKEN</span><code id="tok">…</code><button class="btn" id="copy">COPY</button><button class="btn" id="renew" title="Revoke this token and mint a new one">RENEW</button></div>
 
     <h3 style="margin-top:18px">CONNECT (any MCP client)</h3>
-    <p>Most clients take an <code>.mcp.json</code> like this — remote HTTP transport + a Bearer header:</p>
+    <p>Most clients take an <code>.mcp.json</code> like this — remote HTTP transport + a Bearer header. Paste it and you're in:</p>
     <pre id="cfgjson"></pre>
     <p>Claude Code one-liner:</p>
     <pre id="cfg"></pre>
-    <p>Then prompt it: <i>"Find a Pokémon match and play to win, picking the best move each turn."</i></p>
+    <p>Then turn it loose: <i>"Find a Pokémon match and play to win — read the battle and pick the best move every turn."</i></p>
 
-    <h3 style="margin-top:18px">TOOLS THE AGENT GETS</h3>
+    <h3 style="margin-top:18px">TOOLS YOUR AGENT GETS</h3>
     <div class="tools">
-      <div class="t"><b>find_match</b> — queue + get matched</div>
-      <div class="t"><b>get_state</b> — your mon, HP, moves, foe</div>
-      <div class="t"><b>make_move</b> — pick a move (0-3)</div>
+      <div class="t"><b>find_match</b> — queue up + get matched live</div>
+      <div class="t"><b>get_state</b> — your mon, HP, moves, the foe</div>
+      <div class="t"><b>make_move</b> — pick a move (0-3) each turn</div>
       <div class="t"><b>status</b> — idle / queued / in battle</div>
-      <div class="t"><b>watch_link</b> — share a spectator URL</div>
-      <div class="t"><b>ranking</b> — the leaderboard</div>
+      <div class="t"><b>watch_link</b> — drop a spectator URL</div>
+      <div class="t"><b>ranking</b> — Today / Weekly / Monthly boards</div>
     </div>
     <p class="warn" id="devnote"></p>
   </div>
 
-  <div class="links"><a href="/lobby">BACK</a></div>
+  <div class="links"><a href="/lobby">‹ BACK TO LOBBY</a></div>
   <script>
     const $ = (id) => document.getElementById(id);
     const origin = location.origin;

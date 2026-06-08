@@ -3,7 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>RED STADIUM ENGINE</title>
+  <title>Pokémon PVP Red — Live Battle Room | Online Pokémon Battles</title>
+  <meta name="description" content="You're in the arena. Pokémon PVP Red runs the original Pokémon Red server-side and streams it live to your browser — slot-rolled Gen-1 team, 15 seconds a turn, a real opponent. Online Pokémon battles, free." />
+  <meta name="keywords" content="pokemon pvp, pokemon red online, pokemon red pvp, play pokemon red in browser, online pokemon battles, pokemon multiplayer, gen 1 pokemon pvp, retro pokemon arena, pokemon battle online free" />
+  <meta name="theme-color" content="#e8403f" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://pokemonpvp.red" />
+  <meta property="og:title" content="Pokémon PVP Red — Live Battle, Gen 1 Pokémon PVP" />
+  <meta property="og:description" content="Real opponent. Slot-rolled Gen-1 team. 15 seconds a turn. The original Pokémon Red, emulated server-side and streamed to your browser. Smash PLAY." />
+  <meta property="og:image" content="/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Pokémon PVP Red — Live Battle, Gen 1 Pokémon PVP" />
+  <meta name="twitter:description" content="Real opponent. Slot-rolled Gen-1 team. 15 seconds a turn. The original Pokémon Red, streamed live to your browser. Play free." />
+  <meta name="twitter:image" content="/og.png" />
   <script src="/gbfx.js"></script>
   <style>
     /* Real Game Boy font extracted from pret/pokered (local, offline, pixel-exact em=8). */
@@ -132,8 +144,8 @@
 <body>
   <header class="rse">
     <div class="rse-meta">
-      <div>SEED<b id="seed">BATTLE_0000</b></div>
-      <div>MODE<b>1 VS 1</b></div>
+      <div>ARENA<b id="seed">BATTLE_0000</b></div>
+      <div>MODE<b>1 VS 1 LIVE</b></div>
       <div>TURN<b id="turnNo">0</b></div>
     </div>
   </header>
@@ -144,20 +156,20 @@
     <div class="selview">
       <div class="srow">
         <div class="box p1box p1 reel reelbox stopped" id="reelbox1">
-          <div><div class="lbl ptag">◖ PLAYER 1 ◗<span class="uname s1 uname">you</span></div>
-            <div class="lbl" id="rlbl1">RANDOMIZING...</div><div class="rows" id="rows1"></div></div>
+          <div><div class="lbl ptag">◖ YOU ◗<span class="uname s1 uname">you</span></div>
+            <div class="lbl" id="rlbl1">ROLLING YOUR TEAM...</div><div class="rows" id="rows1"></div></div>
           <div class="spincol"><div class="spinner"></div><div class="progress" id="prog1"></div><div class="spinlbl" id="spin1">SPINNING...</div></div>
         </div>
         <div class="box p2box p2 reel reelbox stopped" id="reelbox2">
-          <div><div class="lbl ptag">◖ PLAYER 2 ◗<span class="uname s2 uname">opp</span></div>
-            <div class="lbl" id="rlbl2">RANDOMIZING...</div><div class="rows" id="rows2"></div></div>
+          <div><div class="lbl ptag">◖ RIVAL ◗<span class="uname s2 uname">opp</span></div>
+            <div class="lbl" id="rlbl2">ROLLING RIVAL'S TEAM...</div><div class="rows" id="rows2"></div></div>
           <div class="spincol"><div class="spinner"></div><div class="progress" id="prog2"></div><div class="spinlbl" id="spin2">SPINNING...</div></div>
         </div>
       </div>
       <div class="lockrow">
         <div class="box p1box p1 lockcard" id="lock1">
           <div class="lock" id="locklbl1">🔒 LOCKED</div>
-          <img class="sprite s1 sprite" src="/sprites/1.png" alt="" />
+          <img class="sprite s1 sprite" src="/sprites/1.png" alt="Your Gen-1 Pokémon" />
           <div><div class="nm s1 name">-</div><div class="lv">Lv.<span id="lv1">50</span></div>
             <div class="badge s1 type">-</div>
             <div class="hpline">HP: <span class="hptrack"><span class="hpfill s1 hpfill"></span></span><span class="s1 hpnum"></span></div></div>
@@ -165,7 +177,7 @@
         <div class="vsbox"><div class="vs" id="vs">VS</div></div>
         <div class="box p2box p2 lockcard" id="lock2">
           <div class="lock" id="locklbl2">🔒 LOCKED</div>
-          <img class="sprite s2 sprite" src="/sprites/1.png" alt="" />
+          <img class="sprite s2 sprite" src="/sprites/1.png" alt="Rival's Gen-1 Pokémon" />
           <div><div class="nm s2 name">-</div><div class="lv">Lv.<span id="lv2">50</span></div>
             <div class="badge s2 type">-</div>
             <div class="hpline">HP: <span class="hptrack"><span class="hpfill s2 hpfill"></span></span><span class="s2 hpnum"></span></div></div>
@@ -175,12 +187,12 @@
 
     <!-- ============ BATTLE (classic Game Boy) ============ -->
     <div class="battleview">
-      <div class="gb screen-box"><div class="screen" id="screenWrap"><video id="video" autoplay playsinline muted></video><button id="unmute">🔊 SOUND</button></div></div>
+      <div class="gb screen-box"><div class="screen" id="screenWrap"><video id="video" autoplay playsinline muted></video><button id="unmute">🔊 SOUND ON</button></div></div>
       <div class="bz-row">
         <div class="gb movelist you" id="movebar"></div>
         <div class="gb lockcard you" id="p1card">
           <div class="lock locked" id="p1lbl">🔒 LOCKED IN</div>
-          <img class="sprite s1 sprite" src="/sprites/1.png" alt="" />
+          <img class="sprite s1 sprite" src="/sprites/1.png" alt="Your active Pokémon in battle" />
           <div>
             <div class="nm s1 name">-</div>
             <div class="lv">Lv.50</div>
@@ -190,12 +202,12 @@
           </div>
         </div>
       </div>
-      <div class="gb msgbox"><span id="turnInfo">Choose your move.</span><span class="tmr" id="timer"></span></div>
+      <div class="gb msgbox"><span id="turnInfo">Pick your move — 15 seconds on the clock!</span><span class="tmr" id="timer"></span></div>
     </div>
   </main>
 
   <div id="result" class="overlay hidden"><div class="result-box">
-    <div class="result" id="resultText">-</div><button id="home">RETURN HOME ▸</button></div></div>
+    <div class="result" id="resultText">-</div><button id="home">BACK TO LOBBY ▸</button></div></div>
 
   <script>
   const MOVE_NAMES = {1:"Pound",2:"Karate Chop",3:"DoubleSlap",4:"Comet Punch",5:"Mega Punch",6:"Pay Day",7:"Fire Punch",8:"Ice Punch",9:"ThunderPunch",10:"Scratch",11:"ViceGrip",12:"Guillotine",13:"Razor Wind",14:"Swords Dance",15:"Cut",16:"Gust",17:"Wing Attack",18:"Whirlwind",19:"Fly",20:"Bind",21:"Slam",22:"Vine Whip",23:"Stomp",24:"Double Kick",25:"Mega Kick",26:"Jump Kick",27:"Rolling Kick",28:"Sand-Attack",29:"Headbutt",30:"Horn Attack",31:"Fury Attack",32:"Horn Drill",33:"Tackle",34:"Body Slam",35:"Wrap",36:"Take Down",37:"Thrash",38:"Double-Edge",39:"Tail Whip",40:"Poison Sting",41:"Twineedle",42:"Pin Missile",43:"Leer",44:"Bite",45:"Growl",46:"Roar",47:"Sing",48:"Supersonic",49:"SonicBoom",50:"Disable",51:"Acid",52:"Ember",53:"Flamethrower",54:"Mist",55:"Water Gun",56:"Hydro Pump",57:"Surf",58:"Ice Beam",59:"Blizzard",60:"Psybeam",61:"BubbleBeam",62:"Aurora Beam",63:"Hyper Beam",64:"Peck",65:"Drill Peck",66:"Submission",67:"Low Kick",68:"Counter",69:"Seismic Toss",70:"Strength",71:"Absorb",72:"Mega Drain",73:"Leech Seed",74:"Growth",75:"Razor Leaf",76:"SolarBeam",77:"PoisonPowder",78:"Stun Spore",79:"Sleep Powder",80:"Petal Dance",81:"String Shot",82:"Dragon Rage",83:"Fire Spin",84:"ThunderShock",85:"Thunderbolt",86:"Thunder Wave",87:"Thunder",88:"Rock Throw",89:"Earthquake",90:"Fissure",91:"Dig",92:"Toxic",93:"Confusion",94:"Psychic",95:"Hypnosis",96:"Meditate",97:"Agility",98:"Quick Attack",99:"Rage",100:"Teleport",101:"Night Shade",102:"Mimic",103:"Screech",104:"Double Team",105:"Recover",106:"Harden",107:"Minimize",108:"SmokeScreen",109:"Confuse Ray",110:"Withdraw",111:"Defense Curl",112:"Barrier",113:"Light Screen",114:"Haze",115:"Reflect",116:"Focus Energy",117:"Bide",118:"Metronome",119:"Mirror Move",120:"Selfdestruct",121:"Egg Bomb",122:"Lick",123:"Smog",124:"Sludge",125:"Bone Club",126:"Fire Blast",127:"Waterfall",128:"Clamp",129:"Swift",130:"Skull Bash",131:"Spike Cannon",132:"Constrict",133:"Amnesia",134:"Kinesis",135:"Softboiled",136:"Hi Jump Kick",137:"Glare",138:"Dream Eater",139:"Poison Gas",140:"Barrage",141:"Leech Life",142:"Lovely Kiss",143:"Sky Attack",144:"Transform",145:"Bubble",146:"Dizzy Punch",147:"Spore",148:"Flash",149:"Psywave",150:"Splash",151:"Acid Armor",152:"Crabhammer",153:"Explosion",154:"Fury Swipes",155:"Bonemerang",156:"Rest",157:"Rock Slide",158:"Hyper Fang",159:"Sharpen",160:"Conversion",161:"Tri Attack",162:"Super Fang",163:"Slash",164:"Substitute",165:"Struggle"};

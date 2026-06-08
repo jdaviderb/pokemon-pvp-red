@@ -3,7 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>RED STADIUM ENGINE</title>
+  <title>Pokémon PVP Red — Live Lobby | Play Pokémon Red Online, Free PvP Battles</title>
+  <meta name="description" content="Pokémon PVP Red — the original Pokémon Red, emulated server-side and streamed live to your browser in color. Zero install. Hit PLAY, get a random Gen-1 team from the slot machine, and battle a REAL opponent in real time, 15 seconds per turn. Climb the Today / Weekly / Monthly leaderboards. Online Pokémon battles, free." />
+  <meta name="keywords" content="pokemon pvp, pokemon red online, pokemon red pvp, play pokemon red in browser, online pokemon battles, pokemon multiplayer, gen 1 pokemon pvp, retro pokemon arena, pokemon battle online free, pokemon pvp red" />
+  <meta name="theme-color" content="#e8403f" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://pokemonpvp.red" />
+  <meta property="og:title" content="Pokémon PVP Red — Play Pokémon Red Online, Real-Time PvP Battles" />
+  <meta property="og:description" content="The original Pokémon Red, streamed live to your browser in color. Click PLAY, roll a random Gen-1 team, and battle a REAL opponent in real time — 15 seconds per turn. Free to jump in." />
+  <meta property="og:image" content="/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Pokémon PVP Red — Online Pokémon Battles, Free" />
+  <meta name="twitter:description" content="Play Pokémon Red in your browser. Slot-machine Gen-1 teams, real opponents, real time, 15s per turn. Climb the leaderboards. Smash PLAY." />
+  <meta name="twitter:image" content="/og.png" />
   <script src="/gbfx.js"></script>
   <style>
     @font-face { font-family:"PokeRed"; src:url("/fonts/pokered.woff2") format("woff2"), url("/fonts/pokered.ttf") format("truetype"); font-display:swap; }
@@ -88,32 +100,32 @@
 </head>
 <body>
   <div class="parade"><img id="paradeMon" src="/sprites/94.png" alt="" /><img id="paradeMon2" class="b" src="/sprites/6.png" alt="" /></div>
-  <div class="gb corner tr" id="modeBox" style="display:none">MODE<b>1 VS 1</b>LEVEL CAP: 50</div>
+  <div class="gb corner tr" id="modeBox" style="display:none">LIVE PVP<b>1 VS 1</b>LEVEL CAP: 50</div>
 
   <div class="stage">
-    <img class="logo-img" src="/title/pokemon_logo.png" alt="POKEMON" />
+    <img class="logo-img" src="/title/pokemon_logo.png" alt="Pokémon PVP Red — play Pokémon Red online" />
     <div class="verrow">
-      <span class="ver-txt">Red PVP MOD</span>
-      <img class="red-img" src="/title/player.png" alt="" />
+      <span class="ver-txt">PVP RED</span>
+      <img class="red-img" src="/title/player.png" alt="Trainer Red" />
     </div>
 
     <div class="gb panel">
       <div id="menu0">
-        <button class="provbtn" id="playBtn"><span class="cur">▶</span>PLAY</button>
-        <button class="provbtn" id="tvBtn"><span class="cur">▶</span>WATCH (TV)</button>
-        <button class="provbtn" id="rankBtn"><span class="cur">▶</span>RANKING</button>
+        <button class="provbtn" id="playBtn"><span class="cur">▶</span>PLAY NOW</button>
+        <button class="provbtn" id="tvBtn"><span class="cur">▶</span>SPECTATE (TV WALL)</button>
+        <button class="provbtn" id="rankBtn"><span class="cur">▶</span>LEADERBOARDS</button>
         <button class="provbtn" id="howtoBtn"><span class="cur">▶</span>HOW TO PLAY</button>
       </div>
       <div id="devauth" style="display:none">
-        <div class="press blink" id="press"><span class="pball"></span> PRESS START <span class="pball"></span></div>
+        <div class="press blink" id="press"><span class="pball"></span> PRESS START TO BATTLE <span class="pball"></span></div>
         <div class="form" id="form">
-          <label>USERNAME</label>
+          <label>TRAINER NAME</label>
           <input id="u" autocomplete="username" maxlength="20" placeholder="ASH" />
           <label>PASSWORD</label>
           <input id="p" type="password" autocomplete="current-password" placeholder="••••••" />
           <div class="menu">
-            <div class="mitem" id="login"><span class="cur">▶</span>LOGIN</div>
-            <div class="mitem" id="register"><span class="cur">▶</span>REGISTER</div>
+            <div class="mitem" id="login"><span class="cur">▶</span>ENTER THE ARENA</div>
+            <div class="mitem" id="register"><span class="cur">▶</span>NEW TRAINER</div>
           </div>
           <div class="msg" id="msg"></div>
         </div>
@@ -126,19 +138,19 @@
   <div id="playModal" class="gmodal hidden">
     <div class="gb gbox">
       <div id="gMethod">
-        <div class="gtext">HOW DO YOU WANT TO PLAY?</div>
+        <div class="gtext">READY TO BATTLE? PICK HOW YOU JUMP IN.</div>
         <div class="gmenu" id="methodMenu"></div>
       </div>
       <div id="gConfirm" style="display:none">
-        <div class="gtext">PLAY AS GUEST<br><br>Your progress will NOT be saved. AI agents (MCP) are disabled for guest accounts.</div>
+        <div class="gtext">PLAY AS GUEST<br><br>Jump straight into a battle. Heads up: your progress and collection will NOT be saved, and AI agents (MCP) are disabled for guests. Sign in to keep your wins.</div>
         <div class="gmenu">
-          <button class="gbtn" id="gYes"><span class="cur">▶</span>YES, CONTINUE</button>
+          <button class="gbtn" id="gYes"><span class="cur">▶</span>YES, LET'S BATTLE</button>
           <button class="gbtn" id="gNo"><span class="cur">▶</span>NO, GO BACK</button>
         </div>
       </div>
       <div id="gName" style="display:none">
-        <img class="red-onboard" src="/title/player.png" alt="" />
-        <div class="gtext" style="text-align:center">First, what is your name?</div>
+        <img class="red-onboard" src="/title/player.png" alt="Trainer Red" />
+        <div class="gtext" style="text-align:center">First, trainer — what's your name?</div>
         <div class="nameslots" id="nameSlots"></div>
         <div class="kbd" id="kbd"></div>
         <div class="kbtns">
@@ -149,8 +161,8 @@
         <div class="gmsg" id="gMsg"></div>
       </div>
       <div id="gDone" style="display:none">
-        <img class="red-onboard" src="/title/player.png" alt="" />
-        <div class="gtext" style="text-align:center">Right! So your name is <b id="doneName"></b>!</div>
+        <img class="red-onboard" src="/title/player.png" alt="Trainer Red" />
+        <div class="gtext" style="text-align:center">Right! So your name is <b id="doneName"></b>! Time to find a real opponent.</div>
         <div class="gmenu"><button class="gbtn" id="gGo"><span class="cur">▶</span>LET'S GO - FIND MATCH</button></div>
         <div class="gmsg" id="gMsg2"></div>
       </div>
@@ -159,12 +171,12 @@
 
   <div id="howtoModal" class="gmodal hidden">
     <div class="gb gbox">
-      <div class="gtext">HOW TO PLAY<br><br>(Coming soon.)</div>
+      <div class="gtext">HOW TO PLAY<br><br>1. Hit PLAY — jump in as a guest or sign in with Google.<br>2. FIND MATCH and the slot machine rolls you a random Gen-1 team.<br>3. Battle a REAL opponent live — 15 seconds per turn.<br>4. Win to climb the Today / Weekly / Monthly boards.<br>5. Win 5x with a Pokémon to add it to YOUR collection.<br><br>It's the original Pokémon Red, in color, in your browser. No install. Catch you in the arena!</div>
       <div class="gmenu"><button class="gbtn" id="howClose"><span class="cur">▶</span>CLOSE</button></div>
     </div>
   </div>
 
-  <div class="foot"><span>PLAYERS ONLINE: <b id="online">--</b></span><span></span><span></span></div>
+  <div class="foot"><span>TRAINERS ONLINE: <b id="online">--</b></span><span></span><span></span></div>
 
   <script>
     const $ = (id) => document.getElementById(id);
