@@ -21,7 +21,7 @@
     .tl{top:16px;left:16px;} .tr{top:16px;right:16px;text-align:right;}
     .foot { position:absolute; bottom:18px; width:100%; left:0; display:flex; justify-content:space-between; padding:0 22px; color:#7c7c68; font-size:16px; letter-spacing:1px; }
     .stage { text-align:center; display:flex; flex-direction:column; align-items:center; gap:6px; position:relative; z-index:1; }
-    /* Pokemon Red intro parade: a grayscale mon scrolls across the lower screen, changing each pass */
+    /* Pokemon Red intro parade: a (color, subtly dimmed) mon scrolls across the lower screen, changing each pass */
     .parade { position:fixed; left:0; right:0; bottom:0; height:60%; overflow:hidden; z-index:0; pointer-events:none; }
     .parade img { position:absolute; bottom:-6%; left:0; height:min(48vh,320px); image-rendering:pixelated;
       filter:saturate(1.05) brightness(.7); opacity:.5; animation:parade 5s linear infinite; }
