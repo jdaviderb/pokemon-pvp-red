@@ -1,93 +1,93 @@
 # Pokémon PVP Red
 
-### The original Pokémon Red — online, in your browser, battling REAL people in real time. Zero install. ▶️
+### The original Pokémon Red — online, in your browser, battling REAL people in real time. No download. ▶️
 
 <!-- GIF: full hero shot — click PLAY (guest), hit FIND MATCH, the slot machine spins and rolls a random Gen-1 team. End on the battle starting. This is THE money shot. -->
 ![Pokémon PVP Red — click PLAY, find a match, slot machine rolls your team](docs/media/hero.gif)
 
-**Pokémon PVP Red** is **Pokémon Red online** the way 10-year-old you dreamed it: the actual Gen-1 cart,
-emulated **server-side** and streamed live to your browser over WebRTC — in glorious color. No download.
-No emulator setup. No ROM hunting. Click **PLAY** and you're in.
+Remember battling your friends with a link cable? **Pokémon PVP Red** is that — except your opponent is
+anyone in the world, it's live, and it runs in your browser. It's the real Pokémon Red, in color, with
+**no app to install, no emulator to set up, no ROM to find.** Open the page, hit **PLAY**, and you're in.
 
-This is **pokemon red pvp** done right. Get matched against a **real human opponent**, get a random team
-from the slot machine, and throw down in **online Pokémon battles** — 15 seconds a turn, winner takes the
-ladder. Welcome to the **retro Pokémon arena**.
+> ## 🧪 Alpha — this is an early experiment
+> It's **live and playable**, but it's a **work in progress**: expect rough edges, weird bugs, and things
+> that change (or break) without warning. Saves, accounts, and features may reset. Come play, come break
+> it, and don't be shocked when things move around. You've been warned 😄
 
-> **play pokemon red in browser** · **gen 1 pokemon pvp** · **pokemon multiplayer** · **pokemon battle online free**
+## ▶ Play now — **[pokemonpvp.red](https://pokemonpvp.red)**
 
-## ▶ Play now — [pokemonpvp.red](https://pokemonpvp.red)
-
-Free. Instant. As a guest or with Google. **Smash PLAY.** 🔴
+Free. Instant. Play as a guest or sign in with Google. **Smash PLAY.** 🔴
 
 ---
 
-## Why it rules
+## How it works (about 10 seconds)
 
-You grew up on this game. Now it fights back. Here's the kit:
+1. **Go to [pokemonpvp.red](https://pokemonpvp.red)** and hit **PLAY** — jump in as a guest, no signup.
+2. Press **FIND MATCH**. A slot machine rolls you a **random Gen-1 team**.
+3. You're matched with a **real person** — battle live, **15 seconds per turn**.
+4. **Win** to climb the leaderboards and earn Pokémon for your collection.
 
-- **⚔️ Real-time PvP** — matched against an actual human, live. **Online Pokémon battles**, 15 seconds per
-  turn. No bots pretending to be people. Real opponents, real pressure.
-- **🎰 Slot-machine random teams** — hit FIND MATCH and the slot machine rolls you a random Gen-1 squad.
-  Every match is a fresh draw. Adapt or get swept.
-- **🏆 Today / Weekly / Monthly leaderboards** — win to climb. Three boards, three windows, infinite
-  bragging rights. Top the daily, grind the weekly, own the month.
-- **📦 Build your collection** — **win 5 times with a Pokémon and it's YOURS.** Add it to your collection.
-  Earn your team one victory at a time.
-- **📺 The live TV wall** — every single battle happening right now, streaming at once. Spectate the
-  whole arena. Find your next rival. Watch the ladder churn live.
-- **🤖 AI agents via MCP** — don't want to hold the controller? Point an **AI agent** at the built-in
-  **MCP server** and it finds matches and battles for you. Yes, really.
-- **🚀 Instant guest play** — no signup wall. One click and you're battling. Sign in with Google when
-  you're ready to keep your wins.
-- **🌐 Runs in the browser, in color** — zero install. The real Pokémon Red, auto-colorized like a Game
-  Boy Color rendered it, streamed straight to your tab.
+That's it. No tutorials, no grind to get started — just battles.
 
 <!-- GIF: a single live battle turn — the FIGHT menu, picking a move, the attack animation landing, HP bar draining, and the 15-second turn timer ticking. Show the real game responding to a real player. -->
 ![A live Pokémon PVP Red battle turn — pick a move, 15s on the clock](docs/media/battle-turn.gif)
 
-## The TV wall
+## What makes it fun
 
-Why watch one battle when you can watch them ALL? Every live match in the arena, on one screen. This is
-**pokemon red online** as a spectator sport.
+- **⚔️ Real opponents, live.** You're matched against an actual person, not a bot. Real battles, real
+  pressure, 15 seconds a turn.
+- **🎰 A random team every time.** The slot machine deals you a fresh Gen-1 squad each match. No two games
+  are the same — adapt or get swept.
+- **🏆 Climb the leaderboards.** Win to rise on the **Today**, **Weekly**, and **Monthly** boards. Top the
+  day, grind the week, own the month.
+- **📦 Collect your favorites.** Win **5 times** with a Pokémon and it's **yours** — added to your
+  collection forever.
+- **📺 Watch every battle at once.** The live TV wall streams every match happening right now. Spectate
+  the whole arena and scout your next rival.
+- **🚀 Zero friction.** One click and you're battling. Sign in with Google whenever you want to save your
+  wins and your collection.
 
-<!-- GIF: the live TV wall — a paginated grid of multiple simultaneous WebRTC battle streams all playing live at once. Pan across the wall so it's obviously many real games. -->
+## Every battle, live — the TV wall
+
+Why watch one battle when you can watch them all? Every live match in the arena, on a single screen. It's
+Pokémon as a spectator sport.
+
+<!-- GIF: the live TV wall — a paginated grid of multiple simultaneous battle streams all playing live at once. Pan across the wall so it's obviously many real games. -->
 ![The Pokémon PVP Red TV wall — every live battle at once](docs/media/tv-wall.gif)
 
-## Let an AI play for you
+## Or let an AI play for you 🤖
 
-Connect an **AI agent** through the **MCP server** and watch it find a match and battle a real opponent —
-hands off the keyboard. **Gen 1 pokemon pvp**, played by your agent. See [`docs/mcp.md`](docs/mcp.md) and
-[`docs/connect-agents.md`](docs/connect-agents.md).
+Don't feel like holding the controller? You can connect an **AI agent** that finds matches and battles
+real opponents for you — completely hands-off. (For the curious, it's powered by a built-in MCP server.)
 
-<!-- GIF: an AI agent connected via MCP — show the agent's tool calls / decisions on one side and the live game reacting (find match, choose moves, win) on the other. Make it clear the agent is driving. -->
-![An AI agent playing Pokémon PVP Red via MCP](docs/media/mcp-agent.gif)
-
----
-
-## Built different
-
-A genuine flex, kept short:
-
-- The **original Pokémon Red**, emulated **fully server-side** ([gambatte](https://github.com/libretro/gambatte-libretro)
-  libretro core) — your browser never touches a ROM.
-- Streamed live over **WebRTC**: **VP8 video + stereo Opus audio**, input sent back over a data channel.
-- Written in **Rust**, one emulator per battle, fanned out to spectators in real time.
-- **AI agents** plug in via a first-class **MCP server**.
-
-The game is server-only; the browser just gets the stream. That's how **play pokemon red in browser**
-with no install actually works.
+<!-- GIF: an AI agent playing — show the agent finding a match, choosing moves, and the live game reacting/winning. Make it clear the agent is driving. -->
+![An AI agent playing Pokémon PVP Red](docs/media/mcp-agent.gif)
 
 ---
 
-## Run it yourself
+### ▶ [Play now — pokemonpvp.red](https://pokemonpvp.red)
+
+Free, instant, in your browser. See you in the arena. 🔴
+
+<br>
+
+<details>
+<summary><b>For developers — run it yourself</b></summary>
+
+<br>
+
+Pokémon PVP Red runs the real Pokémon Red **fully server-side** ([gambatte](https://github.com/libretro/gambatte-libretro)
+libretro core, written in **Rust**) and streams it live to the browser over **WebRTC** (VP8 video + Opus
+audio); input goes back over a data channel. The browser never touches a ROM. AI agents plug in via an
+**MCP server**.
 
 ```sh
-cargo run --release          # default = coordinator (a worker/emulator per battle → N concurrent rooms)
+cargo run --release          # default = coordinator (one emulator per battle → N concurrent rooms)
 # open http://localhost:3000  →  PLAY AS GUEST  →  FIND MATCH
 ```
 
-`cargo run --release -- --solo` runs the single-process arena (one emulator, one battle at a time).
-Needs homebrew `libvpx` + `libopus`; the gambatte core lives in `cores/` (see `cores/fetch.sh`).
+`cargo run --release -- --solo` runs the single-process arena (one emulator, one battle). Needs homebrew
+`libvpx` + `libopus`; the gambatte core lives in `cores/` (see `cores/fetch.sh`).
 
 **Docker (production, linux/amd64):**
 
@@ -96,15 +96,11 @@ Needs homebrew `libvpx` + `libopus`; the gambatte core lives in `cores/` (see `c
 docker run --rm --network host -e DEV=1 pokemon-red-pvp:prod   # open http://localhost:3000
 ```
 
-**Use `--network host`**, not `-p` — WebRTC's ICE candidates are unreachable across Docker's bridge
-network (the UI loads but no video). See [`docs/SCALING.md`](docs/SCALING.md).
+Use `--network host`, not `-p` — WebRTC's ICE candidates are unreachable across Docker's bridge network.
 
 **Controls (Game Boy):** Arrows = D-pad · `X` = A · `Z` = B · `Enter` = Start · `⇧Right` / `⌫` = Select.
 
-## Docs
+Full docs: **[DOCS.md](DOCS.md)** · architecture & internals: **[CLAUDE.md](CLAUDE.md)** · AI agents:
+**[docs/mcp.md](docs/mcp.md)** and **[docs/connect-agents.md](docs/connect-agents.md)**.
 
-Full documentation index: **[DOCS.md](DOCS.md)**. Deep build/architecture notes: **[CLAUDE.md](CLAUDE.md)**.
-
----
-
-### ▶ [Play Pokémon PVP Red now — pokemonpvp.red](https://pokemonpvp.red) — free, instant, in your browser. Gotta battle 'em all. 🔴
+</details>
