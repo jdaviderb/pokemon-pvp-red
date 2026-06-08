@@ -52,8 +52,7 @@ That's it. No tutorials, no grind to get started — just battles.
 Why watch one battle when you can watch them all? Every live match in the arena, on a single screen. It's
 Pokémon as a spectator sport.
 
-<!-- GIF: the live TV wall — a paginated grid of multiple simultaneous battle streams all playing live at once. Pan across the wall so it's obviously many real games. -->
-![The Pokémon PVP Red TV wall — every live battle at once](docs/media/tv-wall.gif)
+<img alt="Pokémon PVP Red — the live TV wall, every battle at once" src="https://github.com/user-attachments/assets/cbc695ee-5ebc-4d48-a952-f9c83e9d74f4" />
 
 ## Or let an AI play for you 🤖
 
