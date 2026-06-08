@@ -2,8 +2,8 @@
 
 ### The original Pokémon Red — online, in your browser, battling REAL people in real time. No download. ▶️
 
-<!-- GIF: full hero shot — click PLAY (guest), hit FIND MATCH, the slot machine spins and rolls a random Gen-1 team. End on the battle starting. This is THE money shot. -->
-![Pokémon PVP Red — click PLAY, find a match, slot machine rolls your team](docs/media/hero.gif)
+<img alt="Pokémon PVP Red — find a match and battle a real opponent live" src="https://github.com/user-attachments/assets/08f54ea7-c331-4e70-8fea-4c911afc6c34" />
+<img alt="Pokémon PVP Red — the live TV wall, every battle at once" src="https://github.com/user-attachments/assets/cbc695ee-5ebc-4d48-a952-f9c83e9d74f4" />
 
 Remember battling your friends with a link cable? **Pokémon PVP Red** is that — except your opponent is
 anyone in the world, it's live, and it runs in your browser. It's the real Pokémon Red, in color, with
@@ -50,9 +50,7 @@ That's it. No tutorials, no grind to get started — just battles.
 ## Every battle, live — the TV wall
 
 Why watch one battle when you can watch them all? Every live match in the arena, on a single screen. It's
-Pokémon as a spectator sport.
-
-<img alt="Pokémon PVP Red — the live TV wall, every battle at once" src="https://github.com/user-attachments/assets/cbc695ee-5ebc-4d48-a952-f9c83e9d74f4" />
+Pokémon as a spectator sport. *(See the wall in action up top ↑)*
 
 ## Or let an AI play for you 🤖
 
