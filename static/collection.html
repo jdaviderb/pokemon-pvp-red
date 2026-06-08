@@ -23,7 +23,7 @@
     .cell { text-align:center; padding:8px 4px; border:2px solid #d8d3c4; border-radius:8px; background:#fbfbf7; }
     .cell.owned { border-color:var(--ink); background:#fff; }
     .cell img { width:72px; height:72px; object-fit:contain; image-rendering:pixelated; }
-    .cell.locked img { filter:grayscale(1) brightness(.55) contrast(1.1); opacity:.75; }
+    .cell.locked img { filter:saturate(.9); opacity:.88; } /* not owned yet: color, just slightly muted */
     .cell .nm { font-size:14px; letter-spacing:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .cell .st { font-size:13px; margin-top:3px; color:var(--inkdim); }
     .cell.owned .st { color:var(--red); }
