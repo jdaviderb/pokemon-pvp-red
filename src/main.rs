@@ -14,6 +14,7 @@ mod coordinator;
 mod db;
 mod entities;
 mod flags;
+mod hud;
 mod mcp;
 mod migrations;
 mod libretro;

@@ -207,6 +207,9 @@ fn run_loop(
     let mut held: HashSet<String> = HashSet::new();
     let mut taps = TapMachine::default(); // agent action -> button taps
     let mut menu = MenuPhase::Overworld; // software battle-menu state machine
+    // Hide the FIGHT/ITEM/PKMN/RUN menu in battle (PvP injects both moves, so it's noise). ON by
+    // default; set env HIDE_BATTLE_MENU=0 to show the real menu again. See src/hud.rs.
+    let hide_menu = std::env::var("HIDE_BATTLE_MENU").map(|v| v != "0" && !v.is_empty()).unwrap_or(true);
 
     let mut stat_t = Instant::now();
     let mut stat_frames: u64 = 0;
@@ -370,6 +373,25 @@ fn run_loop(
                 ch = fh;
                 tracing::info!("resolution change -> VP8 canvas now {cw}x{ch}");
             }
+        }
+
+        // 3c. Hide the FIGHT/ITEM menu: in PvP we inject both sides' moves, so the menu is noise.
+        //     When it's up, paint over it with the game's bg on the RGB565 frame. The game's own
+        //     battle text at other phases is untouched (we only blank during the menu). Toggle:
+        //     HIDE_BATTLE_MENU=0 disables this (read once into `hide_menu` above).
+        let menu_up = hide_menu
+            && battle
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map(|s| matches!(s.menu, crate::battle::MenuPhase::MainMenu))
+                .unwrap_or(false);
+        if menu_up {
+            emu.with_frame_mut(|f| {
+                if !f.bytes.is_empty() && f.fmt == crate::video::PIXFMT_RGB565 {
+                    crate::hud::hide_battle_menu(&mut f.bytes, f.pitch, f.w as usize, f.h as usize);
+                }
+            });
         }
 
         // 4. VIDEO: latest framebuffer (format-aware: XRGB8888 for Emu/SameBoy, RGB565 for gambatte)

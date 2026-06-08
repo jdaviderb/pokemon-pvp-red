@@ -122,7 +122,8 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
 | `Dockerfile` · `build-docker-production.sh` | production linux/amd64 image (bundles ROM + Linux core + states); see `docs/SCALING.md` |
 | `src/video.rs` | RGB565→I420 (gambatte) + VP8 encoder; canvas sized from the 1st frame |
 | `src/audio.rs` | i16 stereo → core rate→48000 linear resample → stereo Opus packets |
-| `src/pipeline.rs` | the core-fps loop; broadcast channels; `AppInner`; input; stats |
+| `src/pipeline.rs` | the core-fps loop; broadcast channels; `AppInner`; input; stats; per-frame HUD hook |
+| `src/hud.rs` | composite onto the RGB565 frame before encode. Hides the in-battle FIGHT/ITEM menu (PvP injects moves, so it's noise) by painting it with the sampled bg. Toggle: env `HIDE_BATTLE_MENU=0` |
 | `src/webrtc.rs` | per-peer PeerConnection, tracks (Opus stereo cap), RTCP drain, data channel, signaling, cleanup |
 | `src/battle.rs` | Pokémon Red battle arena: `BattleState`/`BattlePokemon`/`AgentAction`, `read_battle_state` (WRAM, BIG-ENDIAN), inject_*, `TapMachine` (action→menu input) |
 | `src/signaling.rs` | axum `Router` + `AppState`; `/offer`, `/battle/*`, `/auth/*`, `/api/{me,species}`, `/ws` |

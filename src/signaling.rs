@@ -128,6 +128,7 @@ pub fn router(state: AppState) -> Router {
     if state.dev {
         tracing::warn!("DEV mode ON — /console + /battle/* are mounted (unauthenticated)");
         app = app
+            .route("/debug/frame", get(debug_frame_handler))
             .route("/battle/state", get(battle_state_handler))
             .route("/battle/action", post(battle_action_handler))
             .route("/battle/save", post(battle_save_handler))
@@ -392,6 +393,30 @@ async fn offer_handler(
 }
 
 // ---------- AI battle-arena API ----------
+
+/// GET /debug/frame -> the latest framebuffer as a PPM (DEV only). Lets us eyeball the HUD overlay.
+async fn debug_frame_handler() -> Response {
+    let (w, h, pitch, fmt, bytes) = crate::libretro::snapshot_frame();
+    if w == 0 || bytes.is_empty() {
+        return (StatusCode::SERVICE_UNAVAILABLE, "no frame").into_response();
+    }
+    let (w, h) = (w as usize, h as usize);
+    let mut out = format!("P6\n{w} {h}\n255\n").into_bytes();
+    for y in 0..h {
+        for x in 0..w {
+            let off = y * pitch + x * 2;
+            let (r, g, b) = if fmt == crate::video::PIXFMT_RGB565 && off + 1 < bytes.len() {
+                let v = (bytes[off] as u16) | ((bytes[off + 1] as u16) << 8);
+                let (r5, g6, b5) = (((v >> 11) & 0x1f) as u8, ((v >> 5) & 0x3f) as u8, (v & 0x1f) as u8);
+                ((r5 << 3) | (r5 >> 2), (g6 << 2) | (g6 >> 4), (b5 << 3) | (b5 >> 2))
+            } else {
+                (0, 0, 0)
+            };
+            out.extend_from_slice(&[r, g, b]);
+        }
+    }
+    ([(CONTENT_TYPE, "image/x-portable-pixmap")], out).into_response()
+}
 
 /// GET /battle/state -> the latest snapshot the emulator thread published.
 async fn battle_state_handler(

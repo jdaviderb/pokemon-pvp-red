@@ -139,6 +139,13 @@ static FRAME: Mutex<Frame> = Mutex::new(Frame {
     bytes: Vec::new(),
 });
 
+/// Copy the latest framebuffer for readers without an `Emu` handle (debug frame dump).
+/// Returns (w, h, pitch, fmt, bytes). fmt 2 == RGB565 (gambatte).
+pub fn snapshot_frame() -> (u32, u32, usize, u32, Vec<u8>) {
+    let f = FRAME.lock().unwrap();
+    (f.w, f.h, f.pitch, f.fmt, f.bytes.clone())
+}
+
 // interleaved L,R i16 @ core sample rate; drained every frame by the pipeline.
 static AUDIO: Mutex<Vec<i16>> = Mutex::new(Vec::new());
 
@@ -548,6 +555,12 @@ impl Emu {
     /// Inspect the latest framebuffer (XRGB8888 / BGRX) under lock.
     pub fn with_frame<R>(&self, f: impl FnOnce(&Frame) -> R) -> R {
         f(&FRAME.lock().unwrap())
+    }
+
+    /// Mutable framebuffer access — lets the pipeline composite an overlay (HUD) onto the latest
+    /// frame before it's converted to I420 + encoded.
+    pub fn with_frame_mut<R>(&self, f: impl FnOnce(&mut Frame) -> R) -> R {
+        f(&mut FRAME.lock().unwrap())
     }
 
     /// Drain all audio accumulated since the last call (interleaved L,R i16 @ self.sample_rate).
