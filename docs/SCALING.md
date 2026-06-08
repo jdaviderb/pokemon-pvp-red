@@ -34,6 +34,48 @@ Rough ceiling after these: a single coordinator handles ~thousands of concurrent
 hundreds of thousands of pollers; the emulators are the only heavy CPU and they're separate
 processes you add machines for.
 
+## Everything through one TLS origin (coordinator proxy)
+
+Production runs the **coordinator** behind a single TLS domain, not `--solo`. The coordinator owns no
+emulator, so for a matched player it **bridges the battle through itself** instead of redirecting the
+browser to the worker's port (which isn't exposed behind TLS):
+
+- **Battle WebSocket** — `GET /ws?room=<uuid>` on the coordinator is proxied to that room's worker
+  (`ws.rs::proxy_ws`), forwarding the caller's `?token=` and/or session cookie (workers inherit
+  `COOKIE_SECRET`, so a forwarded cookie authenticates). Lobby/matchmaking `/ws` (no `?room=`) is still
+  handled locally.
+- **WebRTC** — `/offer?room=<uuid>` is proxied to the worker (`WorkerPool::proxy_offer`); the SDP answer
+  carries the worker's ICE candidates so media still flows browser↔worker directly (node public IP via
+  `hostNetwork`). Only the signaling crosses the coordinator.
+- The coordinator's `/api/me` and `/api/room/{id}` read live battles from the **pool** (the local rooms
+  map is empty there) so the same-origin room page knows the player is in their match.
+
+`/room` serves the page same-origin everywhere (no redirect). This is what lets many battles run behind
+one cert. (`coordinator.rs`, `ws.rs`, `signaling.rs::{room_page_handler,offer_handler}`.)
+
+## Per-battle CPU: encode only when watched + a realtime encoder
+
+The emulator is cheap (a Game Boy at ~59.7 fps is trivial); the per-battle CPU was almost entirely the
+**VP8 video path**. Two fixes took a *watched* battle from ~1.2 cores to ~0.15 and let dozens run on one
+16-core node:
+
+1. **Encode only while a battle has a viewer.** The RGB565→I420→VP8 pipeline (and Opus) is skipped
+   entirely when `video_tx.receiver_count() == 0` (`pipeline.rs`, gated by `watching`). An unwatched
+   battle costs just emulation; encoding resumes with a keyframe (via `keyframe_req`) the instant a
+   viewer/TV connects. The TV wall paginates, so only the visible cells ever encode.
+
+2. **A realtime VP8 preset.** The `vpx-encode 0.6.2` crate hard-codes, for VP8, `cpu_used = 0` (libvpx's
+   SLOWEST/best-quality setting — roughly a core per 60 fps stream) and `g_threads = 8` (8 encoder
+   threads for a tiny 160×144 frame — and that libvpx thread pool **spins even when idle**, so dozens of
+   *unwatched* workers melted the box for nothing). We vendor the crate (`vendor/vpx-encode` +
+   `[patch.crates-io]`) with `cpu_used = 12` (realtime) and `g_threads = 1`, and drop the bitrate to
+   1000 kbps (3500 was for 640×240 N64).
+
+**Measured on the 16-core prod node:** 12 *watched* battles 14 cores → ~1.9; ~25 concurrent battles
+load ~56 → **~5** (those idle 8-thread encoder pools were the mysterious load that made the box choke
+with the CPU otherwise near-idle). Practical knob: set **`MAX_WORKERS`** to the node's emulator budget —
+budget ~1 core per *peak-watched* battle; unwatched battles are nearly free.
+
 ## Quick code wins still open (in-repo, no infra)
 
 - **WorkerPool `Vec` → `HashMap<port, Worker>`** (+ a `public_id → port` index): `worker_for` /

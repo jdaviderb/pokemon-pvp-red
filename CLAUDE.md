@@ -137,6 +137,19 @@ axum :3000 serves static/index.html + POST /offer (non-trickle SDP exchange)
 
 ## Non-obvious things — READ before editing these areas
 
+- **Per-battle CPU is the VP8 encoder, NOT the emulator** (a GB at ~59.7fps is trivial). Two things keep
+  many concurrent battles cheap — don't undo them (see `docs/SCALING.md`):
+  - **Encode only when watched**: `pipeline.rs` skips the whole RGB565→I420→VP8 (and Opus) path when
+    `video_tx.receiver_count() == 0` (the `watching` gate). Unwatched battles cost ~emulation only;
+    encoding resumes with a keyframe (`keyframe_req`) when a viewer connects.
+  - **Realtime encoder**: `vpx-encode` is **vendored** (`vendor/vpx-encode` + `[patch.crates-io]`)
+    because upstream hard-codes VP8 `cpu_used=0` (libvpx's SLOWEST preset) and `g_threads=8` (whose
+    thread pool spins even when idle). We use `cpu_used=12` + `g_threads=1`. This was the difference
+    between the node choking at ~load 56 and idling at ~5 for 25 battles. Don't bump g_threads for GB.
+- **Coordinator runs behind ONE TLS origin** (prod is coordinator, not `--solo`): the battle WS
+  (`/ws?room=`) and `/offer?room=` are **proxied** through the coordinator to the room's worker
+  (`ws.rs::proxy_ws`, `WorkerPool::proxy_offer`); `/api/me` + `/api/room` read live battles from the
+  pool. So `/room` is same-origin (no redirect to a worker port). `MAX_WORKERS` caps concurrency.
 - **Headless / software render**: the frontend refuses `SET_HW_RENDER` so the core delivers CPU
   framebuffers via `video_refresh` (no GL context). gambatte is software-only, so this is automatic.
 - **Pixel format**: gambatte delivers **RGB565** (little-endian u16, R5/G6/B5); `frame_to_i420`
