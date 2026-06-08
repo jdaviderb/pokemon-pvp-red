@@ -83,18 +83,10 @@ Controls (Game Boy, P1): arrows = D-pad, `X`=A, `Z`=B, `Enter`=Start, `⇧Right`
 ## Production deployment (context — lives in a separate repo)
 
 This project runs in production at **https://pokemonpvp.red**, but the **deployment is NOT in this
-repo** — it's GitOps in a sibling repo **`~/projects-2026/gitops`** (github.com/jdaviderb/gitops).
-Useful context only; nothing here depends on it.
-
-- A single-node **k3s** cluster (`203.0.113.10`) runs the image **`app-image`** (Docker Hub,
-  built from this repo's `Dockerfile`). **Flux CD** reconciles `gitops` every ~1 min; **Traefik**
-  fronts it with auto **Let's Encrypt** TLS (`www` → 301 → apex).
-- It runs **`--solo` + SQLite** (on a PVC) with **`hostNetwork`** so WebRTC ICE candidates are the
-  node's public IP (Postgres + multi-battle scaling are planned follow-ups). Google OAuth + a stable
-  `COOKIE_SECRET` come from a cluster Secret (`GOOGLE_REDIRECT_URI` host = `pokemonpvp.red`); secrets
-  are NOT committed to either repo.
-- **Ship a new version:** build amd64, `docker push app-image:<tag>`, bump `image:` in
-  `gitops/apps/pokemon-red-pvp/deployment.yaml`, push. See that repo's `CLAUDE.md` for the details.
+repo** — it's GitOps (Flux) in a separate private repo that builds this `Dockerfile` and ships it to a
+small k3s cluster behind Traefik (auto Let's Encrypt TLS, `www` → 301 → apex). Useful context only;
+nothing here depends on it. Prod runs **without `DEV`**, so the dev-only `/battle/*`, `/console` and
+`/debug/frame` routes are NOT mounted; secrets live in cluster Secrets (never committed).
 
 ## Architecture
 

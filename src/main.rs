@@ -34,9 +34,8 @@ use signaling::{router, AppState, Role};
 // Default to "Pokemon Red.gb": gambatte's GBC auto-colorization (forced in libretro.rs) renders it
 // in color out of the box, AND its savestates power the battle arena + 2-player multiplayer. Pass
 // the native romhack ".gbc" as argv[1] for its own colors, or any other ROM/core for GB/GBC.
-const DEFAULT_ROM: &str = "~/pokemon-pvp-red/Pokemon Red.gb";
-const DEFAULT_CORE: &str =
-    "~/pokemon-pvp-red/cores/gambatte_libretro.dylib";
+const DEFAULT_ROM: &str = "Pokemon Red.gb";
+const DEFAULT_CORE: &str = "cores/gambatte_libretro.dylib";
 
 /// A session-cookie key that is stable across restarts (so logins survive `cargo run`):
 /// COOKIE_SECRET env if set, else a random key persisted to `.cookie_key` (created once).

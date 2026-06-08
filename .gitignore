@@ -41,3 +41,4 @@ data.db-*
 .env.*
 !.env.example
 cache/
+/sim/

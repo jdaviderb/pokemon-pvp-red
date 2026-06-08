@@ -43,7 +43,7 @@ gray, input changed the framebuffer checksum, and the converter code below is th
 - **Core:** `gambatte_libretro.dylib` — Gambatte v0.5.0-netlink, build `6716e6e`, arm64 nightly from
   `https://buildbot.libretro.com/nightly/apple/osx/arm64/latest/gambatte_libretro.dylib.zip`.
 - **Path (already copied into the project):**
-  `~/pokemon-pvp-red/cores/gambatte_libretro.dylib`
+  `cores/gambatte_libretro.dylib`
   - sha256 `3bc49f04d573f5bf5c4f8c17874b0cab0bd0657422366379e6662e345d6490b1` (verified on disk)
   - `file` reports `Mach-O 64-bit dynamically linked shared library arm64` (verified)
 - Extensions: `gb|gbc|dmg`. `need_fullpath = false` → passing ROM `data`+`size` is enough (the frontend
@@ -277,9 +277,9 @@ forcing.
 ### 6a. `src/main.rs` defaults (replace lines 20-22)
 
 ```rust
-const DEFAULT_ROM: &str = "~/pokemon-pvp-red/Pokemon Red.gb";
+const DEFAULT_ROM: &str = "Pokemon Red.gb";
 const DEFAULT_CORE: &str =
-    "~/pokemon-pvp-red/cores/gambatte_libretro.dylib";
+    "cores/gambatte_libretro.dylib";
 ```
 
 `main.rs` already reads `argv[1]=ROM`, `argv[2]=core` with these as fallbacks (lines 33-34) — no
@@ -292,24 +292,24 @@ arg-parsing change needed.
 cargo run --release
 
 # color GBC (header 0x143 = 0xC0) via argv[1]; core defaults to gambatte:
-cargo run --release -- "~/pokemon-pvp-red/Pokemon Red Color.gbc"
+cargo run --release -- "Pokemon Red Color.gbc"
 
 # explicit core too:
 cargo run --release -- \
-  "~/pokemon-pvp-red/Pokemon Red Color.gbc" \
-  "~/pokemon-pvp-red/cores/gambatte_libretro.dylib"
+  "Pokemon Red Color.gbc" \
+  "cores/gambatte_libretro.dylib"
 ```
 
 ### 6c. Recreating `Pokemon Red Color.gbc` from the IPS patch
 
 The colorized `.gbc` is `Pokemon Red.gb` with `pokered_color/pokered_color_vanilla.ips` applied
-(already present at `~/pokemon-pvp-red/pokered_color/pokered_color_vanilla.ips`;
+(already present at `pokered_color/pokered_color_vanilla.ips`;
 the patched `.gbc` is already on disk). To (re)create it deterministically, here is a self-contained IPS
 applier. IPS format: magic `PATCH`, then records `[3B big-endian offset][2B big-endian size]` followed by
 `size` bytes of data; **if `size == 0` it is an RLE run: `[2B big-endian run length][1B value]`**;
 terminated by the 3-byte literal `EOF`.
 
-Save as `~/pokemon-pvp-red/scripts/apply_ips.py` and run it:
+Save as `scripts/apply_ips.py` and run it:
 
 ```python
 #!/usr/bin/env python3
@@ -348,10 +348,10 @@ if __name__ == "__main__":
 ```
 
 ```sh
-python3 ~/pokemon-pvp-red/scripts/apply_ips.py \
-  "~/pokemon-pvp-red/Pokemon Red.gb" \
-  "~/pokemon-pvp-red/pokered_color/pokered_color_vanilla.ips" \
-  "~/pokemon-pvp-red/Pokemon Red Color.gbc"
+python3 scripts/apply_ips.py \
+  "Pokemon Red.gb" \
+  "pokered_color/pokered_color_vanilla.ips" \
+  "Pokemon Red Color.gbc"
 # expect: ... header 0x143 = 0xc0   (proves GBC mode -> color)
 ```
 
@@ -406,7 +406,7 @@ cargo build --release
 cargo run --release
 
 # run color GBC:
-cargo run --release -- "~/pokemon-pvp-red/Pokemon Red Color.gbc"
+cargo run --release -- "Pokemon Red Color.gbc"
 ```
 No `Cargo.toml` change is required: gambatte loads through the existing `libloading` path; libvpx/libopus
 are unchanged. (`vpx-encode` keeps `ffi-generate`; nothing GB-specific.)
