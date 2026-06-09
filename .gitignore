@@ -42,3 +42,10 @@ data.db-*
 !.env.example
 cache/
 /sim/
+
+# PSX BIOS (copyrighted — never commit) + saves + disc images
+/system/
+/saves/
+/Bloody Roar*/
+*.cue
+*.bin

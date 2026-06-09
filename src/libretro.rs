@@ -197,6 +197,12 @@ fn forced_option(key: &str) -> Option<String> {
         "mupen64plus-cpucore" => "dynamic_recompiler".into(),
         "mupen64plus-43screensize" => "320x240".into(),
         "mupen64plus-aspect" => "4:3".into(),
+        // pcsx_rearmed (PSX): the ARM dynarec + fastmem is unstable on arm64 macOS (the psxMap remap
+        // warnings -> a silent native SIGSEGV a few seconds in), so run the pure interpreter — still
+        // well over 60fps on Apple Silicon. No real BIOS present, so the core uses its HLE BIOS.
+        "pcsx_rearmed_drc" => "disabled".into(),
+        "pcsx_rearmed_neon_enhancement_enable" => "disabled".into(),
+        "pcsx_rearmed_async_cd" => "sync".into(),
         _ => return None,
     })
 }
@@ -389,11 +395,21 @@ pub struct Emu {
 
 impl Emu {
     pub fn new(core_path: &str, rom_path: &str) -> anyhow::Result<Self> {
-        std::fs::create_dir_all("/tmp/n64sys").ok();
-        std::fs::create_dir_all("/tmp/n64save").ok();
+        // System dir = where disc-based cores (PSX: mednafen/swanstation) look for the BIOS; save dir
+        // = memcards/SRAM. Configurable via env so the BIOS can live in the project (default
+        // ./system); both are auto-created and resolved to ABSOLUTE paths (cores want absolute).
+        let sys_dir = std::env::var("SYSTEM_DIR").unwrap_or_else(|_| "system".into());
+        let save_dir = std::env::var("SAVE_DIR").unwrap_or_else(|_| "saves".into());
+        std::fs::create_dir_all(&sys_dir).ok();
+        std::fs::create_dir_all(&save_dir).ok();
+        let abs = |p: &str| {
+            std::fs::canonicalize(p)
+                .map(|x| x.to_string_lossy().into_owned())
+                .unwrap_or_else(|_| p.to_string())
+        };
         unsafe {
-            SYS_DIR = CString::new("/tmp/n64sys")?.into_raw();
-            SAVE_DIR = CString::new("/tmp/n64save")?.into_raw();
+            SYS_DIR = CString::new(abs(&sys_dir))?.into_raw();
+            SAVE_DIR = CString::new(abs(&save_dir))?.into_raw();
         }
 
         let lib =
