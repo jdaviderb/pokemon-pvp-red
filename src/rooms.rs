@@ -581,6 +581,9 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
         if !fight_started {
             continue;
         }
+        // Stream the live HP to the room so the web UI can draw both fighters' health bars (and we
+        // can SEE the RAM read is tracking the real fight).
+        broadcast_to_room(game, rid, json!({"type":"fight_hp","p1":p1_hp,"p2":p2_hp})).await;
 
         if !round_locked && (p1_hp == 0 || p2_hp == 0) {
             round_locked = true;

@@ -254,12 +254,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
   let ws, pc, mySeat = 0, timerHandle = null, resultShown = false, lastProgress = Date.now(), watchdog = null;
   let inputDc = null, FIGHT = false; // fight mode: keyboard -> a 2-player controller over a data channel
+  const hpMax = { 1: 1, 2: 1 }; // running max HP per fighter -> health-bar scale
   let COORD = ""; // coordinator origin when this page runs on a worker; "" when solo
   let SP = {}, byDex = {}, allDex = [], lockedIdx = { 1:null, 2:null }, myMoves = null, reelsStarted = false, ppMax = {};
 
   async function connectVideo() {
     pc = new RTCPeerConnection({ iceServers: [] });
-    if (FIGHT) inputDc = pc.createDataChannel("input"); // worker wires this to the emulator pad
+    if (FIGHT) { inputDc = pc.createDataChannel("input"); window.__dc = inputDc; } // worker wires this to the pad (window.__dc exposed for debugging)
     pc.addTransceiver("video", { direction: "recvonly" }); pc.addTransceiver("audio", { direction: "recvonly" });
     const remote = new MediaStream(); $("video").srcObject = remote; pc.ontrack = (e) => remote.addTrack(e.track);
     const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
@@ -286,10 +287,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     o.textContent = text; o.style.cssText = css;
   }
   function handle(m) {
-    if (FIGHT) { // fight rooms have no slot machine / turn engine — track seat + round score + result
+    if (FIGHT) { // fight rooms have no slot machine / turn engine — track seat + HP + round + result
       if ((m.type === "room_state" || m.type === "matched") && m.seat) mySeat = m.seat;
+      if (m.type === "fight_hp") {
+        hpMax[1] = Math.max(hpMax[1], m.p1); hpMax[2] = Math.max(hpMax[2], m.p2);
+        const set = (s, hp, mx) => { const el = $("hp" + s); if (el) el.style.width = Math.max(0, Math.min(100, hp / mx * 100)) + "%"; const n = $("hp" + s + "n"); if (n) n.textContent = hp; };
+        set(1, m.p1, hpMax[1]); set(2, m.p2, hpMax[2]);
+      }
       if (m.type === "fight_round") fightBanner("fightscore", "P1  " + m.p1_wins + " – " + m.p2_wins + "  P2",
-        "position:fixed;top:8px;left:0;right:0;text-align:center;color:#ffdd55;z-index:3;font:700 20px ui-monospace,monospace;text-shadow:0 2px 4px #000");
+        "position:fixed;top:36px;left:0;right:0;text-align:center;color:#ffdd55;z-index:3;font:700 20px ui-monospace,monospace;text-shadow:0 2px 4px #000");
       if (m.type === "winner") fightBanner("fightover", m.you_won ? "YOU WIN!" : "YOU LOSE",
         "position:fixed;top:40%;left:0;right:0;text-align:center;color:#fff;z-index:4;font:800 52px ui-monospace,monospace;text-shadow:0 3px 8px #000");
       if (m.type === "room_closed") location.replace(COORD + "/lobby");
@@ -417,6 +423,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     if (FIGHT) {
       document.body.innerHTML =
         '<video id="video" autoplay playsinline muted style="position:fixed;inset:0;width:100vw;height:100vh;object-fit:contain;background:#000;z-index:1"></video>' +
+        '<div id="hpbars" style="position:fixed;top:8px;left:0;right:0;display:flex;gap:12px;padding:0 14px;z-index:3;font:bold 13px ui-monospace,monospace;color:#fff;text-shadow:0 1px 2px #000">' +
+          '<div style="flex:1"><div>P1 <span id="hp1n">--</span></div><div style="height:18px;background:#511;border:2px solid #fff;border-radius:3px;overflow:hidden"><div id="hp1" style="height:100%;width:0;background:linear-gradient(180deg,#8f8,#2a2);transition:width .2s"></div></div></div>' +
+          '<div style="flex:1"><div style="text-align:right"><span id="hp2n">--</span> P2</div><div style="height:18px;background:#511;border:2px solid #fff;border-radius:3px;overflow:hidden;display:flex;justify-content:flex-end"><div id="hp2" style="height:100%;width:0;background:linear-gradient(180deg,#8f8,#2a2);transition:width .2s"></div></div></div>' +
+        '</div>' +
         '<div class="fighthint" style="position:fixed;bottom:8px;left:0;right:0;text-align:center;color:#fff;font:13px/1.4 ui-monospace,monospace;letter-spacing:1px;text-shadow:0 1px 2px #000;z-index:2"></div>';
       await connectVideo().catch(()=>{}); openWs(); setupFightInput();
       return;
