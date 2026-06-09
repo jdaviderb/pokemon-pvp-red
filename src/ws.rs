@@ -50,6 +50,17 @@ impl WsHub {
             }
         }
     }
+
+    /// Is this user currently connected (at least one live WS sender)? Used to end a fight room
+    /// once both players have left.
+    pub async fn connected(&self, uid: i32) -> bool {
+        self.conns
+            .lock()
+            .await
+            .get(&uid)
+            .map(|v| v.iter().any(|t| !t.is_closed()))
+            .unwrap_or(false)
+    }
 }
 
 #[derive(serde::Deserialize)]

@@ -201,6 +201,9 @@ async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value
         "mode_box": crate::flags::cached(&state.game, crate::flags::TITLE_MODE_BOX),
         // On a worker this points back at the coordinator so "RETURN HOME" leaves the worker port.
         "coordinator_origin": std::env::var("COORDINATOR_ORIGIN").unwrap_or_default(),
+        // Fighting-game arena (PSX): the room page captures the keyboard as a 2-player controller
+        // instead of running the Pokémon battle UI.
+        "fight": crate::rooms::fight_mode(),
     }))
 }
 

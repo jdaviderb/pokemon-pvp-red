@@ -346,6 +346,14 @@ async fn run_room(game: Arc<GameState>, rid: RoomId) {
     game.emu_busy.store(true, Ordering::Relaxed);
     let inner = game.inner.clone();
 
+    // Fighting-game mode (e.g. Bloody Roar on PSX): no slot machine, no turn engine — load a versus
+    // savestate and let both players drive their OWN controller (P1 = pad 0, P2 = pad 1). The match
+    // runs live until a player leaves. Enabled with env FIGHT_MODE=1.
+    if fight_mode() {
+        run_fight_room(&game, rid).await;
+        return;
+    }
+
     // 1. Slot machine: roll a random species per seat.
     let (p1sp, p2sp) = {
         let mut rng = rand::thread_rng();
@@ -493,6 +501,60 @@ async fn run_room(game: Arc<GameState>, rid: RoomId) {
     game.emu_busy.store(false, Ordering::Relaxed);
     *game.active_room.lock().await = None;
     // The matchmaker's next tick (~250ms) starts the next pending room — no recursion here.
+}
+
+/// True when the arena runs a fighting game (raw 2-player pad input) instead of the Pokémon engine.
+pub fn fight_mode() -> bool {
+    std::env::var("FIGHT_MODE").map(|v| v != "0" && !v.is_empty()).unwrap_or(false)
+}
+
+/// A fighting-game match: load the versus savestate, go straight to Battle, and stream while both
+/// players drive their own controller port. Ends when a player leaves (or a long safety cap).
+async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
+    let inner = game.inner.clone();
+    // Load the "versus" savestate (both fighters in the arena). FIGHT_STATE overrides the path.
+    let path = std::env::var("FIGHT_STATE").unwrap_or_else(|_| "states/bloodyroar_vs.state".into());
+    match std::fs::read(&path) {
+        Ok(bytes) => {
+            let (tx, rx) = oneshot::channel();
+            let _ = inner.load_tx.send((bytes, tx));
+            if !matches!(rx.await, Ok(true)) {
+                tracing::warn!("fight room {rid}: load_state({path}) did not take");
+            }
+        }
+        Err(e) => tracing::warn!("fight room {rid}: no savestate at {path}: {e}"),
+    }
+    set_phase(game, rid, RoomPhase::Battle).await;
+    broadcast_room_state(game, rid).await;
+    tracing::info!("fight room {rid}: live — both players control their own pad");
+
+    let (p1, p2) = match game.rooms.lock().await.get(&rid) {
+        Some(r) => (r.p1.user_id, r.p2.user_id),
+        None => return,
+    };
+    // Run live until BOTH players have left (no live WS), or a long safety cap. A ~16s grace lets
+    // both open the room page + connect first.
+    let mut ticks = 0u32;
+    let mut empty = 0u32;
+    loop {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        ticks += 1;
+        if ticks < 8 {
+            continue;
+        }
+        let live = game.ws.connected(p1).await || game.ws.connected(p2).await;
+        empty = if live { 0 } else { empty + 1 };
+        if empty >= 3 || ticks > 600 {
+            break;
+        }
+    }
+
+    set_phase(game, rid, RoomPhase::Done).await;
+    broadcast_to_room(game, rid, json!({"type":"room_closed","reason":"match_ended"})).await;
+    clear_user_room(game, rid).await;
+    game.rooms.lock().await.remove(&rid);
+    game.emu_busy.store(false, Ordering::Relaxed);
+    *game.active_room.lock().await = None;
 }
 
 async fn abort_room(game: &Arc<GameState>, rid: RoomId, reason: &str) {

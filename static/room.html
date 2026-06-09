@@ -253,11 +253,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   const setSprite = (side, dex) => document.querySelectorAll(".s" + side + ".sprite").forEach((e) => (e.src = "/sprites/" + dex + ".png"));
 
   let ws, pc, mySeat = 0, timerHandle = null, resultShown = false, lastProgress = Date.now(), watchdog = null;
+  let inputDc = null, FIGHT = false; // fight mode: keyboard -> a 2-player controller over a data channel
   let COORD = ""; // coordinator origin when this page runs on a worker; "" when solo
   let SP = {}, byDex = {}, allDex = [], lockedIdx = { 1:null, 2:null }, myMoves = null, reelsStarted = false, ppMax = {};
 
   async function connectVideo() {
     pc = new RTCPeerConnection({ iceServers: [] });
+    if (FIGHT) inputDc = pc.createDataChannel("input"); // worker wires this to the emulator pad
     pc.addTransceiver("video", { direction: "recvonly" }); pc.addTransceiver("audio", { direction: "recvonly" });
     const remote = new MediaStream(); $("video").srcObject = remote; pc.ontrack = (e) => remote.addTrack(e.track);
     const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
@@ -279,6 +281,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     ws.onclose = () => setTimeout(openWs, 1500);
   }
   function handle(m) {
+    if (FIGHT) { // fight rooms have no slot machine / turn engine — just track seat + closure
+      if ((m.type === "room_state" || m.type === "matched") && m.seat) mySeat = m.seat;
+      if (m.type === "room_closed") location.replace(COORD + "/lobby");
+      return;
+    }
     if (["slot_result","battle_state","your_turn","room_state"].includes(m.type)) lastProgress = Date.now();
     switch (m.type) {
       case "room_state":
@@ -386,18 +393,40 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
   const roomParam = new URLSearchParams(location.search).get("id");
   (async () => {
-    try { const cfg = await (await fetch("/api/config")).json(); COORD = cfg.coordinator_origin || ""; } catch (e) {}
+    let cfg = {};
+    try { cfg = await (await fetch("/api/config")).json(); COORD = cfg.coordinator_origin || ""; } catch (e) {}
+    FIGHT = !!cfg.fight; if (FIGHT) document.body.classList.add("fight");
     let me = null;
     try { const r = await fetch("/api/me"); if (r.ok) me = await r.json(); } catch (e) {}
     // Player only if logged in AND this URL is their own room; everyone else just watches.
-    if (me && me.room && String(me.room.id) === String(roomParam)) return bootPlayer();
+    if (me && me.room && String(me.room.id) === String(roomParam)) { if (me.room.seat) mySeat = me.room.seat; return bootPlayer(); }
     return bootSpectator(roomParam);
   })();
   async function bootPlayer() {
+    // Fighting game (PSX): replace the whole Pokémon room with a clean full-screen stream + a
+    // 2-player keyboard. No slot machine / battle boxes — the video IS the game.
+    if (FIGHT) {
+      document.body.innerHTML =
+        '<video id="video" autoplay playsinline muted style="position:fixed;inset:0;width:100vw;height:100vh;object-fit:contain;background:#000;z-index:1"></video>' +
+        '<div class="fighthint" style="position:fixed;bottom:8px;left:0;right:0;text-align:center;color:#fff;font:13px/1.4 ui-monospace,monospace;letter-spacing:1px;text-shadow:0 1px 2px #000;z-index:2"></div>';
+      await connectVideo().catch(()=>{}); openWs(); setupFightInput();
+      return;
+    }
     try { (await (await fetch("/api/species")).json()).forEach((s)=>{ SP[s.index]={dex:s.dex,name:s.name,types:s.types,moves:s.moves}; byDex[s.dex]=s.index; allDex.push(s.dex); }); } catch(e){}
     paintReel(1, rand(), true); paintReel(2, rand(), true);
     await connectVideo().catch(()=>{}); openWs();
     watchdog = setInterval(()=>{ if(!resultShown && Date.now()-lastProgress>35000) bail("MATCH STALLED - RETURNING HOME"); }, 5000);
+  }
+  // Fight mode: keyboard -> this player's controller. The SEAT (1/2) picks the pad port server-side.
+  function setupFightInput() {
+    const hint = document.querySelector(".fighthint");
+    if (hint) hint.textContent = "YOU ARE P" + (mySeat || 1) + "  ·  arrows = move · Z/X = attack · A/S = L/R · Enter = start";
+    const KEY = { ArrowUp:"Up", ArrowDown:"Down", ArrowLeft:"Left", ArrowRight:"Right",
+      KeyZ:"B", KeyX:"A", KeyA:"L", KeyS:"R", KeyQ:"Z", Enter:"Start", ShiftRight:"Select" };
+    const held = new Set();
+    const send = (t, btn) => { if (inputDc && inputDc.readyState === "open") inputDc.send(JSON.stringify({ type:t, button:btn, player: mySeat || 1 })); };
+    addEventListener("keydown", (e) => { const b = KEY[e.code]; if (!b) return; e.preventDefault(); if (!held.has(b)) { held.add(b); send("down", b); } });
+    addEventListener("keyup", (e) => { const b = KEY[e.code]; if (!b) return; e.preventDefault(); held.delete(b); send("up", b); });
   }
   // View-only: connect the live video, hide the player UI, show who's fighting. No WS, no controls.
   function specResult(title, sub) {
