@@ -530,7 +530,12 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
 
     let (p1, p2) = match game.rooms.lock().await.get(&rid) {
         Some(r) => (r.p1.user_id, r.p2.user_id),
-        None => return,
+        None => {
+            // Room vanished — free the emulator slot, or it wedges all future matches.
+            game.emu_busy.store(false, Ordering::Relaxed);
+            *game.active_room.lock().await = None;
+            return;
+        }
     };
     // Live loop @ ~4 Hz. When the BR2 HP addresses are pinned (fight::P1_HP != 0), detect a round KO
     // (a fighter's HP hits 0), tally best-of-3, and end with the winning seat. Otherwise (addresses
