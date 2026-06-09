@@ -532,25 +532,78 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
         Some(r) => (r.p1.user_id, r.p2.user_id),
         None => return,
     };
-    // Run live until BOTH players have left (no live WS), or a long safety cap. A ~16s grace lets
-    // both open the room page + connect first.
+    // Live loop @ ~4 Hz. When the BR2 HP addresses are pinned (fight::P1_HP != 0), detect a round KO
+    // (a fighter's HP hits 0), tally best-of-3, and end with the winning seat. Otherwise (addresses
+    // unknown) just run until BOTH players leave. A ~16s grace lets both open the room page first.
+    let hp_known = crate::fight::P1_HP != 0 && crate::fight::P2_HP != 0;
     let mut ticks = 0u32;
     let mut empty = 0u32;
+    let mut p1_wins = 0u8;
+    let mut p2_wins = 0u8;
+    let mut round_locked = false; // debounce: credit one round per KO
+    let mut winner: Option<Seat> = None;
     loop {
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_millis(250)).await;
         ticks += 1;
-        if ticks < 8 {
+        if ticks < 64 {
             continue;
         }
-        let live = game.ws.connected(p1).await || game.ws.connected(p2).await;
-        empty = if live { 0 } else { empty + 1 };
-        if empty >= 3 || ticks > 600 {
-            break;
+
+        // Both-left detection (~every 2s).
+        if ticks % 8 == 0 {
+            let live = game.ws.connected(p1).await || game.ws.connected(p2).await;
+            empty = if live { 0 } else { empty + 1 };
+            if empty >= 3 || ticks > 4800 {
+                break; // both gone, or ~20min safety cap -> end with no winner
+            }
+        }
+
+        if !hp_known {
+            continue;
+        }
+        // Read both fighters' HP off the emu thread (P1 = left/pad0, P2 = right/pad1).
+        let (tx1, rx1) = oneshot::channel();
+        let (tx2, rx2) = oneshot::channel();
+        let _ = inner.ram_read_tx.send((crate::fight::P1_HP, 2, tx1));
+        let _ = inner.ram_read_tx.send((crate::fight::P2_HP, 2, tx2));
+        let rd = |b: Vec<u8>| (b.len() >= 2).then(|| u16::from_le_bytes([b[0], b[1]]));
+        let (p1_hp, p2_hp) = match (rx1.await.ok().and_then(rd), rx2.await.ok().and_then(rd)) {
+            (Some(a), Some(b)) => (a, b),
+            _ => continue,
+        };
+
+        if !round_locked && (p1_hp == 0 || p2_hp == 0) {
+            round_locked = true;
+            if p1_hp == 0 {
+                p2_wins += 1;
+            } else {
+                p1_wins += 1;
+            }
+            broadcast_to_room(
+                game,
+                rid,
+                json!({"type":"fight_round","p1_wins":p1_wins,"p2_wins":p2_wins}),
+            )
+            .await;
+            if p1_wins >= 2 || p2_wins >= 2 {
+                winner = Some(if p1_wins >= 2 { Seat::P1 } else { Seat::P2 });
+                break;
+            }
+        } else if round_locked && p1_hp > 0 && p2_hp > 0 {
+            round_locked = false; // next round started — re-arm
         }
     }
 
+    // A decided match runs the full result flow (DB + winner banner); a walk-away just closes.
+    if winner.is_some() {
+        record_result(game, rid, winner).await;
+        set_phase(game, rid, RoomPhase::Result).await;
+        broadcast_winner(game, rid, winner).await;
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    }
     set_phase(game, rid, RoomPhase::Done).await;
-    broadcast_to_room(game, rid, json!({"type":"room_closed","reason":"match_ended"})).await;
+    let reason = if winner.is_some() { "match_won" } else { "match_ended" };
+    broadcast_to_room(game, rid, json!({"type":"room_closed","reason":reason})).await;
     clear_user_room(game, rid).await;
     game.rooms.lock().await.remove(&rid);
     game.emu_busy.store(false, Ordering::Relaxed);

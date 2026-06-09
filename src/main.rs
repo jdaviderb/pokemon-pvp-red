@@ -13,6 +13,7 @@ mod battle;
 mod coordinator;
 mod db;
 mod entities;
+mod fight;
 mod flags;
 mod hud;
 mod mcp;

@@ -137,6 +137,7 @@ pub fn router(state: AppState) -> Router {
             .route("/battle/species", get(battle_species_handler))
             .route("/battle/enemy", post(battle_enemy_handler))
             .route("/battle/player", post(battle_player_handler))
+            .route("/fight/ram", get(fight_ram_handler))
             .route_service("/console", ServeFile::new("dev/console.html"));
     }
 
@@ -473,6 +474,32 @@ async fn battle_load_handler(State(state): State<AppState>, body: Bytes) -> Stat
     match rx.await {
         Ok(true) => StatusCode::OK,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct FightRamQuery {
+    addr: Option<String>,
+    len: Option<u32>,
+}
+
+/// GET /fight/ram?addr=0x90000&len=4096 — DEV-only raw dump of SYSTEM_RAM (PSX main RAM), for
+/// RAM-diffing Bloody Roar 2 to find HP/round addresses. Default = the full 2 MiB. Returns octets.
+async fn fight_ram_handler(State(state): State<AppState>, Query(q): Query<FightRamQuery>) -> Response {
+    let parse = |s: &str| -> Option<u32> {
+        let s = s.trim();
+        match s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+            Some(h) => u32::from_str_radix(h, 16).ok(),
+            None => s.parse().ok(),
+        }
+    };
+    let addr = q.addr.as_deref().and_then(parse).unwrap_or(0);
+    let len = q.len.unwrap_or(0x20_0000).min(0x20_0000);
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let _ = state.inner.ram_read_tx.send((addr, len, tx));
+    match rx.await {
+        Ok(data) => ([(CONTENT_TYPE, "application/octet-stream")], data).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
 

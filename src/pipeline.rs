@@ -17,6 +17,9 @@ use crate::video::{frame_to_i420, i420_len, make_vp8_encoder};
 /// Reply channels for emu-thread-only savestate ops (the thread owns `Emu`).
 type SaveReq = tokio::sync::oneshot::Sender<Option<Vec<u8>>>;
 type LoadReq = (Vec<u8>, tokio::sync::oneshot::Sender<bool>);
+/// Read `len` bytes of SYSTEM_RAM from a (PSX) address on the emu thread. Used by the fighting
+/// arena to poll HP/round state and by the `/fight/ram` debug dump.
+type RamReadReq = (u32, u32, tokio::sync::oneshot::Sender<Vec<u8>>);
 
 /// /battle/setup payload, resolved on the emu thread. Reply = Ok / why-not.
 pub struct SetupReq {
@@ -63,6 +66,8 @@ pub struct AppInner {
     pub save_tx: mpsc::UnboundedSender<SaveReq>,
     pub load_tx: mpsc::UnboundedSender<LoadReq>,
     pub setup_tx: mpsc::UnboundedSender<SetupReq>,
+    /// Fighting arena: read SYSTEM_RAM (PSX) on the emu thread — HP/round polling + `/fight/ram`.
+    pub ram_read_tx: mpsc::UnboundedSender<RamReadReq>,
     /// Manual enemy control: 0xFF = game AI decides; 0..3 = force that enemy move slot every turn.
     pub enemy_force: Arc<AtomicU8>,
     /// Force P1's chosen move into CCDC (wPlayerSelectedMove): 0xFF = off; 0..3 = that slot. Makes
@@ -82,6 +87,7 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
     let (save_tx, save_rx) = mpsc::unbounded_channel::<SaveReq>();
     let (load_tx, load_rx) = mpsc::unbounded_channel::<LoadReq>();
     let (setup_tx, setup_rx) = mpsc::unbounded_channel::<SetupReq>();
+    let (ram_read_tx, ram_read_rx) = mpsc::unbounded_channel::<RamReadReq>();
     let enemy_force = Arc::new(AtomicU8::new(0xFF)); // default: game AI
     let player_force = Arc::new(AtomicU8::new(0xFF)); // default: use the menu pick
     let battle: Arc<Mutex<Option<BattleState>>> = Arc::new(Mutex::new(None));
@@ -95,7 +101,7 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
     std::thread::spawn(move || {
         if let Err(e) = run_loop(
             core_path, rom_path, v, a, input_rx, kf, action_rx, save_rx, load_rx, setup_rx,
-            battle_thread, ef, pf,
+            ram_read_rx, battle_thread, ef, pf,
         ) {
             tracing::error!("emulator loop ended: {e:?}");
         }
@@ -111,6 +117,7 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
         save_tx,
         load_tx,
         setup_tx,
+        ram_read_tx,
         enemy_force,
         player_force,
     })
@@ -127,6 +134,7 @@ pub fn dummy() -> Arc<AppInner> {
     let (save_tx, _save_rx) = mpsc::unbounded_channel::<SaveReq>();
     let (load_tx, _load_rx) = mpsc::unbounded_channel::<LoadReq>();
     let (setup_tx, _setup_rx) = mpsc::unbounded_channel::<SetupReq>();
+    let (ram_read_tx, _ram_read_rx) = mpsc::unbounded_channel::<RamReadReq>();
     Arc::new(AppInner {
         video_tx,
         audio_tx,
@@ -137,6 +145,7 @@ pub fn dummy() -> Arc<AppInner> {
         save_tx,
         load_tx,
         setup_tx,
+        ram_read_tx,
         enemy_force: Arc::new(AtomicU8::new(0xFF)),
         player_force: Arc::new(AtomicU8::new(0xFF)),
     })
@@ -173,6 +182,7 @@ fn run_loop(
     mut save_rx: mpsc::UnboundedReceiver<SaveReq>,
     mut load_rx: mpsc::UnboundedReceiver<LoadReq>,
     mut setup_rx: mpsc::UnboundedReceiver<SetupReq>,
+    mut ram_read_rx: mpsc::UnboundedReceiver<RamReadReq>,
     battle: Arc<Mutex<Option<BattleState>>>,
     enemy_force: Arc<AtomicU8>,
     player_force: Arc<AtomicU8>,
@@ -227,6 +237,20 @@ fn run_loop(
                 taps.clear(&emu); // abandon any in-flight macro; we just teleported state
             }
             let _ = reply.send(ok);
+        }
+        // 0a''. Fighting arena / debug: copy a window of SYSTEM_RAM (PSX) back to the caller.
+        while let Ok((addr, len, reply)) = ram_read_rx.try_recv() {
+            let data = emu
+                .with_system_ram(|ram| {
+                    let o = (addr & 0x1F_FFFF) as usize;
+                    if o < ram.len() {
+                        ram[o..(o + len as usize).min(ram.len())].to_vec()
+                    } else {
+                        Vec::new()
+                    }
+                })
+                .unwrap_or_default();
+            let _ = reply.send(data);
         }
 
         // 0a'. Custom matchup: load the intro savestate, inject both party slots, then queue

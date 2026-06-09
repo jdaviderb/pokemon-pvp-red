@@ -280,9 +280,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     ws.onmessage = (e) => handle(JSON.parse(e.data));
     ws.onclose = () => setTimeout(openWs, 1500);
   }
+  function fightBanner(id, text, css) {
+    let o = document.getElementById(id);
+    if (!o) { o = document.createElement("div"); o.id = id; document.body.appendChild(o); }
+    o.textContent = text; o.style.cssText = css;
+  }
   function handle(m) {
-    if (FIGHT) { // fight rooms have no slot machine / turn engine — just track seat + closure
+    if (FIGHT) { // fight rooms have no slot machine / turn engine — track seat + round score + result
       if ((m.type === "room_state" || m.type === "matched") && m.seat) mySeat = m.seat;
+      if (m.type === "fight_round") fightBanner("fightscore", "P1  " + m.p1_wins + " – " + m.p2_wins + "  P2",
+        "position:fixed;top:8px;left:0;right:0;text-align:center;color:#ffdd55;z-index:3;font:700 20px ui-monospace,monospace;text-shadow:0 2px 4px #000");
+      if (m.type === "winner") fightBanner("fightover", m.you_won ? "YOU WIN!" : "YOU LOSE",
+        "position:fixed;top:40%;left:0;right:0;text-align:center;color:#fff;z-index:4;font:800 52px ui-monospace,monospace;text-shadow:0 3px 8px #000");
       if (m.type === "room_closed") location.replace(COORD + "/lobby");
       return;
     }
@@ -420,7 +429,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   // Fight mode: keyboard -> this player's controller. The SEAT (1/2) picks the pad port server-side.
   function setupFightInput() {
     const hint = document.querySelector(".fighthint");
-    if (hint) hint.textContent = "YOU ARE P" + (mySeat || 1) + "  ·  arrows = move · Z/X = attack · A/S = L/R · Enter = start";
+    if (hint) hint.textContent = "YOU ARE P" + (mySeat || 1) + " (" + ((mySeat || 1) === 1 ? "LEFT" : "RIGHT") + " fighter)  ·  arrows = move · Z/X = attack · A/S = L/R · Enter = start";
     const KEY = { ArrowUp:"Up", ArrowDown:"Down", ArrowLeft:"Left", ArrowRight:"Right",
       KeyZ:"B", KeyX:"A", KeyA:"L", KeyS:"R", KeyQ:"Z", Enter:"Start", ShiftRight:"Select" };
     const held = new Set();
