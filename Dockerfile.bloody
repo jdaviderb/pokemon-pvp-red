@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1
+# Bloody Roar (PlayStation) build — same engine as the GB image, but FIGHT_MODE + the mednafen_psx
+# core + the disc/BIOS/versus-savestate baked in. Find-match opens a 2-player Bloody Roar fight.
+#   docker buildx build -f Dockerfile.bloody --platform linux/amd64 -t dejavumoney/pkred:bloody-1.0.0 --push .
+# Runs on :4000 (the GB app owns :3000); needs --network host / hostNetwork for WebRTC, like the GB one.
+
+FROM rust:1.92-bookworm AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        clang pkg-config libvpx-dev libopus-dev curl unzip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+ENV PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig \
+    LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
+WORKDIR /src
+COPY . .
+RUN cargo build --release && cp target/release/pokemon-red-pvp /pokemon-red-pvp
+# Linux PSX core (Beetle/mednafen — pure software, stable; the repo's cores/ are macOS .dylib only).
+RUN curl -fsSL -o /tmp/md.zip \
+      https://buildbot.libretro.com/nightly/linux/x86_64/latest/mednafen_psx_libretro.so.zip \
+    && (cd /tmp && unzip -o md.zip) && cp /tmp/mednafen_psx_libretro.so /mednafen_psx_libretro.so
+
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libvpx7 libopus0 libstdc++6 zlib1g ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=builder /pokemon-red-pvp /app/pokemon-red-pvp
+COPY --from=builder /mednafen_psx_libretro.so /app/cores/mednafen_psx_libretro.so
+COPY static /app/static
+COPY system /app/system
+COPY states/bloodyroar_vs.state /app/states/bloodyroar_vs.state
+COPY ["Bloody Roar (USA)", "/app/Bloody Roar (USA)"]
+# FIGHT_MODE => find-match loads the versus savestate + a 2-player room. SYSTEM_DIR -> the bundled BIOS.
+ENV BIND_ADDR=0.0.0.0 \
+    FIGHT_MODE=1 \
+    SYSTEM_DIR=/app/system \
+    RUST_LOG=pokemon_red_pvp=info,webrtc=warn
+EXPOSE 4000
+CMD ["/app/pokemon-red-pvp", "--solo", "--port", "4000", "Bloody Roar (USA)/Bloody Roar (USA).cue", "cores/mednafen_psx_libretro.so"]
