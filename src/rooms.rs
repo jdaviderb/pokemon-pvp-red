@@ -538,9 +538,6 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
     let hp_known = crate::fight::P1_HP != 0 && crate::fight::P2_HP != 0;
     let mut ticks = 0u32;
     let mut empty = 0u32;
-    let mut p1_wins = 0u8;
-    let mut p2_wins = 0u8;
-    let mut round_locked = false; // debounce: credit one round per KO
     let mut fight_started = false; // only arm KO detection once a real round is live
     let mut winner: Option<Seat> = None;
     loop {
@@ -585,25 +582,11 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
         // can SEE the RAM read is tracking the real fight).
         broadcast_to_room(game, rid, json!({"type":"fight_hp","p1":p1_hp,"p2":p2_hp})).await;
 
-        if !round_locked && (p1_hp == 0 || p2_hp == 0) {
-            round_locked = true;
-            if p1_hp == 0 {
-                p2_wins += 1;
-            } else {
-                p1_wins += 1;
-            }
-            broadcast_to_room(
-                game,
-                rid,
-                json!({"type":"fight_round","p1_wins":p1_wins,"p2_wins":p2_wins}),
-            )
-            .await;
-            if p1_wins >= 2 || p2_wins >= 2 {
-                winner = Some(if p1_wins >= 2 { Seat::P1 } else { Seat::P2 });
-                break;
-            }
-        } else if round_locked && p1_hp > 0 && p2_hp > 0 {
-            round_locked = false; // next round started — re-arm
+        // First KO decides the match (single round). We end BEFORE the engine can start a 2nd round —
+        // from the arcade-challenger savestate, round 2 hands player 2 back to the CPU.
+        if p1_hp == 0 || p2_hp == 0 {
+            winner = Some(if p1_hp == 0 { Seat::P2 } else { Seat::P1 });
+            break;
         }
     }
 
