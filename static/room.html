@@ -429,7 +429,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   // Fight mode: keyboard -> this player's controller. The SEAT (1/2) picks the pad port server-side.
   function setupFightInput() {
     const hint = document.querySelector(".fighthint");
-    if (hint) hint.textContent = "YOU ARE P" + (mySeat || 1) + " (" + ((mySeat || 1) === 1 ? "LEFT" : "RIGHT") + " fighter)  ·  arrows = move · Z/X = attack · A/S = L/R · Enter = start";
+    if (hint) hint.textContent = "YOU ARE P" + (mySeat || 1) + " (" + ((mySeat || 1) === 1 ? "LEFT" : "RIGHT") + " fighter)  ·  arrows = move/pick · X = confirm/attack · Z = attack · Enter = start";
     const KEY = { ArrowUp:"Up", ArrowDown:"Down", ArrowLeft:"Left", ArrowRight:"Right",
       KeyZ:"B", KeyX:"A", KeyA:"L", KeyS:"R", KeyQ:"Z", Enter:"Start", ShiftRight:"Select" };
     const held = new Set();

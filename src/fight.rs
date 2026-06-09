@@ -45,9 +45,14 @@ pub fn rd32(ram: &[u8], a: u32) -> u32 {
 // 0 = not yet pinned; `MatchState::read` returns None until P1_HP/P2_HP are set, so the fight room
 // falls back to its disconnect-based end.
 
-pub const P1_HP: u32 = 0;
-pub const P2_HP: u32 = 0;
-/// Best-of-3 rounds-won counters (0 = use the single-round-decides fallback).
+// Found by reverse-engineering the damage routine (the `sh $v0, 0xAC($s1)` HP store at code
+// 0x178A98 — confirmed against the NTSC-U "Infinite Health" GameShark hooks) plus live directional
+// damage: P1 hits the right fighter -> 0xB6CAC drops; P2 hits the left fighter -> 0xB8EAC drops.
+// Both are halfwords at fighter_struct + 0xAC, in the savestate loaded by the fight room.
+// SEAT 1 (pad 0) = LEFT fighter; SEAT 2 (pad 1) = RIGHT fighter.
+pub const P1_HP: u32 = 0x800B_8EAC; // seat 1 / left
+pub const P2_HP: u32 = 0x800B_6CAC; // seat 2 / right
+/// Best-of-3 rounds-won counters (0 = single-round-decides fallback; not pinned yet).
 pub const P1_ROUNDS: u32 = 0;
 pub const P2_ROUNDS: u32 = 0;
 

@@ -541,6 +541,7 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
     let mut p1_wins = 0u8;
     let mut p2_wins = 0u8;
     let mut round_locked = false; // debounce: credit one round per KO
+    let mut fight_started = false; // only arm KO detection once a real round is live
     let mut winner: Option<Seat> = None;
     loop {
         tokio::time::sleep(Duration::from_millis(250)).await;
@@ -571,6 +572,15 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
             (Some(a), Some(b)) => (a, b),
             _ => continue,
         };
+
+        // Arm KO detection only once a real round is live (both fighters at plausible HP) — avoids
+        // false "round over" during the character select / loading, where the addresses read junk.
+        if (50..=2000).contains(&p1_hp) && (50..=2000).contains(&p2_hp) {
+            fight_started = true;
+        }
+        if !fight_started {
+            continue;
+        }
 
         if !round_locked && (p1_hp == 0 || p2_hp == 0) {
             round_locked = true;
