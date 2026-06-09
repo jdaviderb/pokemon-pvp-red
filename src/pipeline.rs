@@ -284,8 +284,8 @@ fn run_loop(
             let pressed = ev.kind == "down";
             match map_button(&ev.button) {
                 Some(EmuAction::Btn(id)) => {
-                    tracing::info!("input P{}: {} {} (btn {id})", ev.player, ev.kind, ev.button);
-                    emu.set_button(id, pressed);
+                    let pad = (ev.player.max(1) - 1).min(1) as usize; // P1 -> port 0, P2 -> port 1
+                    emu.set_button_p(pad, id, pressed);
                 }
                 Some(EmuAction::Stick) | Some(EmuAction::CStick) => {
                     tracing::info!("input P{}: {} {} (analog)", ev.player, ev.kind, ev.button);

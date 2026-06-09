@@ -156,13 +156,16 @@ pub struct Pad {
     pub cx: i16, // C-stick X (right analog)
     pub cy: i16, // C-stick Y
 }
-static PAD: Mutex<Pad> = Mutex::new(Pad {
+const NEW_PAD: Pad = Pad {
     btn: [false; 16],
     lx: 0,
     ly: 0,
     cx: 0,
     cy: 0,
-});
+};
+// Two controller ports: P1 = port 0, P2 = port 1 (fighting games + any 2-player core). Single-player
+// cores only poll port 0, so this is invisible to them.
+static PADS: [Mutex<Pad>; 2] = [Mutex::new(NEW_PAD), Mutex::new(NEW_PAD)];
 
 // leaked CString pointers (valid for the whole process)
 static mut SYS_DIR: *const c_char = ptr::null();
@@ -338,10 +341,11 @@ unsafe extern "C" fn cb_audio_batch(data: *const i16, frames: usize) -> usize {
 }
 unsafe extern "C" fn cb_input_poll() {}
 unsafe extern "C" fn cb_input_state(port: c_uint, device: c_uint, index: c_uint, id: c_uint) -> i16 {
-    if port != 0 {
-        return 0; // P1 only for now
+    let pi = port as usize;
+    if pi >= PADS.len() {
+        return 0; // only ports 0 (P1) and 1 (P2) are wired
     }
-    let p = PAD.lock().unwrap();
+    let p = PADS[pi].lock().unwrap();
     match device {
         DEV_JOYPAD => {
             if (id as usize) < 16 && p.btn[id as usize] {
@@ -481,6 +485,7 @@ impl Emu {
             let mut av: RetroSystemAvInfo = std::mem::zeroed();
             get_av(&mut av);
             set_ctrl(0, DEV_JOYPAD);
+            set_ctrl(1, DEV_JOYPAD); // P2 port for 2-player cores (harmless for 1-player ones)
 
             (
                 run,
@@ -585,17 +590,24 @@ impl Emu {
     }
 
     pub fn set_button(&self, id: usize, pressed: bool) {
+        self.set_button_p(0, id, pressed);
+    }
+    /// Set a button on a specific controller port (0 = P1, 1 = P2). Used by the 2-player path.
+    pub fn set_button_p(&self, player: usize, id: usize, pressed: bool) {
         if id < 16 {
-            PAD.lock().unwrap().btn[id] = pressed;
+            PADS[player.min(1)].lock().unwrap().btn[id] = pressed;
         }
     }
     pub fn set_stick(&self, x: i16, y: i16) {
-        let mut p = PAD.lock().unwrap();
+        self.set_stick_p(0, x, y);
+    }
+    pub fn set_stick_p(&self, player: usize, x: i16, y: i16) {
+        let mut p = PADS[player.min(1)].lock().unwrap();
         p.lx = x;
         p.ly = y;
     }
     pub fn set_cstick(&self, x: i16, y: i16) {
-        let mut p = PAD.lock().unwrap();
+        let mut p = PADS[0].lock().unwrap(); // C-stick is N64 P1-only
         p.cx = x;
         p.cy = y;
     }
