@@ -288,7 +288,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   }
   function handle(m) {
     if (FIGHT) { // fight rooms have no slot machine / turn engine — track seat + HP + round + result
-      if ((m.type === "room_state" || m.type === "matched") && m.seat) mySeat = m.seat;
+      if ((m.type === "room_state" || m.type === "matched") && m.seat) { mySeat = m.seat; window.mySeat = mySeat; }
       if (m.type === "fight_hp") {
         // Server auto-calibrates each fighter's max (per-character) and sends it; fall back to a
         // running max if absent. Each bar scales to its OWN fighter's full HP.
@@ -300,6 +300,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         "position:fixed;top:36px;left:0;right:0;text-align:center;color:#ffdd55;z-index:3;font:700 20px ui-monospace,monospace;text-shadow:0 2px 4px #000");
       if (m.type === "winner") fightBanner("fightover", m.you_won ? "YOU WIN!" : "YOU LOSE",
         "position:fixed;top:40%;left:0;right:0;text-align:center;color:#fff;z-index:4;font:800 52px ui-monospace,monospace;text-shadow:0 3px 8px #000");
+      if (m.type === "fight_draw") fightBanner("fightover", "DRAW",
+        "position:fixed;top:40%;left:0;right:0;text-align:center;color:#ffdd55;z-index:4;font:800 52px ui-monospace,monospace;text-shadow:0 3px 8px #000");
       if (m.type === "room_closed") location.replace(COORD + "/lobby");
       return;
     }

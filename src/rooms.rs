@@ -53,7 +53,7 @@ impl RoomPhase {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Seat {
     P1,
     P2,
@@ -552,6 +552,8 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
     let mut fight_t0: Option<Instant> = None;
     let mut ko_streak = 0u32; // consecutive near-empty reads (debounce transient 0-reads)
     let mut junk_streak = 0u32; // consecutive garbage-high reads = the round ended (struct churn)
+    let mut p1_low = u16::MAX; // lowest good HP seen per fighter = damage history. A REAL KO descends
+    let mut p2_low = u16::MAX; // through many 4 Hz samples first; round-end churn jumps full -> 0.
     let mut last_ratio: (f32, f32) = (1.0, 1.0); // last good HP ratio for the time-up tiebreak
     let mut winner: Option<Seat> = None;
     const ROUND_LIMIT: Duration = Duration::from_secs(75); // BR2 round timer ~60s; backstop above it
@@ -598,16 +600,28 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
             }
             continue;
         }
-        // A reading ABOVE the captured max (never legal mid-round) means the round ENDED — the KO
-        // animation / time-up / char-select churns the struct, so the HP addresses read junk. NOTE:
-        // a read of 0 is NOT junk — it's a KO, the very thing we watch for — so only the HIGH side is
-        // rejected here. Sustained junk = the round is over; decide by the last good HP (the loser was
-        // near-0 just before the transition), so a KO whose exact 0 we missed still resolves right.
+        // Damage history per fighter: a fighter "took real damage" if we ever saw a good read well
+        // below their max. This is what tells a REAL KO (hp descends over many 4 Hz samples, THEN
+        // hits 0) from round-end struct churn (the engine frees/reuses the struct at time-up and the
+        // byte jumps straight full -> 0/garbage with no damage history).
+        let p1_damaged = p1_low <= p1_max.saturating_sub(p1_max / 4);
+        let p2_damaged = p2_low <= p2_max.saturating_sub(p2_max / 4);
+        // Decide a finished round from the last good ratios: if anyone took damage the better ratio
+        // wins; an untouched round (nobody landed anything) ends with no winner.
+        let by_ratio = |r: (f32, f32)| -> Option<Seat> {
+            if !p1_damaged && !p2_damaged {
+                return None;
+            }
+            Some(if r.0 >= r.1 { Seat::P1 } else { Seat::P2 })
+        };
+
+        // A reading ABOVE the captured max is never legal mid-round; sustained = the round ended and
+        // the struct now holds junk. Decide from the last good HP.
         if p1_hp > p1_max + 60 || p2_hp > p2_max + 60 {
             junk_streak += 1;
             if junk_streak >= 5 {
-                winner = Some(if last_ratio.0 >= last_ratio.1 { Seat::P1 } else { Seat::P2 });
-                tracing::info!("fight room {rid}: round ended (struct churn) — winner by last HP {last_ratio:?}");
+                winner = by_ratio(last_ratio);
+                tracing::info!("fight room {rid}: round ended (high churn) — winner {winner:?} by last HP {last_ratio:?}");
                 break;
             }
             continue;
@@ -631,42 +645,54 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
             tracing::info!("fight room {rid}: hp p1={p1_show}/{p1_max} p2={p2_show}/{p2_max}");
         }
 
-        // KO = drained to ~6% of that fighter's own max, held for 2 polls (debounce a transient dip).
+        // Near-empty reads, held for 2 polls (debounce a transient dip).
         let p1_ko = p1_hp <= (p1_max / 16).max(4);
         let p2_ko = p2_hp <= (p2_max / 16).max(4);
         if p1_ko || p2_ko {
             ko_streak += 1;
             if ko_streak >= 2 {
-                winner = Some(if p1_ko && !p2_ko {
-                    Seat::P2
-                } else if p2_ko && !p1_ko {
-                    Seat::P1
-                } else if last_ratio.0 >= last_ratio.1 {
-                    Seat::P1 // both down same tick -> more HP wins
+                // Only a fighter WITH damage history can be truly KO'd. A 0 with no prior damage is
+                // round-end churn (time-up) -> decide by HP advantage instead of crediting a fake KO.
+                let real_p1_ko = p1_ko && p1_damaged;
+                let real_p2_ko = p2_ko && p2_damaged;
+                winner = if real_p1_ko && !real_p2_ko {
+                    tracing::info!("fight room {rid}: KO — P1 down (p1={p1_hp} p2={p2_hp})");
+                    Some(Seat::P2)
+                } else if real_p2_ko && !real_p1_ko {
+                    tracing::info!("fight room {rid}: KO — P2 down (p1={p1_hp} p2={p2_hp})");
+                    Some(Seat::P1)
                 } else {
-                    Seat::P2
-                });
-                tracing::info!("fight room {rid}: KO — p1_hp={p1_hp} p2_hp={p2_hp}");
+                    let w = by_ratio(last_ratio);
+                    tracing::info!("fight room {rid}: round ended (churn-to-zero) — winner {w:?} by last HP {last_ratio:?}");
+                    w
+                };
                 break;
             }
         } else {
             ko_streak = 0;
+            // Track damage history only from non-KO good reads (so churn-zeros don't count as damage).
+            p1_low = p1_low.min(p1_show);
+            p2_low = p2_low.min(p2_show);
         }
 
-        // Time-up: round wall-clock exceeded with no KO -> the fighter with more HP (by ratio) wins.
+        // Time-up backstop: round wall-clock exceeded with no KO and no churn detected.
         if fight_t0.map(|t| t.elapsed() > ROUND_LIMIT).unwrap_or(false) {
-            winner = Some(if last_ratio.0 >= last_ratio.1 { Seat::P1 } else { Seat::P2 });
-            tracing::info!("fight room {rid}: time-up — winner by HP ratio {last_ratio:?}");
+            winner = by_ratio(last_ratio);
+            tracing::info!("fight room {rid}: time-up — winner {winner:?} by HP ratio {last_ratio:?}");
             break;
         }
     }
 
-    // A decided match runs the full result flow (DB + winner banner); a walk-away just closes.
+    // A decided match runs the full result flow (DB + winner banner); a damage-less finished round
+    // is an explicit DRAW (banner, no stats); a walk-away just closes.
     if winner.is_some() {
         record_result(game, rid, winner).await;
         set_phase(game, rid, RoomPhase::Result).await;
         broadcast_winner(game, rid, winner).await;
         tokio::time::sleep(Duration::from_secs(5)).await;
+    } else if armed {
+        broadcast_to_room(game, rid, json!({"type":"fight_draw"})).await;
+        tokio::time::sleep(Duration::from_secs(4)).await;
     }
     set_phase(game, rid, RoomPhase::Done).await;
     let reason = if winner.is_some() { "match_won" } else { "match_ended" };
