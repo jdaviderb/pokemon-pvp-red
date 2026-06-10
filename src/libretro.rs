@@ -623,8 +623,10 @@ pub enum EmuAction {
 pub fn map_button(b: &str) -> Option<EmuAction> {
     use EmuAction::*;
     Some(match b {
-        "A" => Btn(ID_A),
-        "B" => Btn(ID_B),
+        "A" => Btn(ID_A), // PSX Circle / SNES A
+        "B" => Btn(ID_B), // PSX Cross   / SNES B
+        "X" => Btn(ID_X), // PSX Triangle (BR2 kick / menu EXIT) — was unmapped
+        "Y" => Btn(ID_Y), // PSX Square   (BR2 punch) — was unmapped
         "Start" => Btn(ID_START),
         "Select" => Btn(ID_SELECT), // Emu has no Select; Game Boy does
         "Z" => Btn(ID_L2), // Emu Z trigger

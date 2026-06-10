@@ -138,7 +138,8 @@ pub fn router(state: AppState) -> Router {
             .route("/battle/enemy", post(battle_enemy_handler))
             .route("/battle/player", post(battle_player_handler))
             .route("/fight/ram", get(fight_ram_handler))
-            .route_service("/console", ServeFile::new("dev/console.html"));
+            .route_service("/console", ServeFile::new("dev/console.html"))
+            .route_service("/fightcap", ServeFile::new("dev/fightcap.html"));
     }
 
     // Remote MCP server (streamable HTTP) at /mcp so an AI agent plays via a URL + bearer token.

@@ -290,7 +290,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     if (FIGHT) { // fight rooms have no slot machine / turn engine — track seat + HP + round + result
       if ((m.type === "room_state" || m.type === "matched") && m.seat) mySeat = m.seat;
       if (m.type === "fight_hp") {
-        hpMax[1] = Math.max(hpMax[1], m.p1); hpMax[2] = Math.max(hpMax[2], m.p2);
+        // Server auto-calibrates each fighter's max (per-character) and sends it; fall back to a
+        // running max if absent. Each bar scales to its OWN fighter's full HP.
+        hpMax[1] = Math.max(hpMax[1], m.p1max || m.p1); hpMax[2] = Math.max(hpMax[2], m.p2max || m.p2);
         const set = (s, hp, mx) => { const el = $("hp" + s); if (el) el.style.width = Math.max(0, Math.min(100, hp / mx * 100)) + "%"; const n = $("hp" + s + "n"); if (n) n.textContent = hp; };
         set(1, m.p1, hpMax[1]); set(2, m.p2, hpMax[2]);
       }
@@ -439,9 +441,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   // Fight mode: keyboard -> this player's controller. The SEAT (1/2) picks the pad port server-side.
   function setupFightInput() {
     const hint = document.querySelector(".fighthint");
-    if (hint) hint.textContent = "YOU ARE P" + (mySeat || 1) + " (" + ((mySeat || 1) === 1 ? "LEFT" : "RIGHT") + " fighter)  ·  arrows = move/pick · X = confirm/attack · Z = attack · Enter = start";
+    if (hint) hint.textContent = "YOU ARE P" + (mySeat || 1) + " (" + ((mySeat || 1) === 1 ? "LEFT" : "RIGHT") + " fighter)  ·  arrows = move  ·  Z X C V = attacks (✕○□△)  ·  A/S = L1/R1  ·  Enter = start";
+    // BR2 uses all four PSX face buttons: Z=✕(Cross) X=○(Circle) C=□(Square) V=△(Triangle).
     const KEY = { ArrowUp:"Up", ArrowDown:"Down", ArrowLeft:"Left", ArrowRight:"Right",
-      KeyZ:"B", KeyX:"A", KeyA:"L", KeyS:"R", KeyQ:"Z", Enter:"Start", ShiftRight:"Select" };
+      KeyZ:"B", KeyX:"A", KeyC:"Y", KeyV:"X", KeyA:"L", KeyS:"R", KeyQ:"Z", Enter:"Start", ShiftRight:"Select" };
     const held = new Set();
     const send = (t, btn) => { if (inputDc && inputDc.readyState === "open") inputDc.send(JSON.stringify({ type:t, button:btn, player: mySeat || 1 })); };
     addEventListener("keydown", (e) => { const b = KEY[e.code]; if (!b) return; e.preventDefault(); if (!held.has(b)) { held.add(b); send("down", b); } });

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BR2 Fight Capture (DEV)</title>
+<style>
+  html,body{margin:0;background:#000;color:#ddd;font-family:ui-monospace,monospace;height:100%;}
+  #wrap{display:flex;flex-direction:column;height:100vh;}
+  #vidbox{flex:1;display:flex;align-items:center;justify-content:center;background:#000;min-height:0;}
+  video{max-width:100%;max-height:100%;image-rendering:pixelated;}
+  #bar{display:flex;gap:10px;align-items:center;padding:8px 12px;background:#111;border-top:1px solid #333;font-size:13px;flex-wrap:wrap;}
+  button{font-family:inherit;font-size:14px;padding:8px 16px;background:#2a2a2a;color:#eee;border:1px solid #555;cursor:pointer;border-radius:4px;}
+  button:hover{background:#3a3a3a;}
+  #save{background:#1f6f3f;border-color:#2f8f4f;font-weight:bold;}
+  .leg{color:#888;font-size:12px;}
+  .leg b{color:#bbd;}
+  #msg{color:#7fd07f;min-width:140px;}
+  .hp{color:#dd0;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="vidbox"><video id="v" autoplay muted playsinline></video></div>
+  <div id="bar">
+    <button id="save">💾 GUARDAR ESTADO (bootstrap)</button>
+    <span id="msg">conectando…</span>
+    <span class="hp" id="hp"></span>
+    <span class="leg">
+      <b>P1</b> flechas · Z=✕ X=○ C=□ V=△ Enter=Start A=L1 S=R1 &nbsp;|&nbsp;
+      <b>P2</b> IJKL · N=✕ M=○ ,=□ .=△ ;=Start G=L1 H=R1
+    </span>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let dc=null;
+(async()=>{
+  const pc=new RTCPeerConnection({iceServers:[]});
+  pc.addTransceiver('video',{direction:'recvonly'});
+  pc.addTransceiver('audio',{direction:'recvonly'});
+  dc=pc.createDataChannel('input');
+  const ms=new MediaStream(); $('v').srcObject=ms;
+  pc.ontrack=e=>ms.addTrack(e.track);
+  const o=await pc.createOffer(); await pc.setLocalDescription(o);
+  await new Promise(r=>{ if(pc.iceGatheringState==='complete')return r();
+    const c=()=>{ if(pc.iceGatheringState==='complete'){pc.removeEventListener('icegatheringstatechange',c);r();} };
+    pc.addEventListener('icegatheringstatechange',c); setTimeout(r,2500); });
+  const r=await fetch('/offer',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({sdp:pc.localDescription.sdp,type:pc.localDescription.type})});
+  await pc.setRemoteDescription(await r.json());
+  dc.onopen=()=>$('msg').textContent='listo — navega y guarda';
+})().catch(e=>$('msg').textContent='error: '+e.message);
+
+// key -> {button, player}. P1 = pad 1, P2 = pad 2.
+const MAP={
+  // P1
+  'ArrowUp':['Up',1],'ArrowDown':['Down',1],'ArrowLeft':['Left',1],'ArrowRight':['Right',1],
+  'KeyZ':['B',1],'KeyX':['A',1],'KeyC':['Y',1],'KeyV':['X',1],'Enter':['Start',1],'KeyA':['L',1],'KeyS':['R',1],
+  // P2
+  'KeyI':['Up',2],'KeyK':['Down',2],'KeyJ':['Left',2],'KeyL':['Right',2],
+  'KeyN':['B',2],'KeyM':['A',2],'Comma':['Y',2],'Period':['X',2],'Semicolon':['Start',2],'KeyG':['L',2],'KeyH':['R',2],
+};
+const held=new Set();
+function send(kind,btn,pl){ if(dc&&dc.readyState==='open') dc.send(JSON.stringify({type:kind,button:btn,player:pl})); }
+addEventListener('keydown',e=>{ const m=MAP[e.code]; if(!m)return; e.preventDefault(); if(held.has(e.code))return; held.add(e.code); send('down',m[0],m[1]); });
+addEventListener('keyup',e=>{ const m=MAP[e.code]; if(!m)return; e.preventDefault(); held.delete(e.code); send('up',m[0],m[1]); });
+
+$('save').onclick=async()=>{
+  $('msg').textContent='guardando…';
+  try{ const r=await fetch('/battle/save',{method:'POST'}); $('msg').textContent = r.ok ? '✓ guardado ('+r.status+')' : 'fallo '+r.status; }
+  catch(err){ $('msg').textContent='error: '+err.message; }
+};
+
+// live HP candidate peek (helps confirm we're in a real fight) — reads the current fight.rs addresses
+async function peek(){
+  try{
+    const rd=async a=>{ const r=await fetch('/fight/ram?addr='+a+'&len=2'); const b=new Uint8Array(await r.arrayBuffer()); return b[0]|(b[1]<<8); };
+    const p1=await rd('0x800B8EAC'), p2=await rd('0x800B6CAC');
+    $('hp').textContent='HP? P1='+p1+' P2='+p2;
+  }catch(e){}
+}
+setInterval(peek,700);
+</script>
+</body>
+</html>

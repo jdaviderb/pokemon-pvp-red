@@ -537,18 +537,28 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
             return;
         }
     };
-    // Live loop @ ~4 Hz. When the BR2 HP addresses are pinned (fight::P1_HP != 0), detect a round KO
-    // (a fighter's HP hits 0), tally best-of-3, and end with the winning seat. Otherwise (addresses
-    // unknown) just run until BOTH players leave. A ~16s grace lets both open the room page first.
+    // Live loop @ ~4 Hz. With the BR2 HP addresses pinned (fight::P1_HP != 0) we AUTO-CALIBRATE each
+    // fighter's full HP from the first live read (max differs per character), stream both bars to the
+    // web UI, and decide the match on the FIRST KO (a fighter drained to ~empty) — single round, so
+    // we end before the engine can start round 2 (which would hand a side back to the CPU). A round
+    // wall-clock acts as the time-up tiebreak (more HP by ratio wins). No addresses -> run until both
+    // players leave. ~10s grace lets both open the room page first.
     let hp_known = crate::fight::P1_HP != 0 && crate::fight::P2_HP != 0;
     let mut ticks = 0u32;
     let mut empty = 0u32;
-    let mut fight_started = false; // only arm KO detection once a real round is live
+    let mut p1_max = 0u16; // captured full HP per fighter (auto-calibrated)
+    let mut p2_max = 0u16;
+    let mut armed = false; // both maxes captured -> a real round is live, KO detection on
+    let mut fight_t0: Option<Instant> = None;
+    let mut ko_streak = 0u32; // consecutive near-empty reads (debounce transient 0-reads)
+    let mut last_ratio: (f32, f32) = (1.0, 1.0); // last good HP ratio for the time-up tiebreak
     let mut winner: Option<Seat> = None;
+    const ROUND_LIMIT: Duration = Duration::from_secs(95); // BR2 round timer is ~60-99 game-seconds
+    let plausible = |hp: u16| (40..=1200).contains(&hp);
     loop {
         tokio::time::sleep(Duration::from_millis(250)).await;
         ticks += 1;
-        if ticks < 64 {
+        if ticks < 40 {
             continue;
         }
 
@@ -575,22 +585,65 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
             _ => continue,
         };
 
-        // Arm KO detection only once a real round is live (both fighters at plausible HP) — avoids
-        // false "round over" during the character select / loading, where the addresses read junk.
-        if (50..=2000).contains(&p1_hp) && (50..=2000).contains(&p2_hp) {
-            fight_started = true;
-        }
-        if !fight_started {
+        // Calibrate: the first time BOTH read a plausible value, snapshot them as each fighter's max
+        // (the bootstrap loads at the round start, so this is full HP) and start the round clock.
+        if !armed {
+            if plausible(p1_hp) && plausible(p2_hp) {
+                p1_max = p1_hp;
+                p2_max = p2_hp;
+                armed = true;
+                fight_t0 = Some(Instant::now());
+                tracing::info!("fight room {rid}: round live — P1 max {p1_max}, P2 max {p2_max}");
+            }
             continue;
         }
-        // Stream the live HP to the room so the web UI can draw both fighters' health bars (and we
-        // can SEE the RAM read is tracking the real fight).
-        broadcast_to_room(game, rid, json!({"type":"fight_hp","p1":p1_hp,"p2":p2_hp})).await;
+        // A reading well ABOVE the captured max means the round reset (time-up sent us back, or a bad
+        // read) — re-baseline from a plausible pair rather than trust it, and don't judge this tick.
+        if p1_hp > p1_max + 60 || p2_hp > p2_max + 60 || !plausible(p1_hp) || !plausible(p2_hp) {
+            if plausible(p1_hp) && plausible(p2_hp) {
+                p1_max = p1_max.max(p1_hp);
+                p2_max = p2_max.max(p2_hp);
+            }
+            continue;
+        }
 
-        // First KO decides the match (single round). We end BEFORE the engine can start a 2nd round —
-        // from the arcade-challenger savestate, round 2 hands player 2 back to the CPU.
-        if p1_hp == 0 || p2_hp == 0 {
-            winner = Some(if p1_hp == 0 { Seat::P2 } else { Seat::P1 });
+        // Stream live HP + per-fighter max so the web UI scales each bar correctly.
+        broadcast_to_room(
+            game,
+            rid,
+            json!({"type":"fight_hp","p1":p1_hp,"p2":p2_hp,"p1max":p1_max,"p2max":p2_max}),
+        )
+        .await;
+        last_ratio = (
+            p1_hp as f32 / p1_max.max(1) as f32,
+            p2_hp as f32 / p2_max.max(1) as f32,
+        );
+
+        // KO = drained to ~5% of that fighter's own max, held for 2 polls (debounce a transient 0).
+        let p1_ko = p1_hp <= (p1_max / 20).max(3);
+        let p2_ko = p2_hp <= (p2_max / 20).max(3);
+        if p1_ko || p2_ko {
+            ko_streak += 1;
+            if ko_streak >= 2 {
+                winner = Some(if p1_ko && !p2_ko {
+                    Seat::P2
+                } else if p2_ko && !p1_ko {
+                    Seat::P1
+                } else if last_ratio.0 >= last_ratio.1 {
+                    Seat::P1 // both down same tick -> more HP wins
+                } else {
+                    Seat::P2
+                });
+                break;
+            }
+        } else {
+            ko_streak = 0;
+        }
+
+        // Time-up: round wall-clock exceeded with no KO -> the fighter with more HP (by ratio) wins.
+        if fight_t0.map(|t| t.elapsed() > ROUND_LIMIT).unwrap_or(false) {
+            winner = Some(if last_ratio.0 >= last_ratio.1 { Seat::P1 } else { Seat::P2 });
+            tracing::info!("fight room {rid}: time-up — winner by HP ratio {last_ratio:?}");
             break;
         }
     }

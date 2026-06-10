@@ -45,13 +45,15 @@ pub fn rd32(ram: &[u8], a: u32) -> u32 {
 // 0 = not yet pinned; `MatchState::read` returns None until P1_HP/P2_HP are set, so the fight room
 // falls back to its disconnect-based end.
 
-// Found by reverse-engineering the damage routine (the `sh $v0, 0xAC($s1)` HP store at code
-// 0x178A98 — confirmed against the NTSC-U "Infinite Health" GameShark hooks) plus live directional
-// damage: P1 hits the right fighter -> 0xB6CAC drops; P2 hits the left fighter -> 0xB8EAC drops.
-// Both are halfwords at fighter_struct + 0xAC, in the savestate loaded by the fight room.
-// SEAT 1 (pad 0) = LEFT fighter; SEAT 2 (pad 1) = RIGHT fighter.
-pub const P1_HP: u32 = 0x800B_8EAC; // seat 1 / left
-pub const P2_HP: u32 = 0x800B_6CAC; // seat 2 / right
+// HP halfwords (struct + 0xAC, per the disassembled `sh $v0,0xAC($s1)` damage store). These are
+// SPECIFIC TO `states/bloodyroar_vs.state` (the SHENLONG-vs-ALICE versus bootstrap): BR2 allocates
+// each fighter struct dynamically, so the address is fixed only for a frozen savestate. Pinned with
+// a 4-dump cross-diff against a HUMAN-played beatdown (the only way to land clean hits in 3D): for
+// each fighter, HP drops only when THAT side is beaten and is otherwise rock-stable, reaching ~0 at
+// KO. Max HP differs per character (SHENLONG ~417, ALICE ~254), so the fight room AUTO-CALIBRATES
+// each fighter's max from the first live read instead of hardcoding it. SEAT 1 = LEFT, SEAT 2 = RIGHT.
+pub const P1_HP: u32 = 0x8005_41AC; // seat 1 / left  (SHENLONG)  — stable idle @318, drops on hit
+pub const P2_HP: u32 = 0x801C_26AC; // seat 2 / right (ALICE)     — stable idle @254, drops on hit
 /// Best-of-3 rounds-won counters (0 = single-round-decides fallback; not pinned yet).
 pub const P1_ROUNDS: u32 = 0;
 pub const P2_ROUNDS: u32 = 0;
