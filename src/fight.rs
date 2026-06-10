@@ -52,8 +52,11 @@ pub fn rd32(ram: &[u8], a: u32) -> u32 {
 // each fighter, HP drops only when THAT side is beaten and is otherwise rock-stable, reaching ~0 at
 // KO. Max HP differs per character (SHENLONG ~417, ALICE ~254), so the fight room AUTO-CALIBRATES
 // each fighter's max from the first live read instead of hardcoding it. SEAT 1 = LEFT, SEAT 2 = RIGHT.
-pub const P1_HP: u32 = 0x8005_41AC; // seat 1 / left  (SHENLONG)  — stable idle @318, drops on hit
-pub const P2_HP: u32 = 0x801C_26AC; // seat 2 / right (ALICE)     — stable idle @254, drops on hit
+// Verified by idle-stability: REAL HP is rock-constant when no one is being hit (combat meters like
+// stamina/beast-gauge drift or recover, so they're rejected), drops only when THAT fighter is hit,
+// and reaches ~0 at KO. SHENLONG idle @152, ALICE idle @254 (BR2 scales max HP per character).
+pub const P1_HP: u32 = 0x800C_FDAC; // seat 1 / left  (SHENLONG) — idle-stable @152
+pub const P2_HP: u32 = 0x801C_26AC; // seat 2 / right (ALICE)    — idle-stable @254
 /// Best-of-3 rounds-won counters (0 = single-round-decides fallback; not pinned yet).
 pub const P1_ROUNDS: u32 = 0;
 pub const P2_ROUNDS: u32 = 0;

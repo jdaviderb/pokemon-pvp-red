@@ -551,9 +551,10 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
     let mut armed = false; // both maxes captured -> a real round is live, KO detection on
     let mut fight_t0: Option<Instant> = None;
     let mut ko_streak = 0u32; // consecutive near-empty reads (debounce transient 0-reads)
+    let mut junk_streak = 0u32; // consecutive garbage-high reads = the round ended (struct churn)
     let mut last_ratio: (f32, f32) = (1.0, 1.0); // last good HP ratio for the time-up tiebreak
     let mut winner: Option<Seat> = None;
-    const ROUND_LIMIT: Duration = Duration::from_secs(95); // BR2 round timer is ~60-99 game-seconds
+    const ROUND_LIMIT: Duration = Duration::from_secs(75); // BR2 round timer ~60s; backstop above it
     let plausible = |hp: u16| (40..=1200).contains(&hp);
     loop {
         tokio::time::sleep(Duration::from_millis(250)).await;
@@ -597,31 +598,42 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
             }
             continue;
         }
-        // A reading well ABOVE the captured max means the round reset (time-up sent us back, or a bad
-        // read) — re-baseline from a plausible pair rather than trust it, and don't judge this tick.
-        if p1_hp > p1_max + 60 || p2_hp > p2_max + 60 || !plausible(p1_hp) || !plausible(p2_hp) {
-            if plausible(p1_hp) && plausible(p2_hp) {
-                p1_max = p1_max.max(p1_hp);
-                p2_max = p2_max.max(p2_hp);
+        // A reading ABOVE the captured max (never legal mid-round) means the round ENDED — the KO
+        // animation / time-up / char-select churns the struct, so the HP addresses read junk. NOTE:
+        // a read of 0 is NOT junk — it's a KO, the very thing we watch for — so only the HIGH side is
+        // rejected here. Sustained junk = the round is over; decide by the last good HP (the loser was
+        // near-0 just before the transition), so a KO whose exact 0 we missed still resolves right.
+        if p1_hp > p1_max + 60 || p2_hp > p2_max + 60 {
+            junk_streak += 1;
+            if junk_streak >= 5 {
+                winner = Some(if last_ratio.0 >= last_ratio.1 { Seat::P1 } else { Seat::P2 });
+                tracing::info!("fight room {rid}: round ended (struct churn) — winner by last HP {last_ratio:?}");
+                break;
             }
             continue;
         }
+        junk_streak = 0;
 
-        // Stream live HP + per-fighter max so the web UI scales each bar correctly.
+        // Stream live HP (clamped to each max) + per-fighter max so the web UI scales each bar.
+        let p1_show = p1_hp.min(p1_max);
+        let p2_show = p2_hp.min(p2_max);
         broadcast_to_room(
             game,
             rid,
-            json!({"type":"fight_hp","p1":p1_hp,"p2":p2_hp,"p1max":p1_max,"p2max":p2_max}),
+            json!({"type":"fight_hp","p1":p1_show,"p2":p2_show,"p1max":p1_max,"p2max":p2_max}),
         )
         .await;
         last_ratio = (
-            p1_hp as f32 / p1_max.max(1) as f32,
-            p2_hp as f32 / p2_max.max(1) as f32,
+            p1_show as f32 / p1_max.max(1) as f32,
+            p2_show as f32 / p2_max.max(1) as f32,
         );
+        if ticks % 12 == 0 {
+            tracing::info!("fight room {rid}: hp p1={p1_show}/{p1_max} p2={p2_show}/{p2_max}");
+        }
 
-        // KO = drained to ~5% of that fighter's own max, held for 2 polls (debounce a transient 0).
-        let p1_ko = p1_hp <= (p1_max / 20).max(3);
-        let p2_ko = p2_hp <= (p2_max / 20).max(3);
+        // KO = drained to ~6% of that fighter's own max, held for 2 polls (debounce a transient dip).
+        let p1_ko = p1_hp <= (p1_max / 16).max(4);
+        let p2_ko = p2_hp <= (p2_max / 16).max(4);
         if p1_ko || p2_ko {
             ko_streak += 1;
             if ko_streak >= 2 {
@@ -634,6 +646,7 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
                 } else {
                     Seat::P2
                 });
+                tracing::info!("fight room {rid}: KO — p1_hp={p1_hp} p2_hp={p2_hp}");
                 break;
             }
         } else {
