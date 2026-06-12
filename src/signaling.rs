@@ -215,7 +215,13 @@ async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value
 /// shows the recorded result or "BATTLE NOT FOUND" (via /api/room) for an ended/unknown room.
 async fn room_page_handler() -> Response {
     match tokio::fs::read_to_string("static/room.html").await {
-        Ok(html) => Html(html).into_response(),
+        // no-store: the room page evolves with the fight UI; a stale cached copy would render the
+        // health bars with old logic. Force the browser to fetch the current page every time.
+        Ok(html) => (
+            [(axum::http::header::CACHE_CONTROL, "no-store, must-revalidate")],
+            Html(html),
+        )
+            .into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "room page missing").into_response(),
     }
 }
