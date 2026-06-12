@@ -181,18 +181,26 @@ pub async fn build_peer_and_answer(
     // --- INPUT data channel: browser creates "input"; we react via on_data_channel. ---
     {
         let input_tx = inner.input_tx.clone();
+        let input_gate = inner.input_gate.clone();
         pc.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
             let input_tx = input_tx.clone();
+            let input_gate = input_gate.clone();
             Box::pin(async move {
                 if dc.label() == "input" {
                     let input_tx = input_tx.clone();
+                    let input_gate = input_gate.clone();
                     dc.on_message(Box::new(move |msg: DataChannelMessage| {
                         let input_tx = input_tx.clone();
+                        let input_gate = input_gate.clone();
                         Box::pin(async move {
                             if let Ok(ev) =
                                 serde_json::from_slice::<crate::pipeline::InputEvent>(&msg.data)
                             {
-                                let _ = input_tx.send(ev);
+                                // Fight mode mutes players while the server runs the random-pick
+                                // char-select bootstrap; server-injected input bypasses this.
+                                if input_gate.load(Ordering::Relaxed) {
+                                    let _ = input_tx.send(ev);
+                                }
                             }
                         })
                     }));

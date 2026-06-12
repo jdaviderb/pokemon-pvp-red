@@ -77,6 +77,10 @@ pub struct AppInner {
     /// The fight room samples these to correlate HP drops with WHO was attacking (damage/winner
     /// attribution that doesn't depend on knowing which RAM struct belongs to which side).
     pub attack_press: Arc<[AtomicU32; 2]>,
+    /// Fight mode: while false, PLAYER input (the WebRTC data channel) is dropped — the server is
+    /// running the char-select bootstrap (random picks) and player mashing would corrupt it. The
+    /// server's own injected input (`input_tx`) bypasses this. Default open (true).
+    pub input_gate: Arc<AtomicBool>,
 }
 
 pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
@@ -96,6 +100,7 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
     let player_force = Arc::new(AtomicU8::new(0xFF)); // default: use the menu pick
     let battle: Arc<Mutex<Option<BattleState>>> = Arc::new(Mutex::new(None));
     let attack_press: Arc<[AtomicU32; 2]> = Arc::new([AtomicU32::new(0), AtomicU32::new(0)]);
+    let input_gate = Arc::new(AtomicBool::new(true));
 
     let v = video_tx.clone();
     let a = audio_tx.clone();
@@ -127,6 +132,7 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
         enemy_force,
         player_force,
         attack_press,
+        input_gate,
     })
 }
 
@@ -156,6 +162,7 @@ pub fn dummy() -> Arc<AppInner> {
         enemy_force: Arc::new(AtomicU8::new(0xFF)),
         player_force: Arc::new(AtomicU8::new(0xFF)),
         attack_press: Arc::new([AtomicU32::new(0), AtomicU32::new(0)]),
+        input_gate: Arc::new(AtomicBool::new(true)),
     })
 }
 

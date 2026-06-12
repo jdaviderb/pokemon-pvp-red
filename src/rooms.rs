@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use rand::seq::SliceRandom;
+use rand::Rng;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
 };
@@ -571,6 +572,23 @@ fn read_hp_bars(_inner: &Arc<crate::pipeline::AppInner>) -> Option<(u32, u32)> {
     Some((count(0.108, 0.476), count(0.536, 0.900)))
 }
 
+/// Press+release a button on a pad as the server (bypasses the player input_gate) — used to drive
+/// the random char-select picks. `pad` is 1 (P1/left) or 2 (P2/right); timed for menu navigation.
+async fn inject_tap(inner: &Arc<crate::pipeline::AppInner>, btn: &str, pad: u8) {
+    let _ = inner.input_tx.send(crate::pipeline::InputEvent {
+        kind: "down".into(),
+        button: btn.into(),
+        player: pad,
+    });
+    tokio::time::sleep(Duration::from_millis(160)).await;
+    let _ = inner.input_tx.send(crate::pipeline::InputEvent {
+        kind: "up".into(),
+        button: btn.into(),
+        player: pad,
+    });
+    tokio::time::sleep(Duration::from_millis(280)).await;
+}
+
 /// True when the arena runs a fighting game (raw 2-player pad input) instead of the Pokémon engine.
 pub fn fight_mode() -> bool {
     std::env::var("FIGHT_MODE").map(|v| v != "0" && !v.is_empty()).unwrap_or(false)
@@ -580,20 +598,50 @@ pub fn fight_mode() -> bool {
 /// players drive their own controller port. Ends when a player leaves (or a long safety cap).
 async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
     let inner = game.inner.clone();
-    // Load the "versus" savestate (both fighters in the arena). FIGHT_STATE overrides the path.
-    let path = std::env::var("FIGHT_STATE").unwrap_or_else(|_| "states/bloodyroar_vs.state".into());
-    match std::fs::read(&path) {
+    // Load the VS CHARACTER-SELECT savestate; the server then picks both fighters AT RANDOM (the
+    // Pokémon-slot-machine analog — players never choose) by injecting cursor moves + a confirm on
+    // each pad. FIGHT_STATE overrides the path. (Set it to a fixed fight-start state to skip picks.)
+    let path =
+        std::env::var("FIGHT_STATE").unwrap_or_else(|_| "states/bloodyroar_charselect.state".into());
+    let loaded = match std::fs::read(&path) {
         Ok(bytes) => {
             let (tx, rx) = oneshot::channel();
             let _ = inner.load_tx.send((bytes, tx));
-            if !matches!(rx.await, Ok(true)) {
-                tracing::warn!("fight room {rid}: load_state({path}) did not take");
-            }
+            matches!(rx.await, Ok(true))
         }
-        Err(e) => tracing::warn!("fight room {rid}: no savestate at {path}: {e}"),
-    }
+        Err(e) => {
+            tracing::warn!("fight room {rid}: no savestate at {path}: {e}");
+            false
+        }
+    };
     set_phase(game, rid, RoomPhase::Battle).await;
     broadcast_room_state(game, rid).await;
+
+    // Random character assignment: mute players, drive each cursor a random number of steps across
+    // the roster grid, confirm both, and let the fight load. Players take over once it's live.
+    if loaded {
+        inner.input_gate.store(false, Ordering::Relaxed); // mute players during the bootstrap
+        let script: Vec<(&'static str, u8)> = {
+            let mut rng = rand::thread_rng();
+            let mut s = Vec::new();
+            for pad in [1u8, 2u8] {
+                for _ in 0..rng.gen_range(0..8) {
+                    s.push(("Right", pad));
+                }
+                if rng.gen_range(0..2) == 1 {
+                    s.push(("Down", pad));
+                }
+                s.push(("A", pad)); // confirm (OK)
+            }
+            s
+        };
+        for (btn, pad) in script {
+            inject_tap(&inner, btn, pad).await;
+        }
+        tokio::time::sleep(Duration::from_millis(800)).await;
+        inner.input_gate.store(true, Ordering::Relaxed); // players take over
+        tracing::info!("fight room {rid}: random characters assigned, fight loading");
+    }
     tracing::info!("fight room {rid}: live — both players control their own pad");
 
     let (p1, p2) = match game.rooms.lock().await.get(&rid) {
@@ -658,13 +706,13 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
             // post-round cooldown so we never calibrate to a partial intro or win-pose frame.
             p1_max = p1_max.max(p1_fill);
             p2_max = p2_max.max(p2_fill);
-            if ticks >= rearm_at.max(30)
-                && p1_max > 300
-                && p2_max > 300
-                && p1_fill * 100 >= p1_max * 88
-                && p2_fill * 100 >= p2_max * 88
-            {
+            // Arm only when BOTH bars are actually near-full in absolute terms (the round intro
+            // animates them in 0 -> ~1152, and a char-select->fight load briefly shows ~66% bars;
+            // a high floor skips those so we calibrate to the real full and never award a fake round).
+            if ticks >= rearm_at.max(30) && p1_fill > 1080 && p2_fill > 1080 {
                 armed = true;
+                p1_max = p1_fill;
+                p2_max = p2_fill;
                 fight_t0 = Some(Instant::now());
                 tracing::info!("fight room {rid}: round live — P1 {p1_max}px P2 {p2_max}px (score {p1_rounds}-{p2_rounds})");
             }
