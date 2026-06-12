@@ -568,7 +568,8 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
         last: u16,
         low: u16,
         drop_events: u32,
-        cred_p1: f32, // damage credited to P1's attacks (=> the candidate is P2's fighter)
+        first_drop: u32, // tick of the first drop (0 = none yet) -> drop-density check
+        cred_p1: f32,    // damage credited to P1's attacks (=> the candidate is P2's fighter)
         cred_p2: f32,
         dead: bool,
     }
@@ -612,17 +613,20 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
         let rd = |off: usize| u16::from_le_bytes([ram[off], ram[off + 1]]);
 
         if !armed {
-            // Discovery: seed candidates this tick, confirm idle-stability next tick.
+            // Discovery: seed candidates this tick, confirm idle-stability next tick. No struct
+            // alignment is assumed (post-restart allocations land at arbitrary offsets), so EVERY
+            // halfword is a candidate — the behavioral filters do the discrimination.
             if pool.is_empty() {
-                for off in (0xAC..ram.len() - 1).step_by(0x100) {
+                for off in (0..ram.len() - 1).step_by(2) {
                     let v = rd(off);
-                    if (140..=300).contains(&v) {
+                    if (100..=360).contains(&v) {
                         pool.push(Cand {
                             off,
                             init: v,
                             last: v,
                             low: v,
                             drop_events: 0,
+                            first_drop: 0,
                             cred_p1: 0.0,
                             cred_p2: 0.0,
                             dead: false,
@@ -680,6 +684,18 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
                     c.cred_p2 += drop as f32 * w2 as f32 / (w1 + w2) as f32;
                 }
                 c.drop_events += 1;
+                if c.first_drop == 0 {
+                    c.first_drop = ticks;
+                }
+                // Drop-density: stamina/charge meters DRAIN CONTINUOUSLY under attack input
+                // (a drop nearly every 250ms tick); real HP drops only when hits CONNECT —
+                // sparse events with gaps. A candidate dropping on >60% of ticks over 2s+ is
+                // a drain meter, not HP.
+                let span = ticks.saturating_sub(c.first_drop) + 1;
+                if span >= 8 && c.drop_events * 100 / span > 60 {
+                    c.dead = true;
+                    continue;
+                }
                 c.last = v;
                 c.low = c.low.min(v);
             }
