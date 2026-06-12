@@ -605,7 +605,7 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
         let a2 = inner.attack_press[1].load(Ordering::Relaxed);
         atk_window.push_back((a1.saturating_sub(prev_atk.0), a2.saturating_sub(prev_atk.1)));
         prev_atk = (a1, a2);
-        if atk_window.len() > 6 {
+        if atk_window.len() > 3 {
             atk_window.pop_front();
         }
 
@@ -665,10 +665,15 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
                 if (c.init - c.low) as u32 * 100 >= c.init as u32 * 15
                     && v as u32 * 100 >= c.init as u32 * 92
                 {
-                    c.dead = true; // full recovery after >=15% drawdown: a refilling meter
-                    continue;
+                    // Recovered to ~full: that damage was the recoverable kind — legit BR2 HP
+                    // behavior, NOT a disqualifier. Reset the damage history and keep watching.
+                    c.low = v.min(c.init);
+                    c.drop_events = 0;
+                    c.first_drop = 0;
+                    c.cred_p1 = 0.0;
+                    c.cred_p2 = 0.0;
                 }
-                c.last = v; // regen: track it (the on-screen bar refills too); low keeps the floor
+                c.last = v; // regen: track it (the on-screen bar refills too)
                 continue;
             }
             if v < c.last {
@@ -679,20 +684,26 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
                     c.dead = true;
                     continue;
                 }
-                if w1 + w2 > 0 {
-                    c.cred_p1 += drop as f32 * w1 as f32 / (w1 + w2) as f32;
-                    c.cred_p2 += drop as f32 * w2 as f32 / (w1 + w2) as f32;
+                // Credit only UNAMBIGUOUS windows (exactly one side was attacking) — when both
+                // mash, a hit's source can't be told apart, so it shouldn't teach side ownership.
+                if w1 > 0 && w2 == 0 {
+                    c.cred_p1 += drop as f32;
+                } else if w2 > 0 && w1 == 0 {
+                    c.cred_p2 += drop as f32;
                 }
                 c.drop_events += 1;
                 if c.first_drop == 0 {
                     c.first_drop = ticks;
                 }
-                // Drop-density: stamina/charge meters DRAIN CONTINUOUSLY under attack input
-                // (a drop nearly every 250ms tick); real HP drops only when hits CONNECT —
-                // sparse events with gaps. A candidate dropping on >60% of ticks over 2s+ is
-                // a drain meter, not HP.
+                // Drain meters (stamina/charge) trickle away in TINY per-tick steps; real hits
+                // chunk off 8-40 units. Kill candidates whose average drawdown per event is a
+                // trickle, and ones dropping nearly EVERY tick for 3s+ (combos don't sustain that).
                 let span = ticks.saturating_sub(c.first_drop) + 1;
-                if span >= 8 && c.drop_events * 100 / span > 60 {
+                if c.drop_events >= 6 && ((c.init - c.low) as u32) < c.drop_events * 5 {
+                    c.dead = true;
+                    continue;
+                }
+                if span >= 12 && c.drop_events * 100 / span > 85 {
                     c.dead = true;
                     continue;
                 }
