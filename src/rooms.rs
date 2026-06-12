@@ -531,8 +531,17 @@ fn read_hp_bars(_inner: &Arc<crate::pipeline::AppInner>) -> Option<(u32, u32)> {
             (bytes[o + 2], bytes[o + 1], bytes[o])
         }
     };
-    // Bright yellow/gold (high R, high G, low B). Excludes the white timer (B≈R) + blue recoverable.
-    let yellow = |(r, g, b): (u8, u8, u8)| r > 130 && g > 100 && (b as u32) * 5 < (r as u32) * 3;
+    // "Filled" = the visible (non-black) bar the player sees = current HP (yellow/gold) PLUS the
+    // recoverable zone (saturated blue, ~(64,96,160)). Counting both makes the web bar match the
+    // on-screen bar length exactly; counting yellow alone undercounts during combos (the just-lost
+    // blue chunk still shows as bar) which read as "the web bar dropped but the game bar didn't".
+    // Excludes the white timer (B≈R≈G) and the dark stage background (low brightness).
+    let filled = |(r, g, b): (u8, u8, u8)| {
+        let (r, g, b) = (r as u32, g as u32, b as u32);
+        let yellow = r > 130 && g > 100 && b * 5 < r * 3;
+        let blue = b > 110 && b > r + 35 && b > g + 25; // recoverable zone (not the dim bg)
+        yellow || blue
+    };
     let y0 = (h as f32 * 0.108) as usize;
     let y1 = ((h as f32 * 0.130) as usize).min(h);
     let count = |x_lo: f32, x_hi: f32| -> u32 {
@@ -540,7 +549,7 @@ fn read_hp_bars(_inner: &Arc<crate::pipeline::AppInner>) -> Option<(u32, u32)> {
         let mut n = 0u32;
         for y in y0..y1 {
             for x in xa..xb {
-                if yellow(px(x, y)) {
+                if filled(px(x, y)) {
                     n += 1;
                 }
             }
@@ -609,31 +618,38 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
     loop {
         tokio::time::sleep(Duration::from_millis(200)).await;
         ticks += 1;
-        if ticks < 24 {
-            continue; // ~5s: let the savestate load + round intro settle
-        }
+        // Both-left detection (give clients ~14s of startup slack before counting absence, so the
+        // find-match WS -> room WS handoff doesn't look like a walk-away).
         if ticks % 10 == 0 {
             let live = game.ws.connected(p1).await || game.ws.connected(p2).await;
             empty = if live { 0 } else { empty + 1 };
-            if empty >= 3 || ticks > 6000 {
+            if (ticks > 70 && empty >= 3) || ticks > 6000 {
                 break;
             }
         }
 
         let Some((p1_fill, p2_fill)) = read_hp_bars(&inner) else { continue };
 
-        // Arm once BOTH bars read clearly filled (a real round on screen, not a menu/transition).
         if !armed {
-            if p1_fill > 80 && p2_fill > 80 {
-                p1_max = p1_fill;
-                p2_max = p2_fill;
+            // The round intro animates the bars in (0 -> full), so track the HIGHEST seen rather
+            // than locking onto the first (possibly half-drawn) frame. Arm only once both bars are
+            // a real full bar AND the current reading sits near that max (stable, not mid-animation),
+            // after a grace so we never calibrate to a partial intro frame.
+            p1_max = p1_max.max(p1_fill);
+            p2_max = p2_max.max(p2_fill);
+            if ticks >= 30
+                && p1_max > 300
+                && p2_max > 300
+                && p1_fill * 100 >= p1_max * 88
+                && p2_fill * 100 >= p2_max * 88
+            {
                 armed = true;
                 fight_t0 = Some(Instant::now());
                 tracing::info!("fight room {rid}: round live (bars) — P1 {p1_max}px, P2 {p2_max}px");
             }
             continue;
         }
-        // Self-correct the full-HP reference upward (regen / a slightly-damaged calibration frame).
+        // Self-correct the full-HP reference upward (regen / a slightly-low calibration frame).
         p1_max = p1_max.max(p1_fill);
         p2_max = p2_max.max(p2_fill);
 
@@ -641,8 +657,10 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
         let r2 = (p2_fill as f32 / p2_max.max(1) as f32).clamp(0.0, 1.0);
 
         // Both bars gone at once = the round ended / screen changed (KO transition, time-up, char
-        // select). Not a KO by itself — decide from the last good ratio.
-        if p1_fill < p1_max / 12 && p2_fill < p2_max / 12 {
+        // select). Only trust it after the round has been live a few seconds, so a startup intro
+        // flicker can't close the room before both clients have even connected.
+        let live_secs = fight_t0.map(|t| t.elapsed().as_secs()).unwrap_or(0);
+        if live_secs >= 4 && p1_fill < p1_max / 12 && p2_fill < p2_max / 12 {
             gone_streak += 1;
             if gone_streak >= 3 {
                 winner = if !p1_dmg && !p2_dmg {

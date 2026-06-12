@@ -295,7 +295,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         hpMax[1] = Math.max(hpMax[1], m.p1max || m.p1); hpMax[2] = Math.max(hpMax[2], m.p2max || m.p2);
         const set = (s, hp, mx) => { const el = $("hp" + s); const n = $("hp" + s + "n");
           if (mx <= 1) { if (el) el.style.width = "100%"; if (n) n.textContent = "--"; return; } // not calibrated yet
-          if (el) el.style.width = Math.max(0, Math.min(100, hp / mx * 100)) + "%"; if (n) n.textContent = hp; };
+          const pct = Math.max(0, Math.min(100, Math.round(hp / mx * 100)));
+          if (el) el.style.width = pct + "%"; if (n) n.textContent = pct + "%"; };
         set(1, m.p1, hpMax[1]); set(2, m.p2, hpMax[2]);
       }
       if (m.type === "fight_round") fightBanner("fightscore", "P1  " + m.p1_wins + " – " + m.p2_wins + "  P2",
