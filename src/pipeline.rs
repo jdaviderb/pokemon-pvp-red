@@ -2,7 +2,7 @@
 //! VP8 + stereo Opus, and fans the encoded media out over broadcast channels to every peer.
 
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -73,6 +73,10 @@ pub struct AppInner {
     /// Force P1's chosen move into CCDC (wPlayerSelectedMove): 0xFF = off; 0..3 = that slot. Makes
     /// the executed player move reliable even if the menu-nav macro drops a Down (off-by-one).
     pub player_force: Arc<AtomicU8>,
+    /// Fighting arena: total attack-button (A/B/X/Y) presses per pad, monotonically increasing.
+    /// The fight room samples these to correlate HP drops with WHO was attacking (damage/winner
+    /// attribution that doesn't depend on knowing which RAM struct belongs to which side).
+    pub attack_press: Arc<[AtomicU32; 2]>,
 }
 
 pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
@@ -91,6 +95,7 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
     let enemy_force = Arc::new(AtomicU8::new(0xFF)); // default: game AI
     let player_force = Arc::new(AtomicU8::new(0xFF)); // default: use the menu pick
     let battle: Arc<Mutex<Option<BattleState>>> = Arc::new(Mutex::new(None));
+    let attack_press: Arc<[AtomicU32; 2]> = Arc::new([AtomicU32::new(0), AtomicU32::new(0)]);
 
     let v = video_tx.clone();
     let a = audio_tx.clone();
@@ -98,10 +103,11 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
     let battle_thread = battle.clone();
     let ef = enemy_force.clone();
     let pf = player_force.clone();
+    let ap = attack_press.clone();
     std::thread::spawn(move || {
         if let Err(e) = run_loop(
             core_path, rom_path, v, a, input_rx, kf, action_rx, save_rx, load_rx, setup_rx,
-            ram_read_rx, battle_thread, ef, pf,
+            ram_read_rx, battle_thread, ef, pf, ap,
         ) {
             tracing::error!("emulator loop ended: {e:?}");
         }
@@ -120,6 +126,7 @@ pub fn start(core_path: String, rom_path: String) -> Arc<AppInner> {
         ram_read_tx,
         enemy_force,
         player_force,
+        attack_press,
     })
 }
 
@@ -148,6 +155,7 @@ pub fn dummy() -> Arc<AppInner> {
         ram_read_tx,
         enemy_force: Arc::new(AtomicU8::new(0xFF)),
         player_force: Arc::new(AtomicU8::new(0xFF)),
+        attack_press: Arc::new([AtomicU32::new(0), AtomicU32::new(0)]),
     })
 }
 
@@ -186,6 +194,7 @@ fn run_loop(
     battle: Arc<Mutex<Option<BattleState>>>,
     enemy_force: Arc<AtomicU8>,
     player_force: Arc<AtomicU8>,
+    attack_press: Arc<[AtomicU32; 2]>,
 ) -> anyhow::Result<()> {
     let mut emu = Emu::new(&core_path, &rom_path)?;
     let mut opus =
@@ -309,6 +318,11 @@ fn run_loop(
             match map_button(&ev.button) {
                 Some(EmuAction::Btn(id)) => {
                     let pad = (ev.player.max(1) - 1).min(1) as usize; // P1 -> port 0, P2 -> port 1
+                    // Fighting arena: count attack presses per pad; the fight room correlates HP
+                    // drops with who was attacking to attribute damage (and the winner).
+                    if pressed && matches!(ev.button.as_str(), "A" | "B" | "X" | "Y") {
+                        attack_press[pad].fetch_add(1, Ordering::Relaxed);
+                    }
                     emu.set_button_p(pad, id, pressed);
                 }
                 Some(EmuAction::Stick) | Some(EmuAction::CStick) => {
