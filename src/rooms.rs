@@ -132,6 +132,9 @@ pub struct GameState {
     /// Cached feature flags (key -> enabled), refreshed off the request path so /api/config (hit on
     /// every page load) does ZERO DB reads. Seeded at boot, refreshed every ~30s.
     pub flags_cache: std::sync::Mutex<HashMap<String, bool>>,
+    /// Fighting arena: each queued user's chosen fighter (ROSTER index) from the web character
+    /// select. Absent = random. Read when the fight room injects the char-select picks.
+    pub fight_char: Mutex<HashMap<UserId, u8>>,
 }
 
 impl GameState {
@@ -148,6 +151,7 @@ impl GameState {
             ws: WsHub::new(),
             online: std::sync::Mutex::new(HashMap::new()),
             flags_cache: std::sync::Mutex::new(HashMap::new()),
+            fight_char: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -169,7 +173,11 @@ pub async fn on_connect(game: &Arc<GameState>, uid: UserId, uname: &str) {
 
 pub async fn handle_client_msg(game: &Arc<GameState>, uid: UserId, uname: &str, v: serde_json::Value) {
     match v.get("type").and_then(|t| t.as_str()) {
-        Some("find_match") => find_match(game, uid, uname).await,
+        Some("find_match") => {
+            // Optional fighter choice (ROSTER index) from the web character select.
+            let choice = v.get("char").and_then(|c| c.as_u64()).map(|c| c as u8);
+            find_match(game, uid, uname, choice).await
+        }
         Some("cancel_queue") => cancel_queue(game, uid).await,
         Some("commit_move") => {
             if let Some(slot) = v.get("slot").and_then(|s| s.as_u64()) {
@@ -203,12 +211,21 @@ async fn send_current_state(game: &Arc<GameState>, uid: UserId) {
 // Matchmaking
 // ---------------------------------------------------------------------------
 
-async fn find_match(game: &Arc<GameState>, uid: UserId, _uname: &str) {
+async fn find_match(game: &Arc<GameState>, uid: UserId, _uname: &str, choice: Option<u8>) {
     if game.user_room.lock().await.contains_key(&uid) {
         game.ws
             .send_to(uid, json!({"type":"error","code":"in_room","message":"already in a room"}))
             .await;
         return;
+    }
+    // Remember the chosen fighter (or clear a stale one so the fight room rolls random).
+    match choice {
+        Some(c) => {
+            game.fight_char.lock().await.insert(uid, c);
+        }
+        None => {
+            game.fight_char.lock().await.remove(&uid);
+        }
     }
     {
         let mut q = game.queue.lock().await;
@@ -572,6 +589,54 @@ fn read_hp_bars(_inner: &Arc<crate::pipeline::AppInner>) -> Option<(u32, u32)> {
     Some((count(0.108, 0.476), count(0.536, 0.900)))
 }
 
+/// BR2 versus character-select grid, recovered by driving the cursor and reading each name. Two
+/// Right-cycling rows; `Up` toggles rows preserving the column. Index here = the value the web UI
+/// sends (`char` in find_match). `(row, col)`: row 0 = bottom (len 4), row 1 = top (len 5).
+pub const ROSTER: &[(&str, u8, u8)] = &[
+    ("busuzima", 0, 0),
+    ("jenny", 0, 1),
+    ("alice", 0, 2),
+    ("uriko", 0, 3),
+    ("bakuryu", 1, 0),
+    ("long", 1, 1),
+    ("yugo", 1, 2),
+    ("stun", 1, 3),
+    ("shina", 1, 4),
+];
+// Cursor defaults: P1 = Busuzima (bottom, col 0); P2 = Alice (bottom, col 2). The two rows have
+// different widths (4 vs 5) so `Up` does NOT cleanly preserve the column except at col 0 — so we
+// always NORMALIZE to Busuzima (bottom-left) first, where Up -> Bakuryu (top-left) is verified, and
+// navigate from there: each row is a clean Right-cycle.
+
+/// Cursor moves (for `pad`) from its default to ROSTER index `idx`, ending with a confirm (A).
+fn pick_path(pad: u8, idx: u8) -> Vec<(&'static str, u8)> {
+    let (_, row, col) = ROSTER[idx as usize];
+    let mut moves = Vec::new();
+    // Normalize to Busuzima (bottom, col 0). P1 is already there; P2 starts at Alice (bottom idx 2),
+    // so two Rights wrap Alice -> Uriko -> Busuzima.
+    if pad == 2 {
+        moves.push(("Right", pad));
+        moves.push(("Right", pad));
+    }
+    // From the bottom-left corner: Up to the top row (-> Bakuryu, col 0) if needed, then Right to col.
+    if row == 1 {
+        moves.push(("Up", pad));
+    }
+    for _ in 0..col {
+        moves.push(("Right", pad));
+    }
+    moves.push(("A", pad)); // confirm (OK)
+    moves
+}
+
+/// The ROSTER index to drive `pad` to: the player's chosen fighter, or a random one (slot-machine
+/// fallback) if they didn't pick.
+fn pick_target(choice: Option<u8>) -> u8 {
+    choice
+        .filter(|&c| (c as usize) < ROSTER.len())
+        .unwrap_or_else(|| rand::thread_rng().gen_range(0..ROSTER.len() as u8))
+}
+
 /// Press+release a button on a pad as the server (bypasses the player input_gate) — used to drive
 /// the random char-select picks. `pad` is 1 (P1/left) or 2 (P2/right); timed for menu navigation.
 async fn inject_tap(inner: &Arc<crate::pipeline::AppInner>, btn: &str, pad: u8) {
@@ -617,30 +682,34 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
     set_phase(game, rid, RoomPhase::Battle).await;
     broadcast_room_state(game, rid).await;
 
-    // Random character assignment: mute players, drive each cursor a random number of steps across
-    // the roster grid, confirm both, and let the fight load. Players take over once it's live.
+    // Character assignment: each player's web pick (random fallback). Mute players, drive each cursor
+    // to its target on the roster grid, confirm both, and let the fight load. Players take over live.
     if loaded {
-        inner.input_gate.store(false, Ordering::Relaxed); // mute players during the bootstrap
-        let script: Vec<(&'static str, u8)> = {
-            let mut rng = rand::thread_rng();
-            let mut s = Vec::new();
-            for pad in [1u8, 2u8] {
-                for _ in 0..rng.gen_range(0..8) {
-                    s.push(("Right", pad));
-                }
-                if rng.gen_range(0..2) == 1 {
-                    s.push(("Down", pad));
-                }
-                s.push(("A", pad)); // confirm (OK)
+        let (c1, c2) = {
+            let rooms = game.rooms.lock().await;
+            let fc = game.fight_char.lock().await;
+            match rooms.get(&rid) {
+                Some(r) => (
+                    fc.get(&r.p1.user_id).copied(),
+                    fc.get(&r.p2.user_id).copied(),
+                ),
+                None => (None, None),
             }
-            s
         };
+        let (t1, t2) = (pick_target(c1), pick_target(c2));
+        inner.input_gate.store(false, Ordering::Relaxed); // mute players during the bootstrap
+        let mut script = pick_path(1, t1);
+        script.extend(pick_path(2, t2));
         for (btn, pad) in script {
             inject_tap(&inner, btn, pad).await;
         }
         tokio::time::sleep(Duration::from_millis(800)).await;
         inner.input_gate.store(true, Ordering::Relaxed); // players take over
-        tracing::info!("fight room {rid}: random characters assigned, fight loading");
+        let pick_kind = |c: Option<u8>| if c.is_some() { "chose" } else { "random" };
+        tracing::info!(
+            "fight room {rid}: P1={} ({}) P2={} ({}) — fight loading",
+            ROSTER[t1 as usize].0, pick_kind(c1), ROSTER[t2 as usize].0, pick_kind(c2)
+        );
     }
     tracing::info!("fight room {rid}: live — both players control their own pad");
 

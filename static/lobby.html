@@ -87,6 +87,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <img class="logo-img" src="/title/pokemon_logo.png" alt="Pokémon PVP Red — play Pokémon Red online" />
   <div class="verrow"><span class="ver-txt">PVP RED</span><img class="red-img" src="/title/player.png" alt="" /></div>
   <div class="gb who" id="who">...</div>
+  <div id="charsel" style="display:none;width:min(92vw,560px);margin-top:10px">
+    <div style="text-align:center;letter-spacing:2px;font-size:16px;margin-bottom:8px">PICK YOUR FIGHTER</div>
+    <div id="csgrid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px"></div>
+  </div>
   <button class="gb" id="find"><span class="cur">▶</span>FIND MATCH</button>
   <div class="status" id="status"></div>
   <div class="links"><a href="/ranking">LEADERBOARDS</a> - <a href="/collection">MY POKÉMON</a> - <a href="/tv">TV WALL</a> - <span id="mcplink" style="display:none"><a href="/agent">PLAY VIA AI (MCP)</a> - </span><span id="devlink" style="display:none"><a href="/console">DEV CONSOLE</a> - </span><span id="logout">LOG OUT</span></div>
@@ -97,9 +101,30 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     // intro parade: each pass swaps to a random Gen-1 mon
     { const pick = () => "/sprites/" + (Math.floor(Math.random() * 151) + 1) + ".png";
       ["paradeMon", "paradeMon2"].forEach((id) => { const m = $(id); if (!m) return; m.src = pick(); m.addEventListener("animationiteration", () => (m.src = pick())); }); }
-    let ws, searching = false;
+    let ws, searching = false, FIGHT = false, chosenChar = null; // chosenChar null = random
     const autofind = new URLSearchParams(location.search).has("find"); // guest flow lands here -> auto FIND MATCH
+    // BR2 roster (index = the server's ROSTER order). Shown only in fight mode.
+    const ROSTER = [
+      {i:6,n:"YUGO",b:"WOLF"},{i:2,n:"ALICE",b:"RABBIT"},{i:5,n:"LONG",b:"TIGER"},
+      {i:4,n:"BAKURYU",b:"MOLE"},{i:7,n:"STUN",b:"INSECT"},{i:8,n:"SHINA",b:"LEOPARD"},
+      {i:1,n:"JENNY",b:"BAT"},{i:3,n:"URIKO",b:"½-BEAST"},{i:0,n:"BUSUZIMA",b:"CHAMELEON"},
+    ];
+    function buildCharSelect() {
+      $("charsel").style.display = "";
+      const g = $("csgrid"); g.innerHTML = "";
+      const card = (label, sub, val) => {
+        const el = document.createElement("button"); el.className = "gb csc"; el.dataset.val = (val===null?"r":val);
+        el.style.cssText = "padding:8px 4px;font-size:13px;line-height:1.2;cursor:pointer;text-align:center";
+        el.innerHTML = label + (sub?'<div style="font-size:10px;color:#7c7c68">'+sub+'</div>':'');
+        el.onclick = () => { chosenChar = val; [...g.children].forEach(c=>c.style.outline=""); el.style.outline="3px solid #e8403f"; };
+        return el;
+      };
+      g.appendChild(card("🎲 RANDOM","surprise",null));
+      ROSTER.forEach(c => g.appendChild(card(c.n, c.b, c.i)));
+      g.firstChild.click(); // default = random
+    }
     (async () => {
+      try { const c = await (await fetch("/api/config")).json(); FIGHT = !!c.fight; } catch (e) {}
       const r = await fetch("/api/me");
       if (r.status === 401) return location.replace("/login");
       const d = await r.json();
@@ -108,7 +133,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       if (d.room && d.room.id != null) return location.replace("/room?id=" + d.room.id);
       if (d.dev) $("devlink").style.display = "";  // show the dev console link only in DEV mode
       if (!d.user.is_guest || d.dev) $("mcplink").style.display = "";  // agent mode: real accounts (or any in DEV)
-      $("who").innerHTML = "TRAINER <b>" + d.user.username.toUpperCase() + "</b> - " + d.user.wins + "W / " + d.user.losses + "L";
+      $("who").innerHTML = (FIGHT ? "FIGHTER <b>" : "TRAINER <b>") + d.user.username.toUpperCase() + "</b> - " + d.user.wins + "W / " + d.user.losses + "L";
+      if (FIGHT) buildCharSelect();
       openWs();
     })();
     function openWs() {
@@ -124,7 +150,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     }
     function setSearching(pos) { $("find").classList.add("searching"); $("find").innerHTML = '<span class="cur">▶</span>SEARCHING... (CANCEL)'; $("status").innerHTML = '<span class="spin"></span> WAITING FOR AN OPPONENT' + (pos > 1 ? " - #" + pos : ""); }
     function setIdle() { $("find").classList.remove("searching"); $("find").innerHTML = '<span class="cur">▶</span>FIND MATCH'; $("status").textContent = ""; }
-    $("find").onclick = () => { if (!ws || ws.readyState !== 1) return; if (searching) { ws.send(JSON.stringify({ type: "cancel_queue" })); searching = false; setIdle(); } else ws.send(JSON.stringify({ type: "find_match" })); };
+    $("find").onclick = () => { if (!ws || ws.readyState !== 1) return;
+      if (searching) { ws.send(JSON.stringify({ type: "cancel_queue" })); searching = false; setIdle(); }
+      else { const msg = { type: "find_match" }; if (FIGHT && chosenChar != null) msg.char = chosenChar; ws.send(JSON.stringify(msg)); } };
     $("logout").onclick = async () => { await fetch("/auth/logout", { method: "POST" }); location.replace("/login"); };
   </script>
 </body>
