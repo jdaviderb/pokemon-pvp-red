@@ -503,13 +503,51 @@ async fn run_room(game: Arc<GameState>, rid: RoomId) {
     // The matchmaker's next tick (~250ms) starts the next pending room — no recursion here.
 }
 
-/// Read the whole SYSTEM_RAM off the emu thread (None if the channel is gone / short read).
-async fn read_ram_full(inner: &Arc<crate::pipeline::AppInner>) -> Option<Vec<u8>> {
-    let (tx, rx) = oneshot::channel();
-    let _ = inner
-        .ram_read_tx
-        .send((0, crate::fight::PSX_RAM_SIZE as u32, tx));
-    rx.await.ok().filter(|b| b.len() >= 0x1000)
+/// Read the two on-screen HP bars from the emulator framebuffer: `(p1_fill, p2_fill)` = the count of
+/// "filled" (yellow) pixels in the LEFT and RIGHT bar strips — the ground-truth health the player
+/// sees, independent of RAM layout. Yellow = current HP (bright R+G, low B); the blue "recoverable"
+/// and black "lost" zones don't match, so the web bar mirrors exactly what's drawn. Bar geometry is
+/// in fractional screen coords (calibrated on BR2's HUD @560x480) so it survives a resolution change.
+fn read_hp_bars(_inner: &Arc<crate::pipeline::AppInner>) -> Option<(u32, u32)> {
+    let (w, h, pitch, fmt, bytes) = crate::libretro::snapshot_frame();
+    if w == 0 || h == 0 || bytes.is_empty() {
+        return None;
+    }
+    let (w, h) = (w as usize, h as usize);
+    let px = |x: usize, y: usize| -> (u8, u8, u8) {
+        if fmt == crate::video::PIXFMT_RGB565 {
+            let o = y * pitch + x * 2;
+            if o + 1 >= bytes.len() {
+                return (0, 0, 0);
+            }
+            let v = (bytes[o] as u16) | ((bytes[o + 1] as u16) << 8);
+            let (r5, g6, b5) = (((v >> 11) & 0x1f) as u8, ((v >> 5) & 0x3f) as u8, (v & 0x1f) as u8);
+            ((r5 << 3) | (r5 >> 2), (g6 << 2) | (g6 >> 4), (b5 << 3) | (b5 >> 2))
+        } else {
+            let o = y * pitch + x * 4; // XRGB8888: bytes are B,G,R,X
+            if o + 2 >= bytes.len() {
+                return (0, 0, 0);
+            }
+            (bytes[o + 2], bytes[o + 1], bytes[o])
+        }
+    };
+    // Bright yellow/gold (high R, high G, low B). Excludes the white timer (B≈R) + blue recoverable.
+    let yellow = |(r, g, b): (u8, u8, u8)| r > 130 && g > 100 && (b as u32) * 5 < (r as u32) * 3;
+    let y0 = (h as f32 * 0.108) as usize;
+    let y1 = ((h as f32 * 0.130) as usize).min(h);
+    let count = |x_lo: f32, x_hi: f32| -> u32 {
+        let (xa, xb) = ((w as f32 * x_lo) as usize, ((w as f32 * x_hi) as usize).min(w));
+        let mut n = 0u32;
+        for y in y0..y1 {
+            for x in xa..xb {
+                if yellow(px(x, y)) {
+                    n += 1;
+                }
+            }
+        }
+        n
+    };
+    Some((count(0.108, 0.476), count(0.536, 0.900)))
 }
 
 /// True when the arena runs a fighting game (raw 2-player pad input) instead of the Pokémon engine.
@@ -546,252 +584,133 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
             return;
         }
     };
-    // Live loop @ ~4 Hz — RUNTIME HP DISCOVERY. BR2 reallocates the fighter structs on every
-    // round/load (non-deterministically — verified across many instrumented matches), so NO fixed
-    // address survives. Instead we watch all of RAM and keep only halfwords that BEHAVE like
-    // fighter HP: struct+0xAC alignment (the disassembled damage store), plausible value,
-    // idle-stable at round start, NEVER rising afterwards (HP only goes down within a round), and
-    // no single-tick plunge >45% (that's allocator churn, not a hit). Damage is attributed by
-    // INPUT CORRELATION: when a candidate drops, whoever pressed attack buttons in the last ~1.5s
-    // gets the credit — which also tells us which SIDE owns the candidate (its damager's opponent).
-    // That yields live bars and a correct winner with zero dependence on memory layout.
+    // Live loop @ ~5 Hz — READ THE RENDERED HP BAR, not RAM. BR2 reallocates the fighter structs
+    // every round/load, so no memory address survives; the on-screen yellow health bar, by contrast,
+    // is the ground truth the player sees and is ALWAYS at the same screen coordinates. We snapshot
+    // the emulator framebuffer and count yellow (filled) pixels in each bar's strip: left bar = P1
+    // (seat 1), right bar = P2 (seat 2) — so the WINNER is unambiguous, no input correlation needed.
+    // Yellow = current HP only; the blue "recoverable" zone and black "lost" zone don't match, so the
+    // web bar tracks exactly what's drawn (combos shrink it, transform/stamina don't touch it, regen
+    // refills it). Calibrated on BR2 @560x480 (fractional coords below adapt to other dims).
     let mut ticks = 0u32;
     let mut empty = 0u32;
-    let mut winner: Option<Seat> = None;
+    let mut p1_max = 0u32; // full-HP yellow-pixel count per bar (auto-calibrated, running max)
+    let mut p2_max = 0u32;
     let mut armed = false;
     let mut fight_t0: Option<Instant> = None;
-    const ROUND_LIMIT: Duration = Duration::from_secs(75);
-
-    struct Cand {
-        off: usize,
-        init: u16,
-        last: u16,
-        low: u16,
-        drop_events: u32,
-        first_drop: u32, // tick of the first drop (0 = none yet) -> drop-density check
-        cred_p1: f32,    // damage credited to P1's attacks (=> the candidate is P2's fighter)
-        cred_p2: f32,
-        dead: bool,
-    }
-    let mut pool: Vec<Cand> = Vec::new();
-    let mut atk_window: VecDeque<(u32, u32)> = VecDeque::new(); // attack presses per tick (p1,p2)
-    let mut prev_atk = (
-        inner.attack_press[0].load(Ordering::Relaxed),
-        inner.attack_press[1].load(Ordering::Relaxed),
-    );
-    // Last known per-side state, surviving representative death (round-end junks the structs).
-    let mut last_r = (1.0f32, 1.0f32);
-    let mut ever_resolved = (false, false);
-    let mut rep_missing = (0u32, 0u32); // consecutive ticks a previously-resolved side has no rep
+    let mut ko_streak = 0u32;
+    let mut gone_streak = 0u32; // both bars vanished = round/screen ended
+    let mut p1_dmg = false; // ever took real damage (>15%)
+    let mut p2_dmg = false;
+    let mut last_ratio = (1.0f32, 1.0f32);
+    let mut winner: Option<Seat> = None;
+    const ROUND_LIMIT: Duration = Duration::from_secs(80);
 
     loop {
-        tokio::time::sleep(Duration::from_millis(250)).await;
+        tokio::time::sleep(Duration::from_millis(200)).await;
         ticks += 1;
         if ticks < 24 {
-            continue; // ~6s: let the savestate load + round intro settle
+            continue; // ~5s: let the savestate load + round intro settle
         }
-
-        // Both-left detection (~every 2s).
-        if ticks % 8 == 0 {
+        if ticks % 10 == 0 {
             let live = game.ws.connected(p1).await || game.ws.connected(p2).await;
             empty = if live { 0 } else { empty + 1 };
-            if empty >= 3 || ticks > 4800 {
-                break; // both gone, or ~20min safety cap -> end with no winner
+            if empty >= 3 || ticks > 6000 {
+                break;
             }
         }
 
-        // Attack activity this tick -> rolling ~1.5s window.
-        let a1 = inner.attack_press[0].load(Ordering::Relaxed);
-        let a2 = inner.attack_press[1].load(Ordering::Relaxed);
-        atk_window.push_back((a1.saturating_sub(prev_atk.0), a2.saturating_sub(prev_atk.1)));
-        prev_atk = (a1, a2);
-        if atk_window.len() > 3 {
-            atk_window.pop_front();
-        }
+        let Some((p1_fill, p2_fill)) = read_hp_bars(&inner) else { continue };
 
-        let Some(ram) = read_ram_full(&inner).await else { continue };
-        let rd = |off: usize| u16::from_le_bytes([ram[off], ram[off + 1]]);
-
+        // Arm once BOTH bars read clearly filled (a real round on screen, not a menu/transition).
         if !armed {
-            // Discovery: seed candidates this tick, confirm idle-stability next tick. No struct
-            // alignment is assumed (post-restart allocations land at arbitrary offsets), so EVERY
-            // halfword is a candidate — the behavioral filters do the discrimination.
-            if pool.is_empty() {
-                for off in (0..ram.len() - 1).step_by(2) {
-                    let v = rd(off);
-                    if (100..=360).contains(&v) {
-                        pool.push(Cand {
-                            off,
-                            init: v,
-                            last: v,
-                            low: v,
-                            drop_events: 0,
-                            first_drop: 0,
-                            cred_p1: 0.0,
-                            cred_p2: 0.0,
-                            dead: false,
-                        });
-                    }
-                }
-            } else {
-                pool.retain(|c| rd(c.off) == c.init);
-                if pool.len() >= 2 {
-                    armed = true;
-                    fight_t0 = Some(Instant::now());
-                    tracing::info!("fight room {rid}: discovery armed, {} HP candidates", pool.len());
-                } else {
-                    pool.clear(); // bad sample window; retry next tick
-                }
+            if p1_fill > 80 && p2_fill > 80 {
+                p1_max = p1_fill;
+                p2_max = p2_fill;
+                armed = true;
+                fight_t0 = Some(Instant::now());
+                tracing::info!("fight room {rid}: round live (bars) — P1 {p1_max}px, P2 {p2_max}px");
             }
             continue;
         }
+        // Self-correct the full-HP reference upward (regen / a slightly-damaged calibration frame).
+        p1_max = p1_max.max(p1_fill);
+        p2_max = p2_max.max(p2_fill);
 
-        // Prune + track damage.
-        let (w1, w2) = atk_window.iter().fold((0u32, 0u32), |s, d| (s.0 + d.0, s.1 + d.1));
-        for c in pool.iter_mut() {
-            if c.dead {
-                continue;
-            }
-            let v = rd(c.off);
-            // BR2 HP REGENERATES (the recoverable red portion refills between hits), so rises are
-            // legal — but never above full, never a wild jump (churn/noise), and a meter that
-            // RETURNS to ~full after a real drawdown is a self-replenishing gauge (stamina/guard),
-            // not HP: real damage doesn't fully come back.
-            if v > c.init.saturating_add(15) || (v > c.last && (v - c.last) as u32 > (c.init as u32 * 40) / 100) {
-                c.dead = true;
-                continue;
-            }
-            if v > c.last {
-                if (c.init - c.low) as u32 * 100 >= c.init as u32 * 15
-                    && v as u32 * 100 >= c.init as u32 * 92
-                {
-                    // Recovered to ~full: that damage was the recoverable kind — legit BR2 HP
-                    // behavior, NOT a disqualifier. Reset the damage history and keep watching.
-                    c.low = v.min(c.init);
-                    c.drop_events = 0;
-                    c.first_drop = 0;
-                    c.cred_p1 = 0.0;
-                    c.cred_p2 = 0.0;
-                }
-                c.last = v; // regen: track it (the on-screen bar refills too)
-                continue;
-            }
-            if v < c.last {
-                let drop = c.last - v;
-                if drop as u32 > (c.init as u32 * 25) / 100 {
-                    // single-tick plunge: beast-gauge transform / allocator churn — a real hit
-                    // never takes >25% of full HP in 250ms.
-                    c.dead = true;
-                    continue;
-                }
-                // Credit only UNAMBIGUOUS windows (exactly one side was attacking) — when both
-                // mash, a hit's source can't be told apart, so it shouldn't teach side ownership.
-                if w1 > 0 && w2 == 0 {
-                    c.cred_p1 += drop as f32;
-                } else if w2 > 0 && w1 == 0 {
-                    c.cred_p2 += drop as f32;
-                }
-                c.drop_events += 1;
-                if c.first_drop == 0 {
-                    c.first_drop = ticks;
-                }
-                // Drain meters (stamina/charge) trickle away in TINY per-tick steps; real hits
-                // chunk off 8-40 units. Kill candidates whose average drawdown per event is a
-                // trickle, and ones dropping nearly EVERY tick for 3s+ (combos don't sustain that).
-                let span = ticks.saturating_sub(c.first_drop) + 1;
-                if c.drop_events >= 6 && ((c.init - c.low) as u32) < c.drop_events * 5 {
-                    c.dead = true;
-                    continue;
-                }
-                if span >= 12 && c.drop_events * 100 / span > 85 {
-                    c.dead = true;
-                    continue;
-                }
-                c.last = v;
-                c.low = c.low.min(v);
-            }
-        }
+        let r1 = (p1_fill as f32 / p1_max.max(1) as f32).clamp(0.0, 1.0);
+        let r2 = (p2_fill as f32 / p2_max.max(1) as f32).clamp(0.0, 1.0);
 
-        // A candidate is RESOLVED once it took >=12% damage over >=2 attack-correlated hits; it
-        // belongs to the side OPPOSITE its main damager. Representative = most-damaged per side.
-        let resolved = |c: &Cand| {
-            !c.dead
-                && c.drop_events >= 3
-                && (c.init - c.low) as u32 * 100 >= c.init as u32 * 15
-                && (c.cred_p1 + c.cred_p2) > 0.0
-        };
-        let best = |owned_by_p1: bool| -> Option<&Cand> {
-            pool.iter()
-                .filter(|c| resolved(c))
-                .filter(|c| (c.cred_p2 > c.cred_p1) == owned_by_p1)
-                .max_by_key(|c| (c.init - c.low) as u32)
-        };
-        let f1 = best(true); // P1's fighter (hurt mostly by P2's presses)
-        let f2 = best(false);
-        if f1.is_some() {
-            ever_resolved.0 = true;
-            last_r.0 = f1.map(|c| c.last as f32 / c.init.max(1) as f32).unwrap_or(last_r.0);
+        // Both bars gone at once = the round ended / screen changed (KO transition, time-up, char
+        // select). Not a KO by itself — decide from the last good ratio.
+        if p1_fill < p1_max / 12 && p2_fill < p2_max / 12 {
+            gone_streak += 1;
+            if gone_streak >= 3 {
+                winner = if !p1_dmg && !p2_dmg {
+                    None
+                } else if last_ratio.0 >= last_ratio.1 {
+                    Some(Seat::P1)
+                } else {
+                    Some(Seat::P2)
+                };
+                tracing::info!("fight room {rid}: round ended (bars gone) — winner {winner:?} by {last_ratio:?}");
+                break;
+            }
+            continue; // don't trust ratios from a half-faded frame
         }
-        if f2.is_some() {
-            ever_resolved.1 = true;
-            last_r.1 = f2.map(|c| c.last as f32 / c.init.max(1) as f32).unwrap_or(last_r.1);
-        }
+        gone_streak = 0;
 
-        // Bars: unresolved side = full (truthful: it hasn't taken correlated damage yet).
-        let bar = |f: Option<&Cand>| f.map(|c| (c.last, c.init)).unwrap_or((1, 1));
-        let (b1, b2) = (bar(f1), bar(f2));
         broadcast_to_room(
             game,
             rid,
-            json!({"type":"fight_hp","p1":b1.0,"p2":b2.0,"p1max":b1.1,"p2max":b2.1}),
+            json!({"type":"fight_hp","p1":p1_fill,"p2":p2_fill,"p1max":p1_max,"p2max":p2_max}),
         )
         .await;
-        if ticks % 24 == 0 {
-            tracing::info!(
-                "fight room {rid}: pool {} alive | P1 {:?} | P2 {:?} | atk {a1}/{a2}",
-                pool.iter().filter(|c| !c.dead).count(),
-                f1.map(|c| (c.off, c.last, c.init)),
-                f2.map(|c| (c.off, c.last, c.init)),
-            );
+        last_ratio = (r1, r2);
+        if r1 < 0.85 {
+            p1_dmg = true;
+        }
+        if r2 < 0.85 {
+            p2_dmg = true;
+        }
+        if ticks % 20 == 0 {
+            tracing::info!("fight room {rid}: bars P1 {p1_fill}/{p1_max} ({:.0}%) P2 {p2_fill}/{p2_max} ({:.0}%)", r1 * 100.0, r2 * 100.0);
         }
 
-        // KO: a resolved fighter drained to ~4% of its own start by accumulated hits.
-        let ko = |f: Option<&Cand>| f.map(|c| c.last <= (c.init / 24).max(3)).unwrap_or(false);
-        let (k1, k2) = (ko(f1), ko(f2));
-        if k1 || k2 {
-            winner = Some(if k1 && !k2 {
-                Seat::P2
-            } else if k2 && !k1 {
-                Seat::P1
-            } else if last_r.0 >= last_r.1 {
-                Seat::P1
-            } else {
-                Seat::P2
-            });
-            tracing::info!("fight room {rid}: KO — winner {winner:?} (ratios {last_r:?})");
-            break;
+        // KO: one bar emptied (<5%) while the other is still up. Held 2 ticks (debounce a flash).
+        let p1_ko = r1 < 0.05;
+        let p2_ko = r2 < 0.05;
+        if p1_ko || p2_ko {
+            ko_streak += 1;
+            if ko_streak >= 2 {
+                winner = Some(if p1_ko && !p2_ko {
+                    Seat::P2
+                } else if p2_ko && !p1_ko {
+                    Seat::P1
+                } else if last_ratio.0 >= last_ratio.1 {
+                    Seat::P1
+                } else {
+                    Seat::P2
+                });
+                tracing::info!("fight room {rid}: KO — winner {winner:?} (P1 {:.0}% P2 {:.0}%)", r1 * 100.0, r2 * 100.0);
+                break;
+            }
+        } else {
+            ko_streak = 0;
         }
 
-        // Round over: a previously-resolved side lost its representative for a SUSTAINED stretch
-        // (round-end junked the struct; a momentary loss just means another candidate takes over)
-        // -> decide by the last known ratios. Same rule at the wall-clock backstop.
-        rep_missing.0 = if ever_resolved.0 && f1.is_none() { rep_missing.0 + 1 } else { 0 };
-        rep_missing.1 = if ever_resolved.1 && f2.is_none() { rep_missing.1 + 1 } else { 0 };
-        let round_over = rep_missing.0 >= 8 || rep_missing.1 >= 8;
-        if round_over || fight_t0.map(|t| t.elapsed() > ROUND_LIMIT).unwrap_or(false) {
-            winner = if !ever_resolved.0 && !ever_resolved.1 {
-                None // nobody landed anything -> draw
-            } else if last_r.0 >= last_r.1 {
+        if fight_t0.map(|t| t.elapsed() > ROUND_LIMIT).unwrap_or(false) {
+            winner = if !p1_dmg && !p2_dmg {
+                None
+            } else if last_ratio.0 >= last_ratio.1 {
                 Some(Seat::P1)
             } else {
                 Some(Seat::P2)
             };
-            tracing::info!(
-                "fight room {rid}: round over (rep_lost={round_over}) — winner {winner:?} by ratios {last_r:?}"
-            );
+            tracing::info!("fight room {rid}: time-up — winner {winner:?} by {last_ratio:?}");
             break;
         }
     }
+    let armed_any = armed;
 
     // A decided match runs the full result flow (DB + winner banner); a damage-less finished round
     // is an explicit DRAW (banner, no stats); a walk-away just closes.
@@ -800,7 +719,7 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
         set_phase(game, rid, RoomPhase::Result).await;
         broadcast_winner(game, rid, winner).await;
         tokio::time::sleep(Duration::from_secs(5)).await;
-    } else if armed {
+    } else if armed_any {
         broadcast_to_room(game, rid, json!({"type":"fight_draw"})).await;
         tokio::time::sleep(Duration::from_secs(4)).await;
     }

@@ -392,13 +392,23 @@ async fn debug_frame_handler() -> Response {
     let mut out = format!("P6\n{w} {h}\n255\n").into_bytes();
     for y in 0..h {
         for x in 0..w {
-            let off = y * pitch + x * 2;
-            let (r, g, b) = if fmt == crate::video::PIXFMT_RGB565 && off + 1 < bytes.len() {
-                let v = (bytes[off] as u16) | ((bytes[off + 1] as u16) << 8);
-                let (r5, g6, b5) = (((v >> 11) & 0x1f) as u8, ((v >> 5) & 0x3f) as u8, (v & 0x1f) as u8);
-                ((r5 << 3) | (r5 >> 2), (g6 << 2) | (g6 >> 4), (b5 << 3) | (b5 >> 2))
+            let (r, g, b) = if fmt == crate::video::PIXFMT_RGB565 {
+                let off = y * pitch + x * 2;
+                if off + 1 < bytes.len() {
+                    let v = (bytes[off] as u16) | ((bytes[off + 1] as u16) << 8);
+                    let (r5, g6, b5) = (((v >> 11) & 0x1f) as u8, ((v >> 5) & 0x3f) as u8, (v & 0x1f) as u8);
+                    ((r5 << 3) | (r5 >> 2), (g6 << 2) | (g6 >> 4), (b5 << 3) | (b5 >> 2))
+                } else {
+                    (0, 0, 0)
+                }
             } else {
-                (0, 0, 0)
+                // XRGB8888: 4-byte BGRX in memory (PSX / Emu / SameBoy).
+                let off = y * pitch + x * 4;
+                if off + 2 < bytes.len() {
+                    (bytes[off + 2], bytes[off + 1], bytes[off])
+                } else {
+                    (0, 0, 0)
+                }
             };
             out.extend_from_slice(&[r, g, b]);
         }
