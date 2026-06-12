@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
-# Bloody Roar (PlayStation) build — same engine as the GB image, but FIGHT_MODE + the mednafen_psx
-# core + the disc/BIOS/versus-savestate baked in. Find-match opens a 2-player Bloody Roar fight.
-#   docker buildx build -f Dockerfile.bloody --platform linux/amd64 -t dejavumoney/pkred:bloody-1.0.0 --push .
+# Bloody Roar II (PlayStation) build — same engine as the GB image, but FIGHT_MODE + the mednafen_psx
+# core + the disc/BIOS/char-select-savestate baked in. Find-match -> a 2-player BR2 fight: the server
+# drives the char-select to each player's chosen (or random) fighter, then runs a best-of-3.
+#   docker buildx build -f Dockerfile.bloody --platform linux/amd64 -t dejavumoney/pkred:bloody-2.0.0 --push .
 # Runs on :4000 (the GB app owns :3000); needs --network host / hostNetwork for WebRTC, like the GB one.
 
 FROM rust:1.92-bookworm AS builder
@@ -27,12 +28,12 @@ COPY --from=builder /pokemon-red-pvp /app/pokemon-red-pvp
 COPY --from=builder /mednafen_psx_libretro.so /app/cores/mednafen_psx_libretro.so
 COPY static /app/static
 COPY system /app/system
-COPY states/bloodyroar_vs.state /app/states/bloodyroar_vs.state
-COPY ["Bloody Roar (USA)", "/app/Bloody Roar (USA)"]
-# FIGHT_MODE => find-match loads the versus savestate + a 2-player room. SYSTEM_DIR -> the bundled BIOS.
+COPY states/bloodyroar_charselect.state /app/states/bloodyroar_charselect.state
+COPY ["Bloody Roar II", "/app/Bloody Roar II"]
+# FIGHT_MODE => find-match loads the char-select savestate + a 2-player room. SYSTEM_DIR -> bundled BIOS.
 ENV BIND_ADDR=0.0.0.0 \
     FIGHT_MODE=1 \
     SYSTEM_DIR=/app/system \
     RUST_LOG=pokemon_red_pvp=info,webrtc=warn
 EXPOSE 4000
-CMD ["/app/pokemon-red-pvp", "--solo", "--port", "4000", "Bloody Roar (USA)/Bloody Roar (USA).cue", "cores/mednafen_psx_libretro.so"]
+CMD ["/app/pokemon-red-pvp", "--solo", "--port", "4000", "Bloody Roar II/Bloody Roar II.cue", "cores/mednafen_psx_libretro.so"]
