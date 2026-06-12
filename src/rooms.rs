@@ -616,7 +616,7 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
             if pool.is_empty() {
                 for off in (0xAC..ram.len() - 1).step_by(0x100) {
                     let v = rd(off);
-                    if (150..=420).contains(&v) {
+                    if (140..=300).contains(&v) {
                         pool.push(Cand {
                             off,
                             init: v,
@@ -650,19 +650,29 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
             }
             let v = rd(c.off);
             // BR2 HP REGENERATES (the recoverable red portion refills between hits), so rises are
-            // legal — but never above full, and never as a wild jump (that's churn/noise).
+            // legal — but never above full, never a wild jump (churn/noise), and a meter that
+            // RETURNS to ~full after a real drawdown is a self-replenishing gauge (stamina/guard),
+            // not HP: real damage doesn't fully come back.
             if v > c.init.saturating_add(15) || (v > c.last && (v - c.last) as u32 > (c.init as u32 * 40) / 100) {
                 c.dead = true;
                 continue;
             }
             if v > c.last {
+                if (c.init - c.low) as u32 * 100 >= c.init as u32 * 15
+                    && v as u32 * 100 >= c.init as u32 * 92
+                {
+                    c.dead = true; // full recovery after >=15% drawdown: a refilling meter
+                    continue;
+                }
                 c.last = v; // regen: track it (the on-screen bar refills too); low keeps the floor
                 continue;
             }
             if v < c.last {
                 let drop = c.last - v;
-                if drop as u32 > (c.init as u32 * 45) / 100 {
-                    c.dead = true; // single-tick plunge: allocator churn, not a hit
+                if drop as u32 > (c.init as u32 * 25) / 100 {
+                    // single-tick plunge: beast-gauge transform / allocator churn — a real hit
+                    // never takes >25% of full HP in 250ms.
+                    c.dead = true;
                     continue;
                 }
                 if w1 + w2 > 0 {
@@ -679,8 +689,8 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
         // belongs to the side OPPOSITE its main damager. Representative = most-damaged per side.
         let resolved = |c: &Cand| {
             !c.dead
-                && c.drop_events >= 2
-                && (c.init - c.low) as u32 * 100 >= c.init as u32 * 12
+                && c.drop_events >= 3
+                && (c.init - c.low) as u32 * 100 >= c.init as u32 * 15
                 && (c.cred_p1 + c.cred_p2) > 0.0
         };
         let best = |owned_by_p1: bool| -> Option<&Cand> {
