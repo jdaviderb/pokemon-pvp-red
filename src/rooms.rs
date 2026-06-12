@@ -503,6 +503,18 @@ async fn run_room(game: Arc<GameState>, rid: RoomId) {
     // The matchmaker's next tick (~250ms) starts the next pending room — no recursion here.
 }
 
+/// Decide a finished round when there was no clean KO: the fighter with more HP (by ratio) takes it;
+/// a round where neither took real damage is a draw (counts for neither, replayed).
+fn round_by_ratio(p1_dmg: bool, p2_dmg: bool, last_ratio: (f32, f32)) -> Option<Seat> {
+    if !p1_dmg && !p2_dmg {
+        None
+    } else if last_ratio.0 >= last_ratio.1 {
+        Some(Seat::P1)
+    } else {
+        Some(Seat::P2)
+    }
+}
+
 /// Read the two on-screen HP bars from the emulator framebuffer: `(p1_fill, p2_fill)` = the count of
 /// "filled" (yellow) pixels in the LEFT and RIGHT bar strips — the ground-truth health the player
 /// sees, independent of RAM layout. Yellow = current HP (bright R+G, low B); the blue "recoverable"
@@ -601,19 +613,28 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
     // Yellow = current HP only; the blue "recoverable" zone and black "lost" zone don't match, so the
     // web bar tracks exactly what's drawn (combos shrink it, transform/stamina don't touch it, regen
     // refills it). Calibrated on BR2 @560x480 (fractional coords below adapt to other dims).
+    // BEST-OF-3: BR2 is first-to-2-rounds (the "○○" orbs by each name). We track HP bars per round
+    // and award a round to whoever wins it (the other fighter KO'd, or more HP at time-up); the
+    // MATCH ends only when a side reaches 2 round wins. Requiring 2 rounds also filters any single
+    // glitchy read (e.g. a beast-transform flash nudging the bar) — a real win needs two clean KOs.
     let mut ticks = 0u32;
     let mut empty = 0u32;
     let mut p1_max = 0u32; // full-HP yellow-pixel count per bar (auto-calibrated, running max)
     let mut p2_max = 0u32;
     let mut armed = false;
+    let mut rearm_at = 0u32; // earliest tick to re-arm after a round ends (lets the intro play)
     let mut fight_t0: Option<Instant> = None;
     let mut ko_streak = 0u32;
     let mut gone_streak = 0u32; // both bars vanished = round/screen ended
-    let mut p1_dmg = false; // ever took real damage (>15%)
+    let mut p1_dmg = false; // ever took real damage this round (>15%)
     let mut p2_dmg = false;
     let mut last_ratio = (1.0f32, 1.0f32);
+    let mut p1_rounds = 0u32; // match score (round wins)
+    let mut p2_rounds = 0u32;
+    let mut any_round = false; // a real round was fought (vs an immediate walk-away)
     let mut winner: Option<Seat> = None;
     const ROUND_LIMIT: Duration = Duration::from_secs(80);
+    const ROUNDS_TO_WIN: u32 = 2;
 
     loop {
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -623,7 +644,7 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
         if ticks % 10 == 0 {
             let live = game.ws.connected(p1).await || game.ws.connected(p2).await;
             empty = if live { 0 } else { empty + 1 };
-            if (ticks > 70 && empty >= 3) || ticks > 6000 {
+            if (ticks > 70 && empty >= 3) || ticks > 18000 {
                 break;
             }
         }
@@ -633,11 +654,11 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
         if !armed {
             // The round intro animates the bars in (0 -> full), so track the HIGHEST seen rather
             // than locking onto the first (possibly half-drawn) frame. Arm only once both bars are
-            // a real full bar AND the current reading sits near that max (stable, not mid-animation),
-            // after a grace so we never calibrate to a partial intro frame.
+            // a real full bar AND the current reading sits near that max (stable), after a grace /
+            // post-round cooldown so we never calibrate to a partial intro or win-pose frame.
             p1_max = p1_max.max(p1_fill);
             p2_max = p2_max.max(p2_fill);
-            if ticks >= 30
+            if ticks >= rearm_at.max(30)
                 && p1_max > 300
                 && p2_max > 300
                 && p1_fill * 100 >= p1_max * 88
@@ -645,7 +666,7 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
             {
                 armed = true;
                 fight_t0 = Some(Instant::now());
-                tracing::info!("fight room {rid}: round live (bars) — P1 {p1_max}px, P2 {p2_max}px");
+                tracing::info!("fight room {rid}: round live — P1 {p1_max}px P2 {p2_max}px (score {p1_rounds}-{p2_rounds})");
             }
             continue;
         }
@@ -656,79 +677,94 @@ async fn run_fight_room(game: &Arc<GameState>, rid: RoomId) {
         let r1 = (p1_fill as f32 / p1_max.max(1) as f32).clamp(0.0, 1.0);
         let r2 = (p2_fill as f32 / p2_max.max(1) as f32).clamp(0.0, 1.0);
 
-        // Both bars gone at once = the round ended / screen changed (KO transition, time-up, char
-        // select). Only trust it after the round has been live a few seconds, so a startup intro
-        // flicker can't close the room before both clients have even connected.
+        // Detect a ROUND ending: both bars gone (transition), a KO (one bar empty), or time-up.
         let live_secs = fight_t0.map(|t| t.elapsed().as_secs()).unwrap_or(0);
+        let mut round_end: Option<Option<Seat>> = None; // Some(winner-of-round); inner None = draw
         if live_secs >= 4 && p1_fill < p1_max / 12 && p2_fill < p2_max / 12 {
             gone_streak += 1;
             if gone_streak >= 3 {
-                winner = if !p1_dmg && !p2_dmg {
-                    None
-                } else if last_ratio.0 >= last_ratio.1 {
-                    Some(Seat::P1)
-                } else {
-                    Some(Seat::P2)
-                };
-                tracing::info!("fight room {rid}: round ended (bars gone) — winner {winner:?} by {last_ratio:?}");
-                break;
-            }
-            continue; // don't trust ratios from a half-faded frame
-        }
-        gone_streak = 0;
-
-        broadcast_to_room(
-            game,
-            rid,
-            json!({"type":"fight_hp","p1":p1_fill,"p2":p2_fill,"p1max":p1_max,"p2max":p2_max}),
-        )
-        .await;
-        last_ratio = (r1, r2);
-        if r1 < 0.85 {
-            p1_dmg = true;
-        }
-        if r2 < 0.85 {
-            p2_dmg = true;
-        }
-        if ticks % 20 == 0 {
-            tracing::info!("fight room {rid}: bars P1 {p1_fill}/{p1_max} ({:.0}%) P2 {p2_fill}/{p2_max} ({:.0}%)", r1 * 100.0, r2 * 100.0);
-        }
-
-        // KO: one bar emptied (<5%) while the other is still up. Held 2 ticks (debounce a flash).
-        let p1_ko = r1 < 0.05;
-        let p2_ko = r2 < 0.05;
-        if p1_ko || p2_ko {
-            ko_streak += 1;
-            if ko_streak >= 2 {
-                winner = Some(if p1_ko && !p2_ko {
-                    Seat::P2
-                } else if p2_ko && !p1_ko {
-                    Seat::P1
-                } else if last_ratio.0 >= last_ratio.1 {
-                    Seat::P1
-                } else {
-                    Seat::P2
-                });
-                tracing::info!("fight room {rid}: KO — winner {winner:?} (P1 {:.0}% P2 {:.0}%)", r1 * 100.0, r2 * 100.0);
-                break;
+                round_end = Some(round_by_ratio(p1_dmg, p2_dmg, last_ratio));
+            } else {
+                continue; // half-faded frame; wait for confirmation
             }
         } else {
-            ko_streak = 0;
+            gone_streak = 0;
+            broadcast_to_room(
+                game,
+                rid,
+                json!({"type":"fight_hp","p1":p1_fill,"p2":p2_fill,"p1max":p1_max,"p2max":p2_max}),
+            )
+            .await;
+            last_ratio = (r1, r2);
+            if r1 < 0.85 {
+                p1_dmg = true;
+            }
+            if r2 < 0.85 {
+                p2_dmg = true;
+            }
+            if ticks % 20 == 0 {
+                tracing::info!("fight room {rid}: bars P1 {:.0}% P2 {:.0}% (score {p1_rounds}-{p2_rounds})", r1 * 100.0, r2 * 100.0);
+            }
+            // KO: one bar emptied (<5%) while the other is still up. Held 2 ticks (debounce a flash).
+            let p1_ko = r1 < 0.05;
+            let p2_ko = r2 < 0.05;
+            if p1_ko || p2_ko {
+                ko_streak += 1;
+                if ko_streak >= 2 {
+                    round_end = Some(Some(if p1_ko && !p2_ko {
+                        Seat::P2
+                    } else if p2_ko && !p1_ko {
+                        Seat::P1
+                    } else if last_ratio.0 >= last_ratio.1 {
+                        Seat::P1
+                    } else {
+                        Seat::P2
+                    }));
+                }
+            } else {
+                ko_streak = 0;
+            }
+            if round_end.is_none() && fight_t0.map(|t| t.elapsed() > ROUND_LIMIT).unwrap_or(false) {
+                round_end = Some(round_by_ratio(p1_dmg, p2_dmg, last_ratio));
+            }
         }
 
-        if fight_t0.map(|t| t.elapsed() > ROUND_LIMIT).unwrap_or(false) {
-            winner = if !p1_dmg && !p2_dmg {
-                None
-            } else if last_ratio.0 >= last_ratio.1 {
-                Some(Seat::P1)
-            } else {
-                Some(Seat::P2)
-            };
-            tracing::info!("fight room {rid}: time-up — winner {winner:?} by {last_ratio:?}");
-            break;
+        if let Some(rw) = round_end {
+            any_round = true;
+            match rw {
+                Some(Seat::P1) => p1_rounds += 1,
+                Some(Seat::P2) => p2_rounds += 1,
+                None => {} // draw round -> counts for neither, replay
+            }
+            tracing::info!("fight room {rid}: round to {rw:?} -> score {p1_rounds}-{p2_rounds}");
+            broadcast_to_room(
+                game,
+                rid,
+                json!({"type":"fight_round","p1_wins":p1_rounds,"p2_wins":p2_rounds}),
+            )
+            .await;
+            if p1_rounds >= ROUNDS_TO_WIN {
+                winner = Some(Seat::P1);
+                break;
+            }
+            if p2_rounds >= ROUNDS_TO_WIN {
+                winner = Some(Seat::P2);
+                break;
+            }
+            // Re-arm for the next round: reset per-round state and wait out the win-pose + intro.
+            armed = false;
+            p1_max = 0;
+            p2_max = 0;
+            p1_dmg = false;
+            p2_dmg = false;
+            gone_streak = 0;
+            ko_streak = 0;
+            fight_t0 = None;
+            last_ratio = (1.0, 1.0);
+            rearm_at = ticks + 25; // ~5s for the round transition before calibrating round N+1
         }
     }
-    let armed_any = armed;
+    let armed_any = any_round;
 
     // A decided match runs the full result flow (DB + winner banner); a damage-less finished round
     // is an explicit DRAW (banner, no stats); a walk-away just closes.
